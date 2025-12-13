@@ -12,6 +12,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
+import { UbuntuFonts } from '../src/utils/fonts';
 
 const translations = {
   en: {
@@ -231,11 +232,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#3185FC',
     marginBottom: 12,
+    fontFamily: UbuntuFonts.bold,
   },
   subtitle: {
     fontSize: 16,
     color: '#666666',
     lineHeight: 22,
+    fontFamily: UbuntuFonts.regular,
   },
   rtl: {
     textAlign: 'right',
@@ -250,6 +253,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+    fontFamily: UbuntuFonts.semiBold,
   },
   inputWrapper: {
     flexDirection: 'row',
@@ -262,6 +266,7 @@ const styles = StyleSheet.create({
     color: '#1A1A1A',
     paddingVertical: 12,
     paddingRight: 50,
+    fontFamily: UbuntuFonts.regular,
   },
   inputFocused: {
     color: '#1A1A1A',
@@ -319,11 +324,13 @@ const styles = StyleSheet.create({
   signUpText: {
     fontSize: 14,
     color: '#666666',
+    fontFamily: UbuntuFonts.regular,
   },
   signUpLink: {
     fontSize: 14,
     color: '#3185FC',
     fontWeight: '600',
+    fontFamily: UbuntuFonts.semiBold,
   },
 });
 

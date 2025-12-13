@@ -10,6 +10,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
+import { UbuntuFonts } from '../src/utils/fonts';
 
 const translations = {
   en: {
@@ -18,6 +19,8 @@ const translations = {
     register: 'Register',
     login: 'Login',
     demo: 'Try Demo',
+    studentDemo: 'Student Demo',
+    driverDemo: 'Driver Demo',
     language: 'Language',
   },
   ar: {
@@ -26,6 +29,8 @@ const translations = {
     register: 'تسجيل',
     login: 'تسجيل الدخول',
     demo: 'جرب العرض التوضيحي',
+    studentDemo: 'عرض توضيحي للطالب',
+    driverDemo: 'عرض توضيحي للسائق',
     language: 'اللغة',
   },
 };
@@ -36,6 +41,7 @@ const WelcomeScreen = ({
   onLogin,
   onRegister,
   onDemo,
+  onDriverDemo,
 }) => {
   const [language, setLanguage] = useState(propLanguage || 'en');
   const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
@@ -59,6 +65,12 @@ const WelcomeScreen = ({
   const handleDemo = () => {
     if (onDemo) {
       onDemo();
+    }
+  };
+
+  const handleDriverDemo = () => {
+    if (onDriverDemo) {
+      onDriverDemo();
     }
   };
 
@@ -174,13 +186,25 @@ const WelcomeScreen = ({
             <Text style={styles.loginButtonText}>{t.login}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.demoLink}
-            onPress={handleDemo}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.demoLinkText}>{t.demo}</Text>
-          </TouchableOpacity>
+          <View style={styles.demoContainer}>
+            <TouchableOpacity
+              style={styles.demoButton}
+              onPress={handleDemo}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="school" size={20} color="#FFFFFF" style={styles.demoIcon} />
+              <Text style={styles.demoButtonText}>{t.studentDemo}</Text>
+            </TouchableOpacity>
+            
+            <TouchableOpacity
+              style={styles.demoButton}
+              onPress={handleDriverDemo}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons name="directions-bus" size={20} color="#FFFFFF" style={styles.demoIcon} />
+              <Text style={styles.demoButtonText}>{t.driverDemo}</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     </SafeAreaView>
@@ -272,6 +296,7 @@ const styles = StyleSheet.create({
     fontSize: 64,
     fontWeight: 'bold',
     color: '#FFFFFF',
+    fontFamily: UbuntuFonts.bold,
   },
   textContainer: {
     alignItems: 'center',
@@ -283,12 +308,14 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     marginBottom: 12,
     textAlign: 'center',
+    fontFamily: UbuntuFonts.bold,
   },
   subtitleText: {
     fontSize: 18,
     color: '#FFFFFA',
     textAlign: 'center',
     lineHeight: 24,
+    fontFamily: UbuntuFonts.regular,
   },
   rtl: {
     textAlign: 'right',
@@ -320,6 +347,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '600',
+    fontFamily: UbuntuFonts.semiBold,
   },
   loginButton: {
     backgroundColor: '#FFFFFF',
@@ -330,16 +358,34 @@ const styles = StyleSheet.create({
     color: '#3185FC',
     fontSize: 18,
     fontWeight: '600',
+    fontFamily: UbuntuFonts.semiBold,
   },
-  demoLink: {
+  demoContainer: {
+    flexDirection: 'row',
+    width: '100%',
+    gap: 12,
     marginTop: 8,
-    paddingVertical: 12,
   },
-  demoLinkText: {
+  demoButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
+  },
+  demoIcon: {
+    marginRight: 8,
+  },
+  demoButtonText: {
     color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '500',
-    textDecorationLine: 'underline',
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: UbuntuFonts.semiBold,
   },
 });
 

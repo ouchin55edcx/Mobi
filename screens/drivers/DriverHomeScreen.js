@@ -15,6 +15,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import MapView, { Marker, Polyline } from 'react-native-maps';
 import Header from '../../components/Header';
 import DriverNotificationsModal from '../../components/DriverNotificationsModal';
+import { UbuntuFonts } from '../../src/utils/fonts';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -504,13 +505,14 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
+    marginTop: -48,
   },
   headerWrapper: {
     position: 'relative',
   },
   headerActions: {
     position: 'absolute',
-    top: Platform.OS === 'ios' ? 10 : 20,
+    top: 20,
     right: 24,
     flexDirection: 'row',
     alignItems: 'center',
@@ -540,6 +542,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 10,
     fontWeight: 'bold',
+    fontFamily: UbuntuFonts.bold,
   },
   rtl: {
     textAlign: 'right',
@@ -559,6 +562,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#1A1A1A',
     marginBottom: 16,
+    fontFamily: UbuntuFonts.bold,
   },
   availabilityCard: {
     backgroundColor: '#FFFFFF',
@@ -582,6 +586,7 @@ const styles = StyleSheet.create({
     color: '#666666',
     textTransform: 'uppercase',
     letterSpacing: 0.5,
+    fontFamily: UbuntuFonts.semiBold,
   },
   timeSlotColumn: {
     flex: 1,
@@ -611,10 +616,12 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#1A1A1A',
     marginBottom: 4,
+    fontFamily: UbuntuFonts.semiBold,
   },
   timeSlotTime: {
     fontSize: 14,
     color: '#666666',
+    fontFamily: UbuntuFonts.regular,
   },
   checkboxCell: {
     width: 80,
@@ -661,6 +668,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '600',
+    fontFamily: UbuntuFonts.semiBold,
   },
   savedIndicator: {
     flexDirection: 'row',
@@ -673,6 +681,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: '#10B981',
+    fontFamily: UbuntuFonts.semiBold,
   },
   tripCard: {
     backgroundColor: '#FFFFFF',
@@ -711,11 +720,13 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: '#666666',
     flex: 1,
+    fontFamily: UbuntuFonts.medium,
   },
   tripInfoValue: {
     fontSize: 16,
     fontWeight: '600',
     color: '#1A1A1A',
+    fontFamily: UbuntuFonts.semiBold,
   },
   statusBadge: {
     backgroundColor: '#FFFBEB',
@@ -727,6 +738,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: '#F59E0B',
+    fontFamily: UbuntuFonts.semiBold,
   },
 });
 

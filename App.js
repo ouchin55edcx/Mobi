@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { StyleSheet } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { useFonts } from 'expo-font';
 import SplashScreen from './components/SplashScreen';
 import WelcomeScreen from './components/WelcomeScreen';
 import LoginScreen from './components/LoginScreen';
@@ -8,9 +9,7 @@ import SelectRoleScreen from './components/SelectRoleScreen';
 import StudentRegisterScreen from './screens/students/StudentRegisterScreen';
 import EmailVerificationScreen from './screens/students/EmailVerificationScreen';
 import StudentTabNavigator from './components/StudentTabNavigator';
-import DriverRegisterScreen from './screens/drivers/DriverRegisterScreen';
-import BusInformationScreen from './screens/drivers/BusInformationScreen';
-import DriverEmailVerificationScreen from './screens/drivers/EmailVerificationScreen';
+import DriverRegistrationFlow from './screens/drivers/DriverRegistrationFlow';
 import PendingApprovalScreen from './screens/drivers/PendingApprovalScreen';
 import DriverTabNavigator from './components/DriverTabNavigator';
 import TripLiveViewScreen from './screens/drivers/TripLiveViewScreen';
@@ -24,13 +23,41 @@ export default function App() {
   const [driverData, setDriverData] = useState(null);
   const [tripLiveViewData, setTripLiveViewData] = useState(null);
 
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setShowSplash(false);
-    }, 3000); // 3 seconds
+  // Load Ubuntu fonts
+  const [fontsLoaded, fontError] = useFonts({
+    'UbuntuSans-Thin': require('./assets/fonts/UbuntuSans-Thin.ttf'),
+    'UbuntuSans-ThinItalic': require('./assets/fonts/UbuntuSans-ThinItalic.ttf'),
+    'UbuntuSans-ExtraLight': require('./assets/fonts/UbuntuSans-ExtraLight.ttf'),
+    'UbuntuSans-ExtraLightItalic': require('./assets/fonts/UbuntuSans-ExtraLightItalic.ttf'),
+    'UbuntuSans-Light': require('./assets/fonts/UbuntuSans-Light.ttf'),
+    'UbuntuSans-LightItalic': require('./assets/fonts/UbuntuSans-LightItalic.ttf'),
+    'UbuntuSans-Regular': require('./assets/fonts/UbuntuSans-Regular.ttf'),
+    'UbuntuSans-Italic': require('./assets/fonts/UbuntuSans-Italic.ttf'),
+    'UbuntuSans-Medium': require('./assets/fonts/UbuntuSans-Medium.ttf'),
+    'UbuntuSans-MediumItalic': require('./assets/fonts/UbuntuSans-MediumItalic.ttf'),
+    'UbuntuSans-SemiBold': require('./assets/fonts/UbuntuSans-SemiBold.ttf'),
+    'UbuntuSans-SemiBoldItalic': require('./assets/fonts/UbuntuSans-SemiBoldItalic.ttf'),
+    'UbuntuSans-Bold': require('./assets/fonts/UbuntuSans-Bold.ttf'),
+    'UbuntuSans-BoldItalic': require('./assets/fonts/UbuntuSans-BoldItalic.ttf'),
+    'UbuntuSans-ExtraBold': require('./assets/fonts/UbuntuSans-ExtraBold.ttf'),
+    'UbuntuSans-ExtraBoldItalic': require('./assets/fonts/UbuntuSans-ExtraBoldItalic.ttf'),
+  });
 
-    return () => clearTimeout(timer);
-  }, []);
+  useEffect(() => {
+    // Wait for fonts to load before showing the app
+    if (fontsLoaded || fontError) {
+      const timer = setTimeout(() => {
+        setShowSplash(false);
+      }, 3000); // 3 seconds
+
+      return () => clearTimeout(timer);
+    }
+  }, [fontsLoaded, fontError]);
+
+  // Show splash screen while fonts are loading or during initial splash
+  if (!fontsLoaded && !fontError) {
+    return <SplashScreen />;
+  }
 
   const renderScreen = () => {
     if (showSplash) {
@@ -113,58 +140,22 @@ export default function App() {
       );
     }
 
-    // Driver Registration Flow
+    // Driver Registration Flow (Unified Multi-Step)
     if (currentScreen === 'driverRegister') {
       return (
-        <DriverRegisterScreen
+        <DriverRegistrationFlow
           language={language}
           onBack={() => setCurrentScreen('selectRole')}
           onSuccess={(data) => {
-            console.log('Driver registered:', data);
-            // Store driver data and navigate to bus information
-            setDriverData({ driverId: data.id, email: data.email });
-            setCurrentScreen('busInformation');
-          }}
-        />
-      );
-    }
-
-    if (currentScreen === 'busInformation') {
-      if (!driverData) {
-        // If no driver data, go back to registration
-        setCurrentScreen('driverRegister');
-        return null;
-      }
-      return (
-        <BusInformationScreen
-          driverId={driverData.driverId}
-          language={language}
-          onBack={() => setCurrentScreen('driverRegister')}
-          onSuccess={(data) => {
-            console.log('Bus information saved:', data);
-            // Navigate to email verification
-            setCurrentScreen('driverEmailVerification');
-          }}
-        />
-      );
-    }
-
-    if (currentScreen === 'driverEmailVerification') {
-      if (!driverData) {
-        // If no driver data, go back to registration
-        setCurrentScreen('driverRegister');
-        return null;
-      }
-      return (
-        <DriverEmailVerificationScreen
-          driverId={driverData.driverId}
-          email={driverData.email}
-          language={language}
-          onBack={() => setCurrentScreen('busInformation')}
-          onSuccess={() => {
-            console.log('Email verified successfully');
-            // Navigate to pending approval
-            setCurrentScreen('pendingApproval');
+            console.log('Driver registration completed:', data);
+            // After verification, navigate to pending approval
+            // The flow handles verification internally, so we need to track when it's done
+            // For now, we'll use the pendingApproval screen separately
+            // The unified flow shows pending state internally, but we can also use the dedicated screen
+            if (data && data.driverId) {
+              setDriverData({ driverId: data.driverId, email: data.email });
+              setCurrentScreen('pendingApproval');
+            }
           }}
         />
       );
@@ -242,6 +233,11 @@ export default function App() {
           // Demo mode: navigate to student home with demo student ID
           setStudentData({ studentId: 'demo-student-id', email: 'demo@mobi.app', isDemo: true });
           setCurrentScreen('studentHome');
+        }}
+        onDriverDemo={() => {
+          // Demo mode: navigate to driver home with demo driver ID
+          setDriverData({ driverId: 'demo-driver-id', email: 'driver@mobi.app', isDemo: true });
+          setCurrentScreen('driverHome');
         }}
       />
     );

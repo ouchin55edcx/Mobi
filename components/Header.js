@@ -4,6 +4,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { getUnreadNotificationsCount, subscribeToNotifications } from '../src/services/notificationService';
 import NotificationsModal from './NotificationsModal';
 import DemoBadge from './DemoBadge';
+import { UbuntuFonts } from '../src/utils/fonts';
 
 const Header = ({
   title,
@@ -140,11 +141,13 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#3185FC',
     marginBottom: 8,
+    fontFamily: UbuntuFonts.bold,
   },
   subtitle: {
     fontSize: 16,
     color: '#666666',
     lineHeight: 22,
+    fontFamily: UbuntuFonts.regular,
   },
   rtl: {
     textAlign: 'right',
@@ -174,6 +177,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 10,
     fontWeight: 'bold',
+    fontFamily: UbuntuFonts.bold,
   },
 });
 
