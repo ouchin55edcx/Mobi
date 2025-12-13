@@ -8,6 +8,12 @@ import SelectRoleScreen from './components/SelectRoleScreen';
 import StudentRegisterScreen from './screens/students/StudentRegisterScreen';
 import EmailVerificationScreen from './screens/students/EmailVerificationScreen';
 import StudentTabNavigator from './components/StudentTabNavigator';
+import DriverRegisterScreen from './screens/drivers/DriverRegisterScreen';
+import BusInformationScreen from './screens/drivers/BusInformationScreen';
+import DriverEmailVerificationScreen from './screens/drivers/EmailVerificationScreen';
+import PendingApprovalScreen from './screens/drivers/PendingApprovalScreen';
+import DriverTabNavigator from './components/DriverTabNavigator';
+import TripLiveViewScreen from './screens/drivers/TripLiveViewScreen';
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
@@ -15,6 +21,8 @@ export default function App() {
   const [language, setLanguage] = useState('en');
   const [selectedRole, setSelectedRole] = useState(null);
   const [studentData, setStudentData] = useState(null);
+  const [driverData, setDriverData] = useState(null);
+  const [tripLiveViewData, setTripLiveViewData] = useState(null);
 
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -48,8 +56,7 @@ export default function App() {
             if (role === 'student') {
               setCurrentScreen('studentRegister');
             } else if (role === 'driver') {
-              // Navigate to driver registration when implemented
-              console.log('Driver registration coming soon');
+              setCurrentScreen('driverRegister');
             }
           }}
         />
@@ -101,6 +108,125 @@ export default function App() {
           onLogout={() => {
             setStudentData(null);
             setCurrentScreen('welcome');
+          }}
+        />
+      );
+    }
+
+    // Driver Registration Flow
+    if (currentScreen === 'driverRegister') {
+      return (
+        <DriverRegisterScreen
+          language={language}
+          onBack={() => setCurrentScreen('selectRole')}
+          onSuccess={(data) => {
+            console.log('Driver registered:', data);
+            // Store driver data and navigate to bus information
+            setDriverData({ driverId: data.id, email: data.email });
+            setCurrentScreen('busInformation');
+          }}
+        />
+      );
+    }
+
+    if (currentScreen === 'busInformation') {
+      if (!driverData) {
+        // If no driver data, go back to registration
+        setCurrentScreen('driverRegister');
+        return null;
+      }
+      return (
+        <BusInformationScreen
+          driverId={driverData.driverId}
+          language={language}
+          onBack={() => setCurrentScreen('driverRegister')}
+          onSuccess={(data) => {
+            console.log('Bus information saved:', data);
+            // Navigate to email verification
+            setCurrentScreen('driverEmailVerification');
+          }}
+        />
+      );
+    }
+
+    if (currentScreen === 'driverEmailVerification') {
+      if (!driverData) {
+        // If no driver data, go back to registration
+        setCurrentScreen('driverRegister');
+        return null;
+      }
+      return (
+        <DriverEmailVerificationScreen
+          driverId={driverData.driverId}
+          email={driverData.email}
+          language={language}
+          onBack={() => setCurrentScreen('busInformation')}
+          onSuccess={() => {
+            console.log('Email verified successfully');
+            // Navigate to pending approval
+            setCurrentScreen('pendingApproval');
+          }}
+        />
+      );
+    }
+
+    if (currentScreen === 'pendingApproval') {
+      if (!driverData) {
+        // If no driver data, go back to registration
+        setCurrentScreen('driverRegister');
+        return null;
+      }
+      return (
+        <PendingApprovalScreen
+          driverId={driverData.driverId}
+          language={language}
+          onApproved={() => {
+            console.log('Driver approved');
+            // Navigate to driver home
+            setCurrentScreen('driverHome');
+          }}
+          onRejected={() => {
+            console.log('Driver rejected');
+            // Could navigate to a rejection screen or back to welcome
+            setCurrentScreen('welcome');
+            setDriverData(null);
+          }}
+        />
+      );
+    }
+
+    if (currentScreen === 'driverHome') {
+      return (
+        <DriverTabNavigator
+          driverId={driverData?.driverId}
+          language={language}
+          isDemo={driverData?.isDemo || false}
+          onLogout={() => {
+            setDriverData(null);
+            setCurrentScreen('welcome');
+          }}
+          onTripPress={(tripData) => {
+            setTripLiveViewData(tripData);
+            setCurrentScreen('tripLiveView');
+          }}
+        />
+      );
+    }
+
+    if (currentScreen === 'tripLiveView') {
+      if (!tripLiveViewData) {
+        // If no trip data, go back to driver home
+        setCurrentScreen('driverHome');
+        return null;
+      }
+      return (
+        <TripLiveViewScreen
+          tripData={tripLiveViewData}
+          language={language}
+          isDemo={driverData?.isDemo || false}
+          onBack={() => {
+            setTripLiveViewData(null);
+            setCurrentScreen('driverHome');
           }}
         />
       );

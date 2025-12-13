@@ -159,6 +159,42 @@ export const updateBooking = async (bookingId, updates) => {
 };
 
 /**
+ * Get active booking for a student
+ * Active booking = PENDING or CONFIRMED status, not completed/cancelled, and start_time is in the future or current
+ * @param {string} studentId - Student ID
+ * @returns {Promise<Object>} - Result object with data and error
+ */
+export const getActiveBooking = async (studentId) => {
+  try {
+    const now = new Date().toISOString();
+    
+    const { data, error } = await supabase
+      .from('bookings')
+      .select('*')
+      .eq('student_id', studentId)
+      .in('status', ['PENDING', 'CONFIRMED'])
+      .gte('start_time', now)
+      .order('start_time', { ascending: true })
+      .limit(1)
+      .single();
+
+    if (error) {
+      // If no active booking found, return null (not an error)
+      if (error.code === 'PGRST116') {
+        return { data: null, error: null };
+      }
+      console.error('Error fetching active booking:', error);
+      return { data: null, error };
+    }
+
+    return { data, error: null };
+  } catch (error) {
+    console.error('Exception fetching active booking:', error);
+    return { data: null, error };
+  }
+};
+
+/**
  * Cancel booking
  * @param {string} bookingId - Booking ID
  * @returns {Promise<Object>} - Result object with data and error

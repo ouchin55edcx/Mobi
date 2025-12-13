@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native
 import { MaterialIcons } from '@expo/vector-icons';
 import { getUnreadNotificationsCount, subscribeToNotifications } from '../src/services/notificationService';
 import NotificationsModal from './NotificationsModal';
+import DemoBadge from './DemoBadge';
 
 const Header = ({
   title,
@@ -64,14 +65,6 @@ const Header = ({
   return (
     <>
       <View style={styles.header}>
-        {isDemo && (
-          <View style={styles.demoBanner}>
-            <MaterialIcons name="info" size={16} color="#F59E0B" />
-            <Text style={styles.demoBannerText}>
-              {language === 'ar' ? 'وضع العرض التوضيحي' : 'Demo Mode'}
-            </Text>
-          </View>
-        )}
         <View style={styles.headerContent}>
           <View style={styles.titleContainer}>
             <Text style={[styles.title, language === 'ar' && styles.rtl]}>
@@ -84,6 +77,7 @@ const Header = ({
             )}
           </View>
           <View style={styles.actionsContainer}>
+            {isDemo && <DemoBadge language={language} />}
             {showNotifications && !isDemo && studentId && (
               <TouchableOpacity
                 style={styles.notificationButton}
@@ -131,21 +125,6 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
-  },
-  demoBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#FEF3C7',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    borderRadius: 8,
-    marginBottom: 16,
-    gap: 8,
-  },
-  demoBannerText: {
-    fontSize: 12,
-    color: '#F59E0B',
-    fontWeight: '600',
   },
   headerContent: {
     flexDirection: 'row',

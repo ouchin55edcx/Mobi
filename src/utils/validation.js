@@ -126,6 +126,33 @@ export const validateCoordinates = (latitude, longitude) => {
 };
 
 /**
+ * Validates year - must be between 1900 and current year
+ * @param {number|string} year - Year to validate
+ * @returns {boolean} - True if valid, false otherwise
+ */
+export const validateYear = (year) => {
+  if (!year) return false;
+  
+  const yearNum = typeof year === 'string' ? parseInt(year, 10) : year;
+  const currentYear = new Date().getFullYear();
+  
+  return !isNaN(yearNum) && yearNum >= 1900 && yearNum <= currentYear;
+};
+
+/**
+ * Validates capacity - must be integer >= 7
+ * @param {number|string} capacity - Capacity to validate
+ * @returns {boolean} - True if valid, false otherwise
+ */
+export const validateCapacity = (capacity) => {
+  if (!capacity) return false;
+  
+  const capacityNum = typeof capacity === 'string' ? parseInt(capacity, 10) : capacity;
+  
+  return !isNaN(capacityNum) && Number.isInteger(capacityNum) && capacityNum >= 7;
+};
+
+/**
  * Gets validation error message for a field
  * @param {string} field - Field name
  * @param {string|number|null} value - Field value
@@ -158,6 +185,26 @@ export const getValidationError = (field, value, language = 'en') => {
         required: 'Please select your home location',
         invalid: 'Invalid location coordinates',
       },
+      year: {
+        required: 'Year is required',
+        invalid: `Year must be between 1900 and ${new Date().getFullYear()}`,
+      },
+      capacity: {
+        required: 'Capacity is required',
+        invalid: 'Capacity must be at least 7',
+      },
+      plateNumber: {
+        required: 'Plate number is required',
+        invalid: 'Please enter a valid plate number',
+      },
+      type: {
+        required: 'Bus type is required',
+        invalid: 'Please enter a valid bus type',
+      },
+      brand: {
+        required: 'Brand is required',
+        invalid: 'Please enter a valid brand',
+      },
     },
     ar: {
       fullname: {
@@ -182,6 +229,26 @@ export const getValidationError = (field, value, language = 'en') => {
       location: {
         required: 'يرجى اختيار موقع منزلك',
         invalid: 'إحداثيات الموقع غير صحيحة',
+      },
+      year: {
+        required: 'السنة مطلوبة',
+        invalid: `يجب أن تكون السنة بين 1900 و ${new Date().getFullYear()}`,
+      },
+      capacity: {
+        required: 'السعة مطلوبة',
+        invalid: 'يجب أن تكون السعة 7 على الأقل',
+      },
+      plateNumber: {
+        required: 'رقم اللوحة مطلوب',
+        invalid: 'يرجى إدخال رقم لوحة صحيح',
+      },
+      type: {
+        required: 'نوع الحافلة مطلوب',
+        invalid: 'يرجى إدخال نوع حافلة صحيح',
+      },
+      brand: {
+        required: 'العلامة التجارية مطلوبة',
+        invalid: 'يرجى إدخال علامة تجارية صحيحة',
       },
     },
   };

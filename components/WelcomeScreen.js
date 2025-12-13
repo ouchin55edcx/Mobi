@@ -190,7 +190,7 @@ const WelcomeScreen = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: 'rgba(23, 81, 204, 0.98)',
   },
   languageContainer: {
     flexDirection: 'row',
@@ -271,7 +271,7 @@ const styles = StyleSheet.create({
   logo: {
     fontSize: 64,
     fontWeight: 'bold',
-    color: '#3185FC',
+    color: '#FFFFFF',
   },
   textContainer: {
     alignItems: 'center',
@@ -280,13 +280,13 @@ const styles = StyleSheet.create({
   welcomeText: {
     fontSize: 32,
     fontWeight: 'bold',
-    color: '#1A1A1A',
+    color: '#FFFFFF',
     marginBottom: 12,
     textAlign: 'center',
   },
   subtitleText: {
     fontSize: 18,
-    color: '#666666',
+    color: '#FFFFFA',
     textAlign: 'center',
     lineHeight: 24,
   },
@@ -336,7 +336,7 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
   },
   demoLinkText: {
-    color: '#3185FC',
+    color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '500',
     textDecorationLine: 'underline',

@@ -1,212 +1,135 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   TouchableOpacity,
   Platform,
-  KeyboardAvoidingView,
   ScrollView,
-  Alert,
   ActivityIndicator,
+  RefreshControl,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import Header from '../../components/Header';
-import BookingTypePicker from '../../components/BookingTypePicker';
-import TimePicker from '../../components/TimePicker';
-import { createBooking } from '../../src/services/bookingService';
+import TripCard from '../../components/TripCard';
+import BookingModal from '../../components/BookingModal';
+import { getActiveBooking } from '../../src/services/bookingService';
+import { getDemoActiveTrip, DEMO_STUDENT, DEMO_SCHOOL } from '../../src/data/demoData';
 import TripDetailsScreen from './TripDetailsScreen';
 
 const translations = {
   en: {
-    title: 'Book a Ride',
-    subtitle: 'Schedule your pickup or dropoff',
-    bookingType: 'Booking Type',
-    startTime: 'Start Time',
-    endTime: 'End Time',
-    book: 'Book Ride',
-    booking: 'Booking...',
-    success: 'Booking Created',
-    successMessage: 'Your ride has been booked successfully!',
-    ok: 'OK',
-    logout: 'Logout',
+    title: 'Home',
+    subtitle: 'Your active trips',
+    noActiveTrip: 'No active trips',
+    bookAnotherRide: 'Book Another Ride',
+    viewDetails: 'View Details',
+    loading: 'Loading...',
   },
   ar: {
-    title: 'احجز رحلة',
-    subtitle: 'حدد موعد استلامك أو توصيلك',
-    bookingType: 'نوع الحجز',
-    startTime: 'وقت البداية',
-    endTime: 'وقت النهاية',
-    book: 'احجز الرحلة',
-    booking: 'جاري الحجز...',
-    success: 'تم إنشاء الحجز',
-    successMessage: 'تم حجز رحلتك بنجاح!',
-    ok: 'حسناً',
-    logout: 'تسجيل الخروج',
+    title: 'الرئيسية',
+    subtitle: 'رحلاتك النشطة',
+    noActiveTrip: 'لا توجد رحلات نشطة',
+    bookAnotherRide: 'احجز رحلة أخرى',
+    viewDetails: 'عرض التفاصيل',
+    loading: 'جاري التحميل...',
   },
 };
 
 const StudentHomeScreen = ({ studentId, isDemo = false, language = 'en' }) => {
-  const [formData, setFormData] = useState({
-    type: null,
-    startTime: null,
-    endTime: null,
-  });
+  // Use demo locations or real student data
+  const homeLocation = isDemo 
+    ? DEMO_STUDENT.home_location 
+    : { latitude: 33.5731, longitude: -7.5898 }; // In production, fetch from student profile
+  const schoolLocation = isDemo 
+    ? DEMO_SCHOOL.location 
+    : { latitude: 33.5800, longitude: -7.5920 }; // In production, fetch from school data
 
-  const [errors, setErrors] = useState({});
-  const [touched, setTouched] = useState({});
-  const [loading, setLoading] = useState(false);
+  const [activeBooking, setActiveBooking] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [showBookingModal, setShowBookingModal] = useState(false);
   const [showTripDetails, setShowTripDetails] = useState(false);
-  const [generatedTrip, setGeneratedTrip] = useState(null);
+  const [selectedTrip, setSelectedTrip] = useState(null);
 
   const t = translations[language];
+  const isRTL = language === 'ar';
 
-  const handleTypeSelect = useCallback((type) => {
-    setFormData((prev) => ({ ...prev, type }));
-    setErrors((prev) => ({ ...prev, type: null }));
-  }, []);
-
-  const handleStartTimeSelect = useCallback((time) => {
-    setFormData((prev) => ({ ...prev, startTime: time }));
-    setErrors((prev) => ({ ...prev, startTime: null }));
-
-    // Auto-adjust end time if it's before or equal to start time
-    if (formData.endTime && time >= formData.endTime) {
-      const newEndTime = new Date(time);
-      newEndTime.setHours(newEndTime.getHours() + 1); // Add 1 hour default
-      setFormData((prev) => ({ ...prev, endTime: newEndTime }));
-    }
-  }, [formData.endTime]);
-
-  const handleEndTimeSelect = useCallback((time) => {
-    setFormData((prev) => ({ ...prev, endTime: time }));
-    setErrors((prev) => ({ ...prev, endTime: null }));
-  }, []);
-
-  const validateForm = () => {
-    const newErrors = {};
-    let isValid = true;
-
-    // Validate type
-    if (!formData.type) {
-      newErrors.type = language === 'ar' ? 'يرجى اختيار نوع الحجز' : 'Please select booking type';
-      isValid = false;
-    }
-
-    // Validate start time
-    if (!formData.startTime) {
-      newErrors.startTime = language === 'ar' ? 'يرجى اختيار وقت البداية' : 'Please select start time';
-      isValid = false;
-    } else {
-      const now = new Date();
-      if (formData.startTime < now) {
-        newErrors.startTime = language === 'ar' ? 'وقت البداية يجب أن يكون في المستقبل' : 'Start time must be in the future';
-        isValid = false;
-      }
-    }
-
-    // Validate end time
-    if (!formData.endTime) {
-      newErrors.endTime = language === 'ar' ? 'يرجى اختيار وقت النهاية' : 'Please select end time';
-      isValid = false;
-    } else if (formData.startTime && formData.endTime <= formData.startTime) {
-      newErrors.endTime = language === 'ar' ? 'وقت النهاية يجب أن يكون بعد وقت البداية' : 'End time must be after start time';
-      isValid = false;
-    }
-
-    setErrors(newErrors);
-    return isValid;
-  };
-
-  const handleBook = async () => {
-    // Mark all fields as touched
-    Object.keys(formData).forEach((field) => {
-      setTouched((prev) => ({ ...prev, [field]: true }));
-    });
-
-    if (!validateForm()) {
-      return;
-    }
-
-    // Demo mode: Show trip details with mock data
+  // Load active booking
+  const loadActiveBooking = useCallback(async () => {
     if (isDemo) {
-      const mockTripData = generateMockTripData(formData, studentId);
-      setGeneratedTrip(mockTripData);
-      setShowTripDetails(true);
+      // Demo mode: use static demo trip data
+      const demoTrip = getDemoActiveTrip();
+      setActiveBooking(demoTrip);
+      setLoading(false);
+      setRefreshing(false);
       return;
     }
-
-    setLoading(true);
 
     try {
-      const result = await createBooking({
-        studentId,
-        type: formData.type,
-        startTime: formData.startTime,
-        endTime: formData.endTime,
-      });
-
-      if (result.error) {
-        Alert.alert(
-          language === 'ar' ? 'خطأ' : 'Error',
-          result.error.message || (language === 'ar' ? 'فشل إنشاء الحجز' : 'Failed to create booking'),
-          [{ text: language === 'ar' ? 'حسناً' : 'OK' }]
-        );
+      const { data, error } = await getActiveBooking(studentId);
+      if (error) {
+        console.error('Error loading active booking:', error);
+        setActiveBooking(null);
       } else {
-        // Generate trip data (mock for now - in production, this would come from trip generation service)
-        const mockTripData = generateMockTripData(formData, studentId);
-        setGeneratedTrip(mockTripData);
-        setShowTripDetails(true);
-        
-        // Also call callback if provided
-        if (onTripGenerated) {
-          onTripGenerated(mockTripData);
-        }
+        setActiveBooking(data);
       }
     } catch (err) {
-      console.error('Error creating booking:', err);
-      Alert.alert(
-        language === 'ar' ? 'خطأ' : 'Error',
-        language === 'ar' ? 'حدث خطأ أثناء إنشاء الحجز' : 'An error occurred while creating booking',
-        [{ text: language === 'ar' ? 'حسناً' : 'OK' }]
-      );
+      console.error('Exception loading active booking:', err);
+      setActiveBooking(null);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  };
+  }, [studentId, isDemo]);
 
-  // Get minimum date for end time (start time + 1 minute)
-  const getMinEndTime = () => {
-    if (!formData.startTime) return new Date();
-    const minTime = new Date(formData.startTime);
-    minTime.setMinutes(minTime.getMinutes() + 1);
-    return minTime;
-  };
+  // Load on mount and when booking modal closes
+  useEffect(() => {
+    loadActiveBooking();
+  }, [loadActiveBooking]);
 
-  // Generate mock trip data (replace with actual trip generation service)
-  const generateMockTripData = (bookingData, studentId) => {
-    const now = new Date();
-    const startTime = bookingData.startTime || new Date(now.getTime() + 30 * 60 * 1000);
-    
+  // Handle refresh
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    loadActiveBooking();
+  }, [loadActiveBooking]);
+
+  // Handle booking success
+  const handleBookingSuccess = useCallback((newBooking) => {
+    // In demo mode, newBooking is passed from modal
+    // In real mode, reload from API
+    if (isDemo && newBooking) {
+      setActiveBooking(newBooking);
+    } else {
+      loadActiveBooking();
+    }
+  }, [loadActiveBooking, isDemo]);
+
+  // Convert booking to trip data format
+  const convertBookingToTripData = (booking) => {
+    if (!booking) return null;
+
     // Mock locations (in production, fetch from student and school data)
-    const homeLocation = { latitude: 33.5731, longitude: -7.5898 }; // Casablanca
     const pickupLocation = { latitude: 33.5750, longitude: -7.5900 };
     const destinationLocation = { latitude: 33.5800, longitude: -7.5920 };
-
+    const startTime = new Date(booking.start_time);
+    
     // Calculate times (mock calculation)
-    const leaveHomeTime = new Date(startTime.getTime() - 45 * 60 * 1000); // 45 min before
-    const reachPickupTime = new Date(startTime.getTime() - 30 * 60 * 1000); // 30 min before
+    const leaveHomeTime = new Date(startTime.getTime() - 45 * 60 * 1000);
+    const reachPickupTime = new Date(startTime.getTime() - 30 * 60 * 1000);
     const arriveDestinationTime = startTime;
-
-    // Mock route coordinates
     const routeCoordinates = [homeLocation, pickupLocation, destinationLocation];
 
     return {
-      bookingId: 'mock-booking-id',
-      studentId,
-      type: bookingData.type,
+      bookingId: booking.id,
+      tripId: booking.id,
+      studentId: booking.student_id,
+      type: booking.type,
+      status: booking.status,
+      start_time: booking.start_time,
+      end_time: booking.end_time,
       homeLocation,
       pickupLocation,
       destinationLocation,
@@ -219,18 +142,24 @@ const StudentHomeScreen = ({ studentId, isDemo = false, language = 'en' }) => {
     };
   };
 
+  // Handle trip card press
+  const handleTripCardPress = () => {
+    if (activeBooking) {
+      const tripData = convertBookingToTripData(activeBooking);
+      setSelectedTrip(tripData);
+      setShowTripDetails(true);
+    }
+  };
+
   // Show trip details screen
-  if (showTripDetails && generatedTrip) {
+  if (showTripDetails && selectedTrip) {
     return (
       <TripDetailsScreen
-        tripData={generatedTrip}
+        tripData={selectedTrip}
         language={language}
         onBack={() => {
           setShowTripDetails(false);
-          // Reset form after viewing trip
-          setFormData({ type: null, startTime: null, endTime: null });
-          setErrors({});
-          setTouched({});
+          setSelectedTrip(null);
         }}
       />
     );
@@ -239,84 +168,111 @@ const StudentHomeScreen = ({ studentId, isDemo = false, language = 'en' }) => {
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar style="dark" />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.keyboardView}
-        keyboardVerticalOffset={0}
-        enabled={Platform.OS === 'ios'}
-      >
-          {/* Header */}
-          <Header
-            title={t.title}
-            subtitle={t.subtitle}
-            language={language}
-            studentId={studentId}
-            isDemo={isDemo}
-          />
+      
+      {/* Header */}
+      <Header
+        title={t.title}
+        subtitle={activeBooking ? t.subtitle : t.noActiveTrip}
+        language={language}
+        studentId={studentId}
+        isDemo={isDemo}
+        showNotifications={false}
+      />
 
-        {/* Booking Form */}
+      {/* Content */}
+      {loading ? (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color="#3185FC" />
+          <Text style={[styles.loadingText, isRTL && styles.rtl]}>
+            {t.loading}
+          </Text>
+        </View>
+      ) : activeBooking ? (
+        // Active Trip State - Show Trip Card
         <ScrollView
+          style={styles.scrollView}
           contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="always"
-          keyboardDismissMode="none"
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#3185FC"
+            />
+          }
           showsVerticalScrollIndicator={false}
         >
-          <View style={styles.formContainer}>
-            {/* Booking Type */}
-            <BookingTypePicker
-              value={formData.type}
-              onSelect={handleTypeSelect}
-              language={language}
-              error={touched.type && errors.type ? errors.type : null}
-              disabled={loading}
-            />
+          <TripCard
+            tripData={activeBooking}
+            language={language}
+            onPress={handleTripCardPress}
+            homeLocation={homeLocation}
+            schoolLocation={schoolLocation}
+          />
 
-            {/* Start Time */}
-            <TimePicker
-              value={formData.startTime}
-              onSelect={handleStartTimeSelect}
-              label={t.startTime}
-              language={language}
-              error={touched.startTime && errors.startTime ? errors.startTime : null}
-              disabled={loading}
-              minimumDate={new Date()}
-            />
-
-            {/* End Time */}
-            <TimePicker
-              value={formData.endTime}
-              onSelect={handleEndTimeSelect}
-              label={t.endTime}
-              language={language}
-              error={touched.endTime && errors.endTime ? errors.endTime : null}
-              disabled={loading}
-              minimumDate={getMinEndTime()}
-            />
-          </View>
-
-          {/* Book Button */}
+          {/* Book Another Ride Button */}
           <TouchableOpacity
-            style={[styles.bookButton, loading && styles.bookButtonDisabled]}
-            onPress={handleBook}
-            disabled={loading}
+            style={[styles.bookAnotherButton, isRTL && styles.bookAnotherButtonRTL]}
+            onPress={() => setShowBookingModal(true)}
             activeOpacity={0.8}
           >
-            {loading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <>
-                <Text style={styles.bookButtonText}>{t.book}</Text>
-                <MaterialIcons
-                  name="arrow-forward"
-                  size={20}
-                  color="#FFFFFF"
-                  style={styles.bookButtonIcon}
-                />
-              </>
-            )}
+            <MaterialIcons name="add-circle-outline" size={24} color="#3185FC" />
+            <Text style={[styles.bookAnotherText, isRTL && styles.rtl]}>
+              {t.bookAnotherRide}
+            </Text>
           </TouchableOpacity>
         </ScrollView>
-      </KeyboardAvoidingView>
+      ) : (
+        // No Active Trip State - Show Empty State with Book Button
+        <ScrollView
+          style={styles.scrollView}
+          contentContainerStyle={styles.emptyContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              tintColor="#3185FC"
+            />
+          }
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={styles.emptyState}>
+            <View style={styles.emptyIconContainer}>
+              <MaterialIcons name="directions-car" size={64} color="#E5E7EB" />
+            </View>
+            <Text style={[styles.emptyTitle, isRTL && styles.rtl]}>
+              {t.noActiveTrip}
+            </Text>
+            <Text style={[styles.emptySubtitle, isRTL && styles.rtl]}>
+              {language === 'ar'
+                ? 'ابدأ بحجز رحلة جديدة'
+                : 'Start by booking a new ride'}
+            </Text>
+            <TouchableOpacity
+              style={styles.bookButton}
+              onPress={() => setShowBookingModal(true)}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.bookButtonText}>{t.bookAnotherRide}</Text>
+              <MaterialIcons
+                name="arrow-forward"
+                size={20}
+                color="#FFFFFF"
+                style={styles.bookButtonIcon}
+              />
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      )}
+
+      {/* Booking Modal */}
+      <BookingModal
+        visible={showBookingModal}
+        onClose={() => setShowBookingModal(false)}
+        studentId={studentId}
+        language={language}
+        onBookingSuccess={handleBookingSuccess}
+        isDemo={isDemo}
+      />
     </SafeAreaView>
   );
 };
@@ -326,23 +282,59 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
-  keyboardView: {
+  scrollView: {
     flex: 1,
   },
   scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingBottom: 40,
+    paddingBottom: 24,
   },
-  formContainer: {
-    marginTop: 32,
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    gap: 16,
+  },
+  loadingText: {
+    fontSize: 16,
+    color: '#666666',
+  },
+  emptyContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 24,
+  },
+  emptyState: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 48,
+  },
+  emptyIconContainer: {
+    width: 120,
+    height: 120,
+    borderRadius: 60,
+    backgroundColor: '#F9FAFB',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 24,
+  },
+  emptyTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1A1A1A',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptySubtitle: {
+    fontSize: 16,
+    color: '#666666',
     marginBottom: 32,
+    textAlign: 'center',
   },
   bookButton: {
     backgroundColor: '#3185FC',
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
+    borderRadius: 16,
+    paddingVertical: 18,
+    paddingHorizontal: 32,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -355,18 +347,41 @@ const styles = StyleSheet.create({
     shadowRadius: 8,
     elevation: 6,
   },
-  bookButtonDisabled: {
-    opacity: 0.6,
-  },
   bookButtonText: {
     color: '#FFFFFF',
     fontSize: 18,
     fontWeight: '600',
+    letterSpacing: 0.5,
   },
   bookButtonIcon: {
     marginLeft: 8,
   },
+  bookAnotherButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F0F7FF',
+    borderRadius: 16,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    marginHorizontal: 24,
+    marginTop: 24,
+    gap: 8,
+    borderWidth: 2,
+    borderColor: '#3185FC',
+    borderStyle: 'dashed',
+  },
+  bookAnotherButtonRTL: {
+    flexDirection: 'row-reverse',
+  },
+  bookAnotherText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#3185FC',
+  },
+  rtl: {
+    textAlign: 'right',
+  },
 });
 
 export default StudentHomeScreen;
-

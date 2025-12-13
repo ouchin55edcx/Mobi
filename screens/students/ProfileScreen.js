@@ -16,7 +16,9 @@ import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import MapView, { Marker } from 'react-native-maps';
 import Header from '../../components/Header';
+import DemoBadge from '../../components/DemoBadge';
 import { getStudentById, updateStudent } from '../../src/services/studentService';
+import { DEMO_STUDENT } from '../../src/data/demoData';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
 
@@ -100,20 +102,20 @@ const ProfileScreen = ({
     if (studentId && !isDemo) {
       loadStudent();
     } else if (isDemo) {
-      // Demo mode: show mock data
+      // Demo mode: use demo student data
       setStudent({
-        id: 'demo-student-id',
-        fullname: 'Demo Student',
-        email: 'demo@mobi.app',
-        phone: '+212 6XX XXX XXX',
-        school: 'Demo School',
-        home_location: { latitude: 33.5731, longitude: -7.5898 },
+        id: DEMO_STUDENT.id,
+        fullname: DEMO_STUDENT.fullname,
+        email: DEMO_STUDENT.email,
+        phone: DEMO_STUDENT.phone,
+        school: DEMO_STUDENT.schoolName,
+        home_location: DEMO_STUDENT.home_location,
       });
       setFormData({
-        fullname: 'Demo Student',
-        email: 'demo@mobi.app',
-        phone: '+212 6XX XXX XXX',
-        school: 'Demo School',
+        fullname: DEMO_STUDENT.fullname,
+        email: DEMO_STUDENT.email,
+        phone: DEMO_STUDENT.phone,
+        school: DEMO_STUDENT.schoolName,
       });
       setLoading(false);
     }

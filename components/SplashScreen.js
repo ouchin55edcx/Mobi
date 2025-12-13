@@ -12,12 +12,12 @@ const SplashScreen = () => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#3185FC',
+    backgroundColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
   },
   text: {
-    color: '#FFFFFF',
+    color: 'rgba(23, 81, 204, 0.98)',
     fontSize: 72,
     fontWeight: 'bold',
   },

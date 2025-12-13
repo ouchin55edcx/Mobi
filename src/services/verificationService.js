@@ -27,39 +27,54 @@ const generateVerificationCode = () => {
 };
 
 /**
- * Create a verification code for a student
- * @param {string} studentId - Student ID
- * @param {string} email - Student email
+ * Create a verification code for a student or driver
+ * @param {string} userId - User ID (student or driver)
+ * @param {string} email - User email
+ * @param {string} userType - 'student' or 'driver' (defaults to 'student')
  * @returns {Promise<Object>} - Result object with code and error
  */
-export const createVerificationCode = async (studentId, email) => {
+export const createVerificationCode = async (userId, email, userType = 'student') => {
   try {
-    // Delete any existing unverified codes for this student
-    await supabase
+    // Delete any existing unverified codes for this user
+    const deleteQuery = supabase
       .from('verification_codes')
       .delete()
-      .eq('student_id', studentId)
       .eq('verified', false);
+
+    if (userType === 'student') {
+      deleteQuery.eq('student_id', userId);
+    } else {
+      deleteQuery.eq('driver_id', userId);
+    }
+
+    await deleteQuery;
 
     // Generate new code
     const code = generateVerificationCode();
     const expiresAt = new Date();
     expiresAt.setMinutes(expiresAt.getMinutes() + CODE_EXPIRATION_MINUTES);
 
+    // Prepare insert data
+    const insertData = {
+      email: email,
+      code: code,
+      attempts: 0,
+      max_attempts: MAX_ATTEMPTS,
+      expires_at: expiresAt.toISOString(),
+      verified: false,
+      user_type: userType,
+    };
+
+    if (userType === 'student') {
+      insertData.student_id = userId;
+    } else {
+      insertData.driver_id = userId;
+    }
+
     // Insert verification code
     const { data, error } = await supabase
       .from('verification_codes')
-      .insert([
-        {
-          student_id: studentId,
-          email: email,
-          code: code,
-          attempts: 0,
-          max_attempts: MAX_ATTEMPTS,
-          expires_at: expiresAt.toISOString(),
-          verified: false,
-        },
-      ])
+      .insert([insertData])
       .select()
       .single();
 
@@ -80,22 +95,30 @@ export const createVerificationCode = async (studentId, email) => {
 };
 
 /**
- * Verify a code for a student
- * @param {string} studentId - Student ID
+ * Verify a code for a student or driver
+ * @param {string} userId - User ID (student or driver)
  * @param {string} code - Verification code
+ * @param {string} userType - 'student' or 'driver' (defaults to 'student')
  * @returns {Promise<Object>} - Result object with success status and error
  */
-export const verifyCode = async (studentId, code) => {
+export const verifyCode = async (userId, code, userType = 'student') => {
   try {
     // Find the verification code
-    const { data: verificationData, error: fetchError } = await supabase
+    const query = supabase
       .from('verification_codes')
       .select('*')
-      .eq('student_id', studentId)
       .eq('verified', false)
+      .eq('user_type', userType)
       .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+      .limit(1);
+
+    if (userType === 'student') {
+      query.eq('student_id', userId);
+    } else {
+      query.eq('driver_id', userId);
+    }
+
+    const { data: verificationData, error: fetchError } = await query.single();
 
     if (fetchError || !verificationData) {
       return {
@@ -159,15 +182,27 @@ export const verifyCode = async (studentId, code) => {
       return { success: false, error: verifyError };
     }
 
-    // Update student email_verified status
-    const { error: studentUpdateError } = await supabase
-      .from('students')
-      .update({ email_verified: true })
-      .eq('id', studentId);
+    // Update user email_verified status
+    if (userType === 'student') {
+      const { error: studentUpdateError } = await supabase
+        .from('students')
+        .update({ email_verified: true })
+        .eq('id', userId);
 
-    if (studentUpdateError) {
-      console.error('Error updating student verification status:', studentUpdateError);
-      return { success: false, error: studentUpdateError };
+      if (studentUpdateError) {
+        console.error('Error updating student verification status:', studentUpdateError);
+        return { success: false, error: studentUpdateError };
+      }
+    } else {
+      const { error: driverUpdateError } = await supabase
+        .from('drivers')
+        .update({ email_verified: true })
+        .eq('id', userId);
+
+      if (driverUpdateError) {
+        console.error('Error updating driver verification status:', driverUpdateError);
+        return { success: false, error: driverUpdateError };
+      }
     }
 
     return { success: true, error: null };
@@ -179,19 +214,28 @@ export const verifyCode = async (studentId, code) => {
 
 /**
  * Resend verification code
- * @param {string} studentId - Student ID
- * @param {string} email - Student email
+ * @param {string} userId - User ID (student or driver)
+ * @param {string} email - User email
+ * @param {string} userType - 'student' or 'driver' (defaults to 'student')
  * @returns {Promise<Object>} - Result object with code and error
  */
-export const resendVerificationCode = async (studentId, email) => {
+export const resendVerificationCode = async (userId, email, userType = 'student') => {
   try {
     // Check rate limiting - prevent too many resends
-    const { data: recentCodes } = await supabase
+    const query = supabase
       .from('verification_codes')
       .select('created_at')
-      .eq('student_id', studentId)
+      .eq('user_type', userType)
       .order('created_at', { ascending: false })
       .limit(1);
+
+    if (userType === 'student') {
+      query.eq('student_id', userId);
+    } else {
+      query.eq('driver_id', userId);
+    }
+
+    const { data: recentCodes } = await query;
 
     if (recentCodes && recentCodes.length > 0) {
       const lastCodeTime = new Date(recentCodes[0].created_at);
@@ -211,7 +255,7 @@ export const resendVerificationCode = async (studentId, email) => {
     }
 
     // Create new verification code
-    return await createVerificationCode(studentId, email);
+    return await createVerificationCode(userId, email, userType);
   } catch (error) {
     console.error('Exception resending verification code:', error);
     return { data: null, error };
@@ -219,20 +263,28 @@ export const resendVerificationCode = async (studentId, email) => {
 };
 
 /**
- * Get verification status for a student
- * @param {string} studentId - Student ID
+ * Get verification status for a student or driver
+ * @param {string} userId - User ID (student or driver)
+ * @param {string} userType - 'student' or 'driver' (defaults to 'student')
  * @returns {Promise<Object>} - Result object with verification data and error
  */
-export const getVerificationStatus = async (studentId) => {
+export const getVerificationStatus = async (userId, userType = 'student') => {
   try {
-    const { data, error } = await supabase
+    const query = supabase
       .from('verification_codes')
       .select('*')
-      .eq('student_id', studentId)
+      .eq('user_type', userType)
       .eq('verified', false)
       .order('created_at', { ascending: false })
-      .limit(1)
-      .single();
+      .limit(1);
+
+    if (userType === 'student') {
+      query.eq('student_id', userId);
+    } else {
+      query.eq('driver_id', userId);
+    }
+
+    const { data, error } = await query.single();
 
     if (error && error.code !== 'PGRST116') {
       // PGRST116 = no rows returned
