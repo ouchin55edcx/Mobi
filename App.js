@@ -229,15 +229,10 @@ export default function App() {
         onLanguageChange={setLanguage}
         onLogin={() => setCurrentScreen('login')}
         onRegister={() => setCurrentScreen('selectRole')}
-        onDemo={() => {
-          // Demo mode: navigate to student home with demo student ID
+        onSkip={() => {
+          // Skip to demo mode: navigate to student home with demo student ID
           setStudentData({ studentId: 'demo-student-id', email: 'demo@mobi.app', isDemo: true });
           setCurrentScreen('studentHome');
-        }}
-        onDriverDemo={() => {
-          // Demo mode: navigate to driver home with demo driver ID
-          setDriverData({ driverId: 'demo-driver-id', email: 'driver@mobi.app', isDemo: true });
-          setCurrentScreen('driverHome');
         }}
       />
     );

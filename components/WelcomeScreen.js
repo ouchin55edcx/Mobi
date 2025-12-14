@@ -14,23 +14,17 @@ import { UbuntuFonts } from '../src/utils/fonts';
 
 const translations = {
   en: {
-    welcome: 'Welcome to Mobi',
-    subtitle: 'Your journey starts here',
-    register: 'Register',
+    tagline: 'Your mobile companion',
+    register: 'Create Account',
     login: 'Login',
-    demo: 'Try Demo',
-    studentDemo: 'Student Demo',
-    driverDemo: 'Driver Demo',
+    skip: 'Skip Now',
     language: 'Language',
   },
   ar: {
-    welcome: 'مرحباً بك في موبي',
-    subtitle: 'رحلتك تبدأ من هنا',
-    register: 'تسجيل',
+    tagline: 'رفيقك المحمول',
+    register: 'إنشاء حساب',
     login: 'تسجيل الدخول',
-    demo: 'جرب العرض التوضيحي',
-    studentDemo: 'عرض توضيحي للطالب',
-    driverDemo: 'عرض توضيحي للسائق',
+    skip: 'تخطي الآن',
     language: 'اللغة',
   },
 };
@@ -40,10 +34,9 @@ const WelcomeScreen = ({
   onLanguageChange,
   onLogin,
   onRegister,
-  onDemo,
-  onDriverDemo,
+  onSkip,
 }) => {
-  const [language, setLanguage] = useState(propLanguage || 'en');
+  const [language, setLanguage] = useState(propLanguage || 'ar');
   const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
 
   const t = translations[language];
@@ -62,18 +55,6 @@ const WelcomeScreen = ({
 
   const currentLanguage = languages.find((lang) => lang.code === language);
 
-  const handleDemo = () => {
-    if (onDemo) {
-      onDemo();
-    }
-  };
-
-  const handleDriverDemo = () => {
-    if (onDriverDemo) {
-      onDriverDemo();
-    }
-  };
-
   const handleRegister = () => {
     if (onRegister) {
       onRegister();
@@ -83,6 +64,12 @@ const WelcomeScreen = ({
   const handleLogin = () => {
     if (onLogin) {
       onLogin();
+    }
+  };
+
+  const handleSkip = () => {
+    if (onSkip) {
+      onSkip();
     }
   };
 
@@ -98,7 +85,11 @@ const WelcomeScreen = ({
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar style="light" />
       
-      {/* Language Switcher */}
+      {/* Decorative Circles */}
+      <View style={styles.decorativeCircle1} />
+      <View style={styles.decorativeCircle2} />
+
+      {/* Language Switcher - Hidden but accessible */}
       <View style={styles.languageContainer}>
         <TouchableOpacity
           style={styles.languageSelect}
@@ -110,7 +101,7 @@ const WelcomeScreen = ({
             <MaterialIcons
               name="keyboard-arrow-down"
               size={20}
-              color="#666666"
+              color="#FFFFFF"
             />
           </View>
         </TouchableOpacity>
@@ -158,18 +149,20 @@ const WelcomeScreen = ({
       <View style={styles.content}>
         <View style={styles.logoContainer}>
           <Text style={styles.logo}>Mobi</Text>
-        </View>
-
-        <View style={styles.textContainer}>
-          <Text style={[styles.welcomeText, language === 'ar' && styles.rtl]}>
-            {t.welcome}
-          </Text>
-          <Text style={[styles.subtitleText, language === 'ar' && styles.rtl]}>
-            {t.subtitle}
+          <Text style={[styles.tagline, language === 'ar' && styles.rtl]}>
+            {t.tagline}
           </Text>
         </View>
 
         <View style={styles.buttonContainer}>
+          <TouchableOpacity
+            style={[styles.button, styles.loginButton]}
+            onPress={handleLogin}
+            activeOpacity={0.8}
+          >
+            <Text style={styles.loginButtonText}>{t.login}</Text>
+          </TouchableOpacity>
+
           <TouchableOpacity
             style={[styles.button, styles.registerButton]}
             onPress={handleRegister}
@@ -179,32 +172,12 @@ const WelcomeScreen = ({
           </TouchableOpacity>
 
           <TouchableOpacity
-            style={[styles.button, styles.loginButton]}
-            onPress={handleLogin}
-            activeOpacity={0.8}
+            style={styles.skipButton}
+            onPress={handleSkip}
+            activeOpacity={0.7}
           >
-            <Text style={styles.loginButtonText}>{t.login}</Text>
+            <Text style={styles.skipButtonText}>{t.skip}</Text>
           </TouchableOpacity>
-
-          <View style={styles.demoContainer}>
-            <TouchableOpacity
-              style={styles.demoButton}
-              onPress={handleDemo}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons name="school" size={20} color="#FFFFFF" style={styles.demoIcon} />
-              <Text style={styles.demoButtonText}>{t.studentDemo}</Text>
-            </TouchableOpacity>
-            
-            <TouchableOpacity
-              style={styles.demoButton}
-              onPress={handleDriverDemo}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons name="directions-bus" size={20} color="#FFFFFF" style={styles.demoIcon} />
-              <Text style={styles.demoButtonText}>{t.driverDemo}</Text>
-            </TouchableOpacity>
-          </View>
         </View>
       </View>
     </SafeAreaView>
@@ -214,7 +187,27 @@ const WelcomeScreen = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'rgba(23, 81, 204, 0.98)',
+    backgroundColor: '#3185FC',
+    position: 'relative',
+    overflow: 'hidden',
+  },
+  decorativeCircle1: {
+    position: 'absolute',
+    top: -100,
+    left: -100,
+    width: 300,
+    height: 300,
+    borderRadius: 150,
+    backgroundColor: 'rgba(255, 255, 255, 0.08)',
+  },
+  decorativeCircle2: {
+    position: 'absolute',
+    bottom: -150,
+    right: -150,
+    width: 400,
+    height: 400,
+    borderRadius: 200,
+    backgroundColor: 'rgba(255, 255, 255, 0.06)',
   },
   languageContainer: {
     flexDirection: 'row',
@@ -222,19 +215,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingTop: Platform.OS === 'ios' ? 10 : 20,
     paddingBottom: 10,
+    zIndex: 10,
   },
   languageSelect: {
-    borderRadius: 12,
-    backgroundColor: '#F5F5F5',
+    borderRadius: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     borderWidth: 1,
-    borderColor: '#E0E0E0',
+    borderColor: 'rgba(255, 255, 255, 0.3)',
     minWidth: 60,
   },
   languageSelectContent: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingVertical: 10,
+    paddingVertical: 8,
     justifyContent: 'center',
     gap: 8,
   },
@@ -288,46 +282,38 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     paddingHorizontal: 32,
+    zIndex: 1,
   },
   logoContainer: {
-    marginBottom: 40,
+    alignItems: 'center',
+    marginBottom: 80,
   },
   logo: {
-    fontSize: 64,
+    fontSize: 72,
     fontWeight: 'bold',
     color: '#FFFFFF',
     fontFamily: UbuntuFonts.bold,
-  },
-  textContainer: {
-    alignItems: 'center',
-    marginBottom: 60,
-  },
-  welcomeText: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#FFFFFF',
     marginBottom: 12,
-    textAlign: 'center',
-    fontFamily: UbuntuFonts.bold,
   },
-  subtitleText: {
+  tagline: {
     fontSize: 18,
-    color: '#FFFFFA',
+    color: '#FFFFFF',
     textAlign: 'center',
-    lineHeight: 24,
     fontFamily: UbuntuFonts.regular,
+    opacity: 0.95,
   },
   rtl: {
-    textAlign: 'right',
+    textAlign: 'center',
   },
   buttonContainer: {
     width: '100%',
     alignItems: 'center',
+    marginTop: 20,
   },
   button: {
     width: '100%',
-    paddingVertical: 16,
-    borderRadius: 12,
+    paddingVertical: 18,
+    borderRadius: 14,
     marginBottom: 16,
     alignItems: 'center',
     justifyContent: 'center',
@@ -336,12 +322,23 @@ const styles = StyleSheet.create({
       width: 0,
       height: 2,
     },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.15,
     shadowRadius: 4,
-    elevation: 3,
+    elevation: 4,
+  },
+  loginButton: {
+    backgroundColor: '#FFFFFF',
+  },
+  loginButtonText: {
+    color: '#1E3A8A',
+    fontSize: 18,
+    fontWeight: '600',
+    fontFamily: UbuntuFonts.semiBold,
   },
   registerButton: {
-    backgroundColor: '#3185FC',
+    backgroundColor: 'transparent',
+    borderWidth: 2,
+    borderColor: '#FFFFFF',
   },
   registerButtonText: {
     color: '#FFFFFF',
@@ -349,43 +346,15 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontFamily: UbuntuFonts.semiBold,
   },
-  loginButton: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 2,
-    borderColor: '#3185FC',
-  },
-  loginButtonText: {
-    color: '#3185FC',
-    fontSize: 18,
-    fontWeight: '600',
-    fontFamily: UbuntuFonts.semiBold,
-  },
-  demoContainer: {
-    flexDirection: 'row',
-    width: '100%',
-    gap: 12,
+  skipButton: {
     marginTop: 8,
-  },
-  demoButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
     paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
-  demoIcon: {
-    marginRight: 8,
-  },
-  demoButtonText: {
-    color: '#FFFFFF',
-    fontSize: 14,
-    fontWeight: '600',
-    fontFamily: UbuntuFonts.semiBold,
+  skipButtonText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 16,
+    fontWeight: '500',
+    fontFamily: UbuntuFonts.medium,
   },
 });
 

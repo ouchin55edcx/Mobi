@@ -41,6 +41,15 @@ const StudentTabNavigator = ({
             onLogout={onLogout}
           />
         );
+      case 'explore':
+        // For now, show history screen as explore
+        return (
+          <HistoryScreen
+            studentId={studentId}
+            isDemo={isDemo}
+            language={language}
+          />
+        );
       default:
         return (
           <StudentHomeScreen

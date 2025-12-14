@@ -13,15 +13,21 @@ const BottomTabNavigator = ({ activeTab, onTabChange, language = 'en' }) => {
     },
     {
       id: 'history',
-      label: language === 'ar' ? 'السجل' : 'History',
-      icon: 'history',
-      activeIcon: 'history',
+      label: language === 'ar' ? 'الرحلات' : 'Trips',
+      icon: 'directions-car',
+      activeIcon: 'directions-car',
     },
     {
       id: 'profile',
       label: language === 'ar' ? 'الملف الشخصي' : 'Profile',
       icon: 'person',
       activeIcon: 'person',
+    },
+    {
+      id: 'explore',
+      label: language === 'ar' ? 'استكشف' : 'Explore',
+      icon: 'send',
+      activeIcon: 'send',
     },
   ];
 
@@ -62,9 +68,9 @@ const BottomTabNavigator = ({ activeTab, onTabChange, language = 'en' }) => {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#2C2C2C',
     borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
+    borderTopColor: '#1A1A1A',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
