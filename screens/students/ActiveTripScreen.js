@@ -7,6 +7,8 @@ import {
   Platform,
   ScrollView,
   Dimensions,
+  Modal,
+  Vibration,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -23,12 +25,20 @@ const translations = {
     tripDuration: 'Trip Duration',
     time: 'Time',
     go: 'GO',
+    confirmStartTrip: 'Start Tracking?',
+    confirmStartTripMessage: 'Start tracking your trip now?',
+    confirm: 'Yes, Start',
+    cancel: 'Cancel',
   },
   ar: {
     tripDistance: 'المسافة الرحلة',
     tripDuration: 'مدة الرحلة',
     time: 'وقت',
     go: 'ابدأ',
+    confirmStartTrip: 'بدء التتبع؟',
+    confirmStartTripMessage: 'هل تريد بدء تتبع رحلتك الآن؟',
+    confirm: 'نعم، ابدأ',
+    cancel: 'إلغاء',
   },
 };
 
@@ -42,6 +52,7 @@ const ActiveTripScreen = ({
 }) => {
   const mapRef = useRef(null);
   const [showLiveTrip, setShowLiveTrip] = useState(false);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const isRTL = language === 'ar';
   const t = translations[language];
 
@@ -96,7 +107,21 @@ const ActiveTripScreen = ({
     }
   }, []);
 
+  const triggerHapticFeedback = () => {
+    if (Platform.OS === 'ios') {
+      Vibration.vibrate(50);
+    } else {
+      Vibration.vibrate(50);
+    }
+  };
+
   const handleGo = () => {
+    triggerHapticFeedback();
+    setShowConfirmModal(true);
+  };
+
+  const handleConfirmGo = () => {
+    setShowConfirmModal(false);
     setShowLiveTrip(true);
   };
 
@@ -261,6 +286,58 @@ const ActiveTripScreen = ({
           <Text style={styles.goButtonText}>{t.go}</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* Confirmation Modal */}
+      <Modal
+        visible={showConfirmModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowConfirmModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={[styles.modalContainer, isRTL && styles.modalContainerRTL]}>
+            <View style={styles.modalHeader}>
+              <MaterialIcons name="location-on" size={48} color="#3185FC" />
+            </View>
+            
+            <Text style={[styles.modalTitle, isRTL && styles.rtl]}>
+              {t.confirmStartTrip}
+            </Text>
+            
+            <Text style={[styles.modalMessage, isRTL && styles.rtl]}>
+              {t.confirmStartTripMessage}
+            </Text>
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  triggerHapticFeedback();
+                  setShowConfirmModal(false);
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.cancelButtonText, isRTL && styles.rtl]}>
+                  {t.cancel}
+                </Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity
+                style={[styles.modalButton, styles.confirmButton]}
+                onPress={() => {
+                  triggerHapticFeedback();
+                  handleConfirmGo();
+                }}
+                activeOpacity={0.8}
+              >
+                <Text style={[styles.confirmButtonText, isRTL && styles.rtl]}>
+                  {t.confirm}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 };
@@ -448,6 +525,85 @@ const styles = StyleSheet.create({
   },
   rtl: {
     textAlign: 'right',
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalContainer: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 24,
+    padding: 28,
+    width: '100%',
+    maxWidth: 400,
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  modalContainerRTL: {
+    // RTL handled by text alignment
+  },
+  modalHeader: {
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: '700',
+    color: '#1F2937',
+    fontFamily: UbuntuFonts.bold,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: '#6B7280',
+    fontFamily: UbuntuFonts.regular,
+    textAlign: 'center',
+    marginBottom: 28,
+    lineHeight: 24,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    width: '100%',
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cancelButton: {
+    backgroundColor: '#F3F4F6',
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#6B7280',
+    fontFamily: UbuntuFonts.semiBold,
+  },
+  confirmButton: {
+    backgroundColor: '#3185FC',
+    shadowColor: '#3185FC',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  confirmButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    fontFamily: UbuntuFonts.bold,
   },
 });
 

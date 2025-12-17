@@ -4,158 +4,61 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Animated,
   Dimensions,
   Platform,
   Linking,
-  Alert,
+  Animated,
+  Vibration,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
-import StudentPickupModal from '../../components/StudentPickupModal';
+import { UbuntuFonts } from '../../src/utils/fonts';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const translations = {
   en: {
-    tripStatus: 'Trip Status',
-    scheduled: 'Scheduled',
     live: 'LIVE',
-    completed: 'Completed',
-    pickupTime: 'Pickup Time',
-    remainingStudents: 'Remaining Students',
-    estimatedArrival: 'Estimated Arrival',
-    go: 'GO',
-    startTrip: 'Start Trip',
-    tripStarted: 'Trip Started',
-    tripStartedMessage: 'Your trip has started. Students will be notified.',
-    ok: 'OK',
+    nextStudent: 'Next Student',
+    distance: 'Distance',
+    atPickupPoint: 'At Pickup Point',
+    notAtPickupPoint: 'Not At Pickup Point',
+    call: 'Call',
+    sos: 'SOS',
     back: 'Back',
+    km: 'km',
     minutes: 'min',
-    students: 'students',
-    student: 'student',
+    seconds: 'sec',
   },
   ar: {
-    tripStatus: 'حالة الرحلة',
-    scheduled: 'مجدولة',
     live: 'مباشر',
-    completed: 'مكتملة',
-    pickupTime: 'وقت الاستلام',
-    remainingStudents: 'الطلاب المتبقون',
-    estimatedArrival: 'الوصول المتوقع',
-    go: 'ابدأ',
-    startTrip: 'بدء الرحلة',
-    tripStarted: 'تم بدء الرحلة',
-    tripStartedMessage: 'تم بدء رحلتك. سيتم إشعار الطلاب.',
-    ok: 'حسناً',
+    nextStudent: 'الطالب التالي',
+    distance: 'المسافة',
+    atPickupPoint: 'في نقطة الاستلام',
+    notAtPickupPoint: 'غير موجود في نقطة الاستلام',
+    call: 'اتصال',
+    sos: 'طوارئ',
     back: 'رجوع',
+    km: 'كم',
     minutes: 'دقيقة',
-    students: 'طلاب',
-    student: 'طالب',
+    seconds: 'ثانية',
   },
 };
 
-// Trip Status Enum
-const TRIP_STATUS = {
-  SCHEDULED: 'SCHEDULED',
-  LIVE: 'LIVE',
-  COMPLETED: 'COMPLETED',
-};
-
-// Demo data generator
-const generateDemoTripData = (tripId) => {
-  const schoolLocation = { latitude: 33.5800, longitude: -7.5920, name: 'Casablanca International School' };
-  
-  // Generate student pickup points along a route
-  const students = [
-    {
-      id: 'student-1',
-      name: 'Ahmed Alami',
-      phone: '+212612345678',
-      pickupLocation: { latitude: 33.5750, longitude: -7.5900 },
-      status: 'pending',
-      order: 1,
-    },
-    {
-      id: 'student-2',
-      name: 'Fatima Zahra',
-      phone: '+212612345679',
-      pickupLocation: { latitude: 33.5760, longitude: -7.5905 },
-      status: 'pending',
-      order: 2,
-    },
-    {
-      id: 'student-3',
-      name: 'Youssef Benali',
-      phone: '+212612345680',
-      pickupLocation: { latitude: 33.5770, longitude: -7.5910 },
-      status: 'pending',
-      order: 3,
-    },
-    {
-      id: 'student-4',
-      name: 'Aicha Mansouri',
-      phone: '+212612345681',
-      pickupLocation: { latitude: 33.5775, longitude: -7.5912 },
-      status: 'pending',
-      order: 4,
-    },
-    {
-      id: 'student-5',
-      name: 'Mohamed Tazi',
-      phone: '+212612345682',
-      pickupLocation: { latitude: 33.5780, longitude: -7.5914 },
-      status: 'pending',
-      order: 5,
-    },
-    {
-      id: 'student-6',
-      name: 'Sanae El Fassi',
-      phone: '+212612345683',
-      pickupLocation: { latitude: 33.5785, longitude: -7.5916 },
-      status: 'pending',
-      order: 6,
-    },
-    {
-      id: 'student-7',
-      name: 'Omar Idrissi',
-      phone: '+212612345684',
-      pickupLocation: { latitude: 33.5790, longitude: -7.5918 },
-      status: 'pending',
-      order: 7,
-    },
-    {
-      id: 'student-8',
-      name: 'Layla Amrani',
-      phone: '+212612345685',
-      pickupLocation: { latitude: 33.5795, longitude: -7.5920 },
-      status: 'pending',
-      order: 8,
-    },
-  ];
-
-  // Generate route coordinates (simplified polyline)
-  const routeCoordinates = [
-    ...students.map(s => s.pickupLocation),
-    schoolLocation,
-  ];
-
-  // Initial bus location (start of route)
-  const initialBusLocation = students[0].pickupLocation;
-
-  return {
-    id: tripId || 'demo-trip-001',
-    status: TRIP_STATUS.SCHEDULED,
-    pickupTime: '07:30',
-    students,
-    schoolLocation,
-    routeCoordinates,
-    busLocation: initialBusLocation,
-    estimatedArrivalMinutes: 45,
-    startTime: null,
-  };
+// Calculate distance between two coordinates
+const calculateDistance = (lat1, lon1, lat2, lon2) => {
+  const R = 6371; // Radius of the Earth in km
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const a =
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) *
+    Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
 };
 
 const TripLiveViewScreen = ({
@@ -170,635 +73,828 @@ const TripLiveViewScreen = ({
   // Initialize trip data
   const [trip, setTrip] = useState(() => {
     if (tripData) {
-      const demoData = generateDemoTripData(tripData.id);
-      // Merge tripData with demo data, preserving students if provided
-      const mergedTrip = {
-        ...demoData,
-        ...tripData,
-        students: tripData.students || demoData.students,
-        schoolLocation: tripData.schoolLocation || tripData.destinationLocation || demoData.schoolLocation,
+      const students = tripData.students || [];
+      const destinationLocation = tripData.destinationLocation || {
+        latitude: 33.5800,
+        longitude: -7.5920,
       };
-      // Regenerate route coordinates based on merged data
-      mergedTrip.routeCoordinates = [
-        ...mergedTrip.students.map(s => s.pickupLocation),
-        mergedTrip.schoolLocation,
-      ];
-      return mergedTrip;
+      return {
+        ...tripData,
+        students,
+        destinationLocation,
+        startTime: new Date(),
+      };
     }
-    return generateDemoTripData();
+    return {
+      students: [],
+      destinationLocation: { latitude: 33.5800, longitude: -7.5920 },
+      startTime: new Date(),
+    };
   });
 
-  const [tripStatus, setTripStatus] = useState(trip.status);
-  const [busLocation, setBusLocation] = useState(trip.busLocation);
-  const [showStudentModal, setShowStudentModal] = useState(false);
-  const [panelExpanded, setPanelExpanded] = useState(false);
-  const [countdownSeconds, setCountdownSeconds] = useState(trip.estimatedArrivalMinutes * 60);
-  const [startTime, setStartTime] = useState(null);
+  const [currentStudentIndex, setCurrentStudentIndex] = useState(0);
+  const [tripTime, setTripTime] = useState(0); // in seconds (elapsed)
+  const [remainingSeconds, setRemainingSeconds] = useState(20 * 60); // simple countdown for demo
+  const [driverLocation, setDriverLocation] = useState(
+    trip.parkingLocation || trip.students?.[0]?.homeLocation || { latitude: 33.5750, longitude: -7.5900 }
+  );
+  const [routeIndex, setRouteIndex] = useState(0);
+  const [studentAtPickup, setStudentAtPickup] = useState(false);
 
   const mapRef = useRef(null);
-  const animationIntervalRef = useRef(null);
-  const countdownIntervalRef = useRef(null);
-  const panelAnimation = useRef(new Animated.Value(0)).current;
-  const liveIndicatorAnimation = useRef(new Animated.Value(1)).current;
+  const tripTimeIntervalRef = useRef(null);
+  const driverMoveIntervalRef = useRef(null);
+  const pulseAnimation = useRef(new Animated.Value(1)).current;
+  const sosPulseAnimation = useRef(new Animated.Value(1)).current;
+  const sosRotateAnimation = useRef(new Animated.Value(0)).current;
 
-  // Animate panel expansion
-  useEffect(() => {
-    Animated.spring(panelAnimation, {
-      toValue: panelExpanded ? 1 : 0,
-      useNativeDriver: false,
-      tension: 50,
-      friction: 7,
-    }).start();
-  }, [panelExpanded]);
+  // Get next student
+  const nextStudent = trip.students?.[currentStudentIndex] || null;
 
-  // Animate LIVE indicator
+  // Calculate distance to next student
+  const distanceToNextStudent = nextStudent?.homeLocation
+    ? calculateDistance(
+        driverLocation.latitude,
+        driverLocation.longitude,
+        nextStudent.homeLocation.latitude,
+        nextStudent.homeLocation.longitude
+      )
+    : 0;
+
+  // Check if student is at pickup point (within 50 meters)
   useEffect(() => {
-    if (tripStatus === TRIP_STATUS.LIVE) {
-      const pulseAnimation = Animated.loop(
+    if (nextStudent?.homeLocation) {
+      const distance = distanceToNextStudent * 1000; // Convert to meters
+      setStudentAtPickup(distance < 0.05); // 50 meters threshold
+    }
+  }, [distanceToNextStudent, nextStudent]);
+
+  // Build ordered route: parking -> students -> school
+  const routeCoordinates = React.useMemo(() => {
+    const coords = [];
+    if (trip.parkingLocation) {
+      coords.push(trip.parkingLocation);
+    } else if (trip.students?.[0]?.homeLocation) {
+      coords.push(trip.students[0].homeLocation);
+    }
+    (trip.students || [])
+      .map((s) => s.homeLocation)
+      .filter(Boolean)
+      .forEach((loc) => coords.push(loc));
+    if (trip.destinationLocation) {
+      coords.push(trip.destinationLocation);
+    }
+    return coords;
+  }, [trip]);
+
+  // Start trip timer and countdown
+  useEffect(() => {
+    tripTimeIntervalRef.current = setInterval(() => {
+      setTripTime(prev => prev + 1);
+      setRemainingSeconds(prev => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+
+    return () => {
+      if (tripTimeIntervalRef.current) {
+        clearInterval(tripTimeIntervalRef.current);
+      }
+    };
+  }, []);
+
+  // Simulate driver moving along the route and progressing through pickups
+  useEffect(() => {
+    if (!routeCoordinates.length) return;
+
+    // Clear any existing interval
+    if (driverMoveIntervalRef.current) {
+      clearInterval(driverMoveIntervalRef.current);
+    }
+
+    let index = 0;
+    setRouteIndex(0);
+    setDriverLocation(routeCoordinates[0]);
+
+    driverMoveIntervalRef.current = setInterval(() => {
+      index = Math.min(index + 1, routeCoordinates.length - 1);
+      const nextPoint = routeCoordinates[index];
+      setRouteIndex(index);
+      setDriverLocation(nextPoint);
+
+      // Advance to next student when passing its coordinate
+      const nextStudent = trip.students?.[currentStudentIndex];
+      if (nextStudent?.homeLocation) {
+        const d = calculateDistance(
+          nextPoint.latitude,
+          nextPoint.longitude,
+          nextStudent.homeLocation.latitude,
+          nextStudent.homeLocation.longitude
+        );
+        if (d < 0.05 && currentStudentIndex < (trip.students?.length || 0) - 1) {
+          setCurrentStudentIndex(prev => prev + 1);
+        }
+      }
+
+      // Follow bus on map
+      if (mapRef.current) {
+        mapRef.current.animateToRegion(
+          {
+            latitude: nextPoint.latitude,
+            longitude: nextPoint.longitude,
+            latitudeDelta: 0.02,
+            longitudeDelta: 0.02,
+          },
+          800
+        );
+      }
+
+      // Stop at end of route
+      if (index === routeCoordinates.length - 1 && driverMoveIntervalRef.current) {
+        clearInterval(driverMoveIntervalRef.current);
+      }
+    }, 5000); // move every 5 seconds
+
+    return () => {
+      if (driverMoveIntervalRef.current) {
+        clearInterval(driverMoveIntervalRef.current);
+      }
+    };
+  }, [routeCoordinates, trip.students, currentStudentIndex]);
+
+  // Enhanced pulse animation for LIVE indicator with expanding circles
+  const pulseAnimation2 = useRef(new Animated.Value(0)).current;
+  const pulseAnimation3 = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const createPulseSequence = (animation, delay = 0) => {
+      return Animated.loop(
         Animated.sequence([
-          Animated.timing(liveIndicatorAnimation, {
-            toValue: 1.2,
-            duration: 1000,
+          Animated.delay(delay),
+          Animated.timing(animation, {
+            toValue: 1,
+            duration: 2000,
             useNativeDriver: true,
           }),
-          Animated.timing(liveIndicatorAnimation, {
-            toValue: 1,
-            duration: 1000,
+          Animated.timing(animation, {
+            toValue: 0,
+            duration: 2000,
             useNativeDriver: true,
           }),
         ])
       );
-      pulseAnimation.start();
-      return () => pulseAnimation.stop();
-    }
-  }, [tripStatus]);
+    };
 
-  // Countdown timer
-  useEffect(() => {
-    if (tripStatus === TRIP_STATUS.LIVE && startTime) {
-      countdownIntervalRef.current = setInterval(() => {
-        setCountdownSeconds((prev) => {
-          if (prev <= 0) {
-            setTripStatus(TRIP_STATUS.COMPLETED);
-            return 0;
-          }
-          return prev - 1;
-        });
-      }, 1000);
-    }
+    const pulse1 = createPulseSequence(pulseAnimation);
+    const pulse2 = createPulseSequence(pulseAnimation2, 667);
+    const pulse3 = createPulseSequence(pulseAnimation3, 1333);
+
+    pulse1.start();
+    pulse2.start();
+    pulse3.start();
 
     return () => {
-      if (countdownIntervalRef.current) {
-        clearInterval(countdownIntervalRef.current);
-      }
+      pulse1.stop();
+      pulse2.stop();
+      pulse3.stop();
     };
-  }, [tripStatus, startTime]);
+  }, []);
 
-  // Bus movement animation (demo mode)
+  // Warning icon animation for status badge
+  const warningShakeAnimation = useRef(new Animated.Value(0)).current;
+
+  // SOS Button animations
   useEffect(() => {
-    if (tripStatus === TRIP_STATUS.LIVE && isDemo) {
-      const route = trip.routeCoordinates;
-      let currentIndex = 0;
+    const sosPulse = Animated.loop(
+      Animated.sequence([
+        Animated.timing(sosPulseAnimation, {
+          toValue: 1.15,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+        Animated.timing(sosPulseAnimation, {
+          toValue: 1,
+          duration: 800,
+          useNativeDriver: true,
+        }),
+      ])
+    );
 
-      animationIntervalRef.current = setInterval(() => {
-        if (currentIndex < route.length - 1) {
-          currentIndex++;
-          const newLocation = route[currentIndex];
-          setBusLocation(newLocation);
+    const sosRotate = Animated.loop(
+      Animated.timing(sosRotateAnimation, {
+        toValue: 1,
+        duration: 3000,
+        useNativeDriver: true,
+      })
+    );
 
-          // Update map camera to follow bus
-          if (mapRef.current) {
-            mapRef.current.animateToRegion({
-              latitude: newLocation.latitude,
-              longitude: newLocation.longitude,
-              latitudeDelta: 0.01,
-              longitudeDelta: 0.01,
-            }, 1000);
-          }
-
-          // Mark student as picked up when bus reaches their location
-          if (currentIndex < trip.students.length) {
-            setTrip((prev) => ({
-              ...prev,
-              students: prev.students.map((student, idx) =>
-                idx === currentIndex - 1
-                  ? { ...student, status: 'picked' }
-                  : student
-              ),
-            }));
-          }
-        } else {
-          // Reached destination
-          setTripStatus(TRIP_STATUS.COMPLETED);
-        }
-      }, 3000); // Move every 3 seconds
-    }
+    sosPulse.start();
+    sosRotate.start();
 
     return () => {
-      if (animationIntervalRef.current) {
-        clearInterval(animationIntervalRef.current);
-      }
+      sosPulse.stop();
+      sosRotate.stop();
     };
-  }, [tripStatus, isDemo]);
+  }, []);
 
-  // Fit map to show all markers
+  // Warning icon shake animation
   useEffect(() => {
-    if (mapRef.current && trip.routeCoordinates.length > 0) {
-      const coordinates = [
-        ...trip.students.map(s => s.pickupLocation),
-        trip.schoolLocation,
-        busLocation,
-      ];
+    if (!studentAtPickup) {
+      const shake = Animated.loop(
+        Animated.sequence([
+          Animated.timing(warningShakeAnimation, {
+            toValue: 1,
+            duration: 100,
+            useNativeDriver: true,
+          }),
+          Animated.timing(warningShakeAnimation, {
+            toValue: -1,
+            duration: 100,
+            useNativeDriver: true,
+          }),
+          Animated.timing(warningShakeAnimation, {
+            toValue: 1,
+            duration: 100,
+            useNativeDriver: true,
+          }),
+          Animated.timing(warningShakeAnimation, {
+            toValue: 0,
+            duration: 100,
+            useNativeDriver: true,
+          }),
+        ])
+      );
+      shake.start();
 
-      mapRef.current.fitToCoordinates(coordinates, {
-        edgePadding: { top: 100, right: 50, bottom: 200, left: 50 },
+      return () => shake.stop();
+    }
+  }, [studentAtPickup]);
+
+  const sosRotateInterpolate = sosRotateAnimation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ['0deg', '360deg'],
+  });
+
+  // Format trip time
+  const formatTripTime = (seconds) => {
+    const hours = Math.floor(seconds / 3600);
+    const minutes = Math.floor((seconds % 3600) / 60);
+    const secs = seconds % 60;
+    
+    if (hours > 0) {
+      return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+    }
+    return `${minutes}:${String(secs).padStart(2, '0')}`;
+  };
+
+  const triggerHapticFeedback = () => {
+    if (Platform.OS === 'ios') {
+      Vibration.vibrate(50);
+    } else {
+      Vibration.vibrate(50);
+    }
+  };
+
+  const handleCall = (phone) => {
+    triggerHapticFeedback();
+    Linking.openURL(`tel:${phone}`);
+  };
+
+  const handleSOS = () => {
+    triggerHapticFeedback();
+    // Handle SOS emergency
+    Linking.openURL('tel:190'); // Emergency number
+  };
+
+  // Fit map to show all locations
+  useEffect(() => {
+    if (mapRef.current && routeCoordinates.length > 0) {
+      mapRef.current.fitToCoordinates(routeCoordinates, {
+        edgePadding: { top: 150, right: 50, bottom: 250, left: 50 },
         animated: true,
       });
     }
   }, []);
 
-  const handleGoPress = () => {
-    if (tripStatus === TRIP_STATUS.SCHEDULED) {
-      setTripStatus(TRIP_STATUS.LIVE);
-      setStartTime(new Date());
-      setCountdownSeconds(trip.estimatedArrivalMinutes * 60);
-
-      Alert.alert(
-        t.tripStarted,
-        t.tripStartedMessage,
-        [{ text: t.ok }]
-      );
-    }
-  };
-
-  const handleStudentCountPress = () => {
-    setShowStudentModal(true);
-  };
-
-  const handleCallStudent = (phone) => {
-    Linking.openURL(`tel:${phone}`).catch((err) => {
-      Alert.alert('Error', `Could not open phone: ${phone}`);
-    });
-  };
-
-  const remainingStudents = trip.students.filter(s => s.status === 'pending').length;
-  const pickedStudents = trip.students.filter(s => s.status === 'picked').length;
-
-  const formatCountdown = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
-
-  const panelHeight = panelAnimation.interpolate({
-    inputRange: [0, 1],
-    outputRange: [180, 320],
-  });
-
   return (
-    <View style={styles.container}>
+    <SafeAreaView style={styles.container} edges={[]}>
       <StatusBar style="light" />
       
-      {/* Full-Screen Map */}
+      {/* Full Screen Map */}
       <MapView
         ref={mapRef}
         provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
         style={styles.map}
         initialRegion={{
-          latitude: busLocation.latitude,
-          longitude: busLocation.longitude,
+          latitude: driverLocation.latitude,
+          longitude: driverLocation.longitude,
           latitudeDelta: 0.02,
           longitudeDelta: 0.02,
         }}
         showsUserLocation={false}
         showsMyLocationButton={false}
+        showsCompass={false}
         toolbarEnabled={false}
       >
-        {/* Route Polyline */}
-        <Polyline
-          coordinates={trip.routeCoordinates}
-          strokeColor="#3185FC"
-          strokeWidth={4}
-          lineDashPattern={tripStatus === TRIP_STATUS.SCHEDULED ? [5, 5] : []}
+        {/* Student pickup points */}
+        {trip.students?.map((student, index) => {
+          if (!student.homeLocation) return null;
+          const isNext = index === currentStudentIndex;
+          return (
+            <Marker
+              key={student.id || index}
+              coordinate={student.homeLocation}
+              title={student.name}
+            >
+              <View style={[styles.pickupMarker, isNext && styles.nextPickupMarker]}>
+                <Text style={[styles.markerNumber, isNext && styles.nextMarkerNumber]}>
+                  {index + 1}
+                </Text>
+              </View>
+            </Marker>
+          );
+        })}
+        
+        {/* Destination marker */}
+        <Marker
+          coordinate={trip.destinationLocation}
+          pinColor="#10B981"
         />
+        
+        {/* Driver location */}
+        <Marker
+          coordinate={driverLocation}
+          title="Driver"
+        >
+          <View style={styles.driverMarker}>
+            <MaterialIcons name="directions-bus" size={32} color="#FFFFFF" />
+          </View>
+        </Marker>
+        
+        {/* Multi-segment route polyline with gradient colors */}
+        {routeCoordinates.length > 1 && (
+          <>
+            {/* Completed segment (green) */}
+            {routeIndex > 0 && (
+              <Polyline
+                coordinates={routeCoordinates.slice(0, routeIndex + 1)}
+                strokeColor="#10B981"
+                strokeWidth={6}
+                lineDashPattern={[0]}
+                zIndex={1}
+              />
+            )}
 
-        {/* Student Pickup Points */}
-        {trip.students.map((student, index) => (
-          <Marker
-            key={student.id}
-            coordinate={student.pickupLocation}
-            anchor={{ x: 0.5, y: 0.5 }}
-          >
-            <View style={[
-              styles.studentMarker,
-              student.status === 'picked' && styles.studentMarkerPicked,
-            ]}>
-              <View style={[
-                styles.studentMarkerInner,
-                student.status === 'picked' && styles.studentMarkerInnerPicked,
-              ]}>
-                <Text style={[
-                  styles.studentMarkerNumber,
-                  student.status === 'picked' && styles.studentMarkerNumberPicked,
-                ]}>
-                  {student.order}
+            {/* Current segment (blue) */}
+            {routeIndex < routeCoordinates.length - 1 && (
+              <Polyline
+                coordinates={routeCoordinates.slice(routeIndex, routeIndex + 2)}
+                strokeColor="#3B82F6"
+                strokeWidth={8}
+                lineDashPattern={[0]}
+                zIndex={2}
+              />
+            )}
+
+            {/* Remaining segment (gray) */}
+            {routeIndex < routeCoordinates.length - 2 && (
+              <Polyline
+                coordinates={routeCoordinates.slice(routeIndex + 1)}
+                strokeColor="#9CA3AF"
+                strokeWidth={4}
+                lineDashPattern={[5, 5]}
+                zIndex={0}
+              />
+            )}
+          </>
+        )}
+      </MapView>
+
+      {/* Back Button - Enhanced */}
+      <TouchableOpacity
+        style={[styles.backButton, isRTL && styles.backButtonRTL]}
+        onPress={() => {
+          triggerHapticFeedback();
+          onBack();
+        }}
+        activeOpacity={0.7}
+      >
+        <View style={styles.backButtonContainer}>
+          <MaterialIcons 
+            name={isRTL ? "arrow-forward" : "arrow-back"} 
+            size={24} 
+            color="#1A1A1A" 
+          />
+        </View>
+      </TouchableOpacity>
+
+      {/* LIVE Indicator with Trip Time - Enhanced */}
+      <View style={styles.liveContainer}>
+        <View style={styles.liveBadgeContainer}>
+          {/* Expanding pulse circles */}
+          <Animated.View
+            style={[
+              styles.livePulseCircle,
+              styles.livePulseCircle1,
+              {
+                opacity: pulseAnimation.interpolate({
+                  inputRange: [0, 0.5, 1],
+                  outputRange: [0, 0.6, 0],
+                }),
+                transform: [{
+                  scale: pulseAnimation.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [1, 2.5],
+                  }),
+                }],
+              },
+            ]}
+          />
+          <Animated.View
+            style={[
+              styles.livePulseCircle,
+              styles.livePulseCircle2,
+              {
+                opacity: pulseAnimation2.interpolate({
+                  inputRange: [0, 0.5, 1],
+                  outputRange: [0, 0.4, 0],
+                }),
+                transform: [{
+                  scale: pulseAnimation2.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [1, 2.5],
+                  }),
+                }],
+              },
+            ]}
+          />
+          <Animated.View
+            style={[
+              styles.livePulseCircle,
+              styles.livePulseCircle3,
+              {
+                opacity: pulseAnimation3.interpolate({
+                  inputRange: [0, 0.5, 1],
+                  outputRange: [0, 0.2, 0],
+                }),
+                transform: [{
+                  scale: pulseAnimation3.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [1, 2.5],
+                  }),
+                }],
+              },
+            ]}
+          />
+
+          {/* Main badge with subtle pulse */}
+          <Animated.View style={[styles.liveBadge, { transform: [{ scale: pulseAnimation.interpolate({
+            inputRange: [0, 0.5, 1],
+            outputRange: [1, 1.05, 1],
+          }) }] }]}>
+            <View style={styles.liveDot} />
+            <Text style={styles.liveText}>{t.live}</Text>
+          </Animated.View>
+        </View>
+        <View style={styles.tripTimeContainer}>
+          <Text style={styles.tripTimeText}>{formatTripTime(tripTime)}</Text>
+        </View>
+      </View>
+
+      {/* Distance Card - Minimal */}
+      {nextStudent && (
+        <View style={[styles.distanceCard, isRTL && styles.distanceCardRTL]}>
+          <Text style={styles.distanceValue}>
+            {distanceToNextStudent.toFixed(1)}
+          </Text>
+          <Text style={styles.distanceUnit}>{t.km}</Text>
+          <Text style={styles.distanceLabel}>
+            TO STUDENT {currentStudentIndex + 1} • {Math.max(1, Math.round((distanceToNextStudent / 30) * 60))} MIN
+          </Text>
+        </View>
+      )}
+
+      {/* Next Student Card - Compact with Blur/Glassmorphism */}
+      {nextStudent && (
+        <View style={[styles.studentCardWrapper, isRTL && styles.studentCardWrapperRTL]}>
+          <View style={styles.studentBlurCard}>
+            <View style={styles.studentCardHeader}>
+              <View style={styles.studentInfoContainer}>
+                <Text style={[styles.studentNameLabel, isRTL && styles.rtl]}>
+                  NEXT STUDENT
+                </Text>
+                <Text style={[styles.studentName, isRTL && styles.rtl]} numberOfLines={1}>
+                  {nextStudent.name || `Student ${currentStudentIndex + 1}`}
                 </Text>
               </View>
             </View>
-          </Marker>
-        ))}
-
-        {/* School Destination */}
-        <Marker
-          coordinate={trip.schoolLocation}
-          anchor={{ x: 0.5, y: 1 }}
-        >
-          <View style={styles.schoolMarker}>
-            <MaterialIcons name="school" size={32} color="#10B981" />
-            <View style={styles.schoolMarkerBadge}>
-              <Text style={styles.schoolMarkerText}>
-                {language === 'ar' ? 'المدرسة' : 'School'}
-              </Text>
-            </View>
+            
+            {nextStudent.phone && (
+              <TouchableOpacity
+                style={styles.callButton}
+                onPress={() => handleCall(nextStudent.phone)}
+                activeOpacity={0.8}
+              >
+                <View style={styles.callIconContainer}>
+                  <MaterialIcons name="phone" size={22} color="#FFFFFF" />
+                </View>
+                <Text style={[styles.callButtonText, isRTL && styles.rtl]}>
+                  {t.call} {nextStudent.phone}
+                </Text>
+              </TouchableOpacity>
+            )}
           </View>
-        </Marker>
-
-        {/* Bus Location */}
-        <Marker
-          coordinate={busLocation}
-          anchor={{ x: 0.5, y: 0.5 }}
-        >
-          <Animated.View
-            style={[
-              styles.busMarker,
-              {
-                transform: [{ scale: liveIndicatorAnimation }],
-              },
-            ]}
-          >
-            <MaterialIcons name="directions-bus" size={40} color="#FFFFFF" />
-            <View style={styles.busMarkerShadow} />
-          </Animated.View>
-        </Marker>
-      </MapView>
-
-      {/* Top Bar - Back Button & Status */}
-      <SafeAreaView style={styles.topBar} edges={['top']}>
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={onBack}
-          activeOpacity={0.7}
-        >
-          <MaterialIcons name="arrow-back" size={24} color="#FFFFFF" />
-        </TouchableOpacity>
-
-        {tripStatus === TRIP_STATUS.LIVE && (
-          <Animated.View
-            style={[
-              styles.liveIndicator,
-              {
-                transform: [{ scale: liveIndicatorAnimation }],
-              },
-            ]}
-          >
-            <View style={styles.liveIndicatorDot} />
-            <Text style={styles.liveIndicatorText}>{t.live}</Text>
-          </Animated.View>
-        )}
-      </SafeAreaView>
-
-      {/* Bottom Floating Panel */}
-      <Animated.View
-        style={[
-          styles.bottomPanel,
-          { height: panelHeight },
-        ]}
-      >
-        <TouchableOpacity
-          style={styles.panelHandle}
-          onPress={() => setPanelExpanded(!panelExpanded)}
-          activeOpacity={0.7}
-        >
-          <View style={styles.panelHandleBar} />
-        </TouchableOpacity>
-
-        <View style={styles.panelContent}>
-          {/* Status Badge */}
-          <View style={[
-            styles.statusBadge,
-            tripStatus === TRIP_STATUS.LIVE && styles.statusBadgeLive,
-            tripStatus === TRIP_STATUS.COMPLETED && styles.statusBadgeCompleted,
-          ]}>
-            <Text style={[
-              styles.statusText,
-              tripStatus === TRIP_STATUS.LIVE && styles.statusTextLive,
-            ]}>
-              {tripStatus === TRIP_STATUS.SCHEDULED && t.scheduled}
-              {tripStatus === TRIP_STATUS.LIVE && t.live}
-              {tripStatus === TRIP_STATUS.COMPLETED && t.completed}
-            </Text>
-          </View>
-
-          {/* Trip Info */}
-          <View style={styles.tripInfoRow}>
-            <MaterialIcons name="schedule" size={20} color="#666666" />
-            <Text style={[styles.tripInfoLabel, isRTL && styles.rtl]}>
-              {t.pickupTime}:
-            </Text>
-            <Text style={[styles.tripInfoValue, isRTL && styles.rtl]}>
-              {trip.pickupTime}
-            </Text>
-          </View>
-
-          <TouchableOpacity
-            style={styles.tripInfoRow}
-            onPress={handleStudentCountPress}
-            activeOpacity={0.7}
-          >
-            <MaterialIcons name="people" size={20} color="#666666" />
-            <Text style={[styles.tripInfoLabel, isRTL && styles.rtl]}>
-              {t.remainingStudents}:
-            </Text>
-            <Text style={[styles.tripInfoValue, styles.tripInfoValueClickable, isRTL && styles.rtl]}>
-              {remainingStudents} / {trip.students.length}
-            </Text>
-          </TouchableOpacity>
-
-          {tripStatus === TRIP_STATUS.LIVE && (
-            <View style={styles.tripInfoRow}>
-              <MaterialIcons name="timer" size={20} color="#666666" />
-              <Text style={[styles.tripInfoLabel, isRTL && styles.rtl]}>
-                {t.estimatedArrival}:
-              </Text>
-              <Text style={[styles.tripInfoValue, isRTL && styles.rtl]}>
-                {formatCountdown(countdownSeconds)} {t.minutes}
-              </Text>
-            </View>
-          )}
-
-          {panelExpanded && (
-            <View style={styles.expandedContent}>
-              <Text style={[styles.expandedTitle, isRTL && styles.rtl]}>
-                {pickedStudents} {pickedStudents === 1 ? t.student : t.students} {language === 'ar' ? 'تم استلامهم' : 'picked up'}
-              </Text>
-            </View>
-          )}
         </View>
-      </Animated.View>
-
-      {/* GO Button */}
-      {tripStatus === TRIP_STATUS.SCHEDULED && (
-        <TouchableOpacity
-          style={styles.goButton}
-          onPress={handleGoPress}
-          activeOpacity={0.8}
-        >
-          <Text style={styles.goButtonText}>{t.go}</Text>
-        </TouchableOpacity>
       )}
 
-      {/* Student Pickup Modal */}
-      <StudentPickupModal
-        visible={showStudentModal}
-        onClose={() => setShowStudentModal(false)}
-        students={trip.students}
-        language={language}
-        onCall={handleCallStudent}
-      />
-    </View>
+    </SafeAreaView>
   );
 };
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000',
+    backgroundColor: '#000000',
   },
   map: {
-    ...StyleSheet.absoluteFillObject,
-  },
-  topBar: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 16,
-    zIndex: 10,
+    width: '100%',
+    height: '100%',
   },
   backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 60 : 50,
+    left: 20,
+    zIndex: 20,
+  },
+  backButtonRTL: {
+    left: undefined,
+    right: 20,
+  },
+  backButtonContainer: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+    backgroundColor: '#FFFFFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 10,
+    borderWidth: 1,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
+  },
+  liveContainer: {
+    position: 'absolute',
+    top: Platform.OS === 'ios' ? 60 : 50,
+    left: 0,
+    right: 0,
+    alignItems: 'center',
+    zIndex: 10,
+    gap: 12,
+  },
+  liveBadgeContainer: {
+    position: 'relative',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  liveIndicator: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EF4444',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 20,
-    gap: 6,
-  },
-  liveIndicatorDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#FFFFFF',
-  },
-  liveIndicatorText: {
-    color: '#FFFFFF',
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 1,
-  },
-  bottomPanel: {
+  livePulseCircle: {
     position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: '#FFFFFF',
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 10,
-    zIndex: 10,
-  },
-  panelHandle: {
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  panelHandleBar: {
-    width: 40,
-    height: 4,
-    backgroundColor: '#D1D5DB',
-    borderRadius: 2,
-  },
-  panelContent: {
-    paddingHorizontal: 24,
-    paddingBottom: 24,
-  },
-  statusBadge: {
-    alignSelf: 'flex-start',
-    backgroundColor: '#FFFBEB',
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 12,
-    marginBottom: 16,
-  },
-  statusBadgeLive: {
-    backgroundColor: '#FEF2F2',
-  },
-  statusBadgeCompleted: {
-    backgroundColor: '#ECFDF5',
-  },
-  statusText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#F59E0B',
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  statusTextLive: {
-    color: '#EF4444',
-  },
-  tripInfoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 12,
-    gap: 8,
-  },
-  tripInfoLabel: {
-    fontSize: 14,
-    color: '#666666',
-    flex: 1,
-  },
-  tripInfoValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1A1A1A',
-  },
-  tripInfoValueClickable: {
-    color: '#3185FC',
-  },
-  expandedContent: {
-    marginTop: 16,
-    paddingTop: 16,
-    borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-  },
-  expandedTitle: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666666',
-  },
-  goButton: {
-    position: 'absolute',
-    bottom: 220,
-    right: 24,
     width: 80,
     height: 80,
     borderRadius: 40,
+    backgroundColor: '#EF4444',
+  },
+  livePulseCircle1: {
+    backgroundColor: 'rgba(239, 68, 68, 0.8)',
+  },
+  livePulseCircle2: {
+    backgroundColor: 'rgba(239, 68, 68, 0.6)',
+  },
+  livePulseCircle3: {
+    backgroundColor: 'rgba(239, 68, 68, 0.4)',
+  },
+  liveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#EF4444',
+    borderRadius: 24,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    gap: 10,
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.6,
+    shadowRadius: 12,
+    elevation: 10,
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    zIndex: 10,
+  },
+  liveDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: '#FFFFFF',
+    shadowColor: '#FFFFFF',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.8,
+    shadowRadius: 4,
+  },
+  liveText: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: 'bold',
+    fontFamily: UbuntuFonts.bold,
+    letterSpacing: 1.5,
+  },
+  tripTimeContainer: {
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    borderRadius: 25,
+    paddingHorizontal: 32,
+    paddingVertical: 12,
+    borderWidth: 2,
+    borderColor: 'rgba(0, 0, 0, 0.1)',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 6,
+    backdropFilter: 'blur(10px)',
+  },
+  tripTimeText: {
+    color: '#111827',
+    fontSize: 36,
+    fontWeight: 'bold',
+    fontFamily: UbuntuFonts.bold,
+    textShadowColor: 'rgba(255, 255, 255, 0.8)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
+    letterSpacing: 1,
+  },
+  distanceCard: {
+    position: 'absolute',
+    top: SCREEN_HEIGHT * 0.4,
+    right: 20,
+    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    borderRadius: 20,
+    padding: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minWidth: 120,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 6,
+    zIndex: 10,
+  },
+  distanceCardRTL: {
+    right: undefined,
+    left: 20,
+  },
+  distanceValue: {
+    fontSize: 48,
+    fontWeight: '700',
+    color: '#1F2937',
+    fontFamily: UbuntuFonts.bold,
+    lineHeight: 52,
+  },
+  distanceUnit: {
+    fontSize: 18,
+    color: '#6B7280',
+    fontFamily: UbuntuFonts.semiBold,
+    marginTop: 2,
+    fontWeight: '600',
+  },
+  distanceLabel: {
+    fontSize: 10,
+    color: '#9CA3AF',
+    fontFamily: UbuntuFonts.medium,
+    marginTop: 10,
+    textTransform: 'uppercase',
+    letterSpacing: 0.8,
+    fontWeight: '600',
+  },
+  studentCardWrapper: {
+    position: 'absolute',
+    bottom: 32,
+    left: 24,
+    right: 24,
+    zIndex: 10,
+  },
+  studentBlurCard: {
+    borderRadius: 24,
+    paddingVertical: 20,
+    paddingHorizontal: 20,
+    backgroundColor: '#0EA5E9',
+    overflow: 'hidden',
+    shadowColor: '#0EA5E9',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.4,
+    shadowRadius: 16,
+    elevation: 8,
+    backdropFilter: 'blur(20px)',
+  },
+  studentCardWrapperRTL: {
+    // RTL handled by text alignment
+  },
+  studentCardHeader: {
+    marginBottom: 18,
+  },
+  studentInfoContainer: {
+    flex: 1,
+  },
+  studentNameLabel: {
+    fontSize: 10,
+    color: 'rgba(255, 255, 255, 0.8)',
+    fontFamily: UbuntuFonts.medium,
+    marginBottom: 6,
+    textTransform: 'uppercase',
+    letterSpacing: 1.2,
+    fontWeight: '600',
+  },
+  studentName: {
+    fontSize: 26,
+    fontWeight: '700',
+    color: '#FFFFFF',
+    fontFamily: UbuntuFonts.bold,
+  },
+  callButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    height: 60,
+    paddingHorizontal: 24,
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    elevation: 6,
+  },
+  callIconContainer: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: '#10B981',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  callButtonText: {
+    color: '#10B981',
+    fontSize: 18,
+    fontWeight: '700',
+    fontFamily: UbuntuFonts.bold,
+  },
+  pickupMarker: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     backgroundColor: '#3185FC',
+    borderWidth: 3,
+    borderColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 8,
+  },
+  nextPickupMarker: {
+    backgroundColor: '#10B981',
+    width: 50,
+    height: 50,
+    borderRadius: 25,
+    borderWidth: 4,
+    shadowColor: '#10B981',
+    shadowOpacity: 0.5,
+  },
+  markerNumber: {
+    color: '#FFFFFF',
+    fontSize: 15,
+    fontWeight: 'bold',
+    fontFamily: UbuntuFonts.bold,
+  },
+  nextMarkerNumber: {
+    fontSize: 18,
+  },
+  driverMarker: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: '#3185FC',
+    borderWidth: 4,
+    borderColor: '#FFFFFF',
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#3185FC',
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 12,
-    elevation: 8,
-    zIndex: 20,
-  },
-  goButtonText: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '700',
-    letterSpacing: 1,
-  },
-  studentMarker: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#3185FC',
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-  studentMarkerPicked: {
-    backgroundColor: '#10B981',
-  },
-  studentMarkerInner: {
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  studentMarkerInnerPicked: {
-    backgroundColor: '#ECFDF5',
-  },
-  studentMarkerNumber: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: '#3185FC',
-  },
-  studentMarkerNumberPicked: {
-    color: '#10B981',
-  },
-  schoolMarker: {
-    alignItems: 'center',
-  },
-  schoolMarkerBadge: {
-    backgroundColor: '#10B981',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 8,
-    marginTop: 4,
-  },
-  schoolMarkerText: {
-    color: '#FFFFFF',
-    fontSize: 10,
-    fontWeight: '600',
-  },
-  busMarker: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#3185FC',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.4,
-    shadowRadius: 8,
-    elevation: 8,
-  },
-  busMarkerShadow: {
-    position: 'absolute',
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'rgba(49, 133, 252, 0.2)',
-    zIndex: -1,
+    shadowOpacity: 0.5,
+    shadowRadius: 10,
+    elevation: 10,
   },
   rtl: {
     textAlign: 'right',
@@ -806,4 +902,3 @@ const styles = StyleSheet.create({
 });
 
 export default TripLiveViewScreen;
-
