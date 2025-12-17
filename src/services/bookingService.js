@@ -220,3 +220,93 @@ export const cancelBooking = async (bookingId) => {
   }
 };
 
+/**
+ * Get bookings grouped by time slot for driver trips
+ * Groups bookings by similar start times and destination
+ * @param {Date} date - Date to get bookings for
+ * @returns {Promise<Object>} - Grouped bookings
+ */
+export const getBookingsGroupedByTimeSlot = async (date = new Date()) => {
+  try {
+    const startOfDay = new Date(date);
+    startOfDay.setHours(0, 0, 0, 0);
+    const endOfDay = new Date(date);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const { data, error } = await supabase
+      .from('bookings')
+      .select(`
+        *,
+        students (
+          id,
+          fullname,
+          phone,
+          home_location,
+          school
+        )
+      `)
+      .in('status', ['PENDING', 'CONFIRMED'])
+      .gte('start_time', startOfDay.toISOString())
+      .lte('start_time', endOfDay.toISOString())
+      .order('start_time', { ascending: true });
+
+    if (error) {
+      console.error('Error fetching bookings:', error);
+      return { data: null, error };
+    }
+
+    // Group bookings by time slot (within 30 minutes) and destination
+    const grouped = {};
+    
+    if (data) {
+      data.forEach(booking => {
+        const startTime = new Date(booking.start_time);
+        const timeSlot = `${String(startTime.getHours()).padStart(2, '0')}:${String(startTime.getMinutes()).padStart(2, '0')}`;
+        
+        // Round to nearest 30 minutes for grouping
+        const roundedMinutes = Math.floor(startTime.getMinutes() / 30) * 30;
+        const slotTime = `${String(startTime.getHours()).padStart(2, '0')}:${String(roundedMinutes).padStart(2, '0')}`;
+        
+        // Create time range (30 min window)
+        const slotStart = new Date(startTime);
+        slotStart.setMinutes(roundedMinutes, 0, 0);
+        const slotEnd = new Date(slotStart);
+        slotEnd.setMinutes(slotEnd.getMinutes() + 30);
+        
+        const timeRange = `${slotStart.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })} - ${slotEnd.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false })}`;
+        
+        // Use school as destination key (assuming all students from same school go to same destination)
+        const destination = booking.students?.school || 'Unknown';
+        const key = `${destination}_${slotTime}`;
+        
+        if (!grouped[key]) {
+          grouped[key] = {
+            timeSlot: timeRange,
+            destination: destination,
+            destinationLocation: booking.students?.home_location || { latitude: 33.5800, longitude: -7.5920 },
+            students: [],
+            studentCount: 0,
+            bookings: [],
+          };
+        }
+        
+        if (booking.students) {
+          grouped[key].students.push({
+            id: booking.students.id,
+            name: booking.students.fullname,
+            phone: booking.students.phone,
+            homeLocation: booking.students.home_location,
+          });
+          grouped[key].bookings.push(booking);
+          grouped[key].studentCount++;
+        }
+      });
+    }
+
+    return { data: Object.values(grouped), error: null };
+  } catch (error) {
+    console.error('Exception fetching grouped bookings:', error);
+    return { data: null, error };
+  }
+};
+

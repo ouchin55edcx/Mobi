@@ -23,18 +23,12 @@ const BottomTabNavigator = ({ activeTab, onTabChange, language = 'en' }) => {
       icon: 'person',
       activeIcon: 'person',
     },
-    {
-      id: 'explore',
-      label: language === 'ar' ? 'استكشف' : 'Explore',
-      icon: 'send',
-      activeIcon: 'send',
-    },
   ];
 
   return (
     <SafeAreaView edges={['bottom']} style={styles.container}>
       <View style={styles.tabBar}>
-        {tabs.map((tab) => {
+        {tabs.map((tab, index) => {
           const isActive = activeTab === tab.id;
           return (
             <TouchableOpacity
@@ -45,8 +39,8 @@ const BottomTabNavigator = ({ activeTab, onTabChange, language = 'en' }) => {
             >
               <MaterialIcons
                 name={isActive ? tab.activeIcon : tab.icon}
-                size={24}
-                color={isActive ? '#3185FC' : '#9CA3AF'}
+                size={28}
+                color={isActive ? '#1463ff' : '#8AB4FF'}
               />
               <Text
                 style={[
@@ -57,7 +51,6 @@ const BottomTabNavigator = ({ activeTab, onTabChange, language = 'en' }) => {
               >
                 {tab.label}
               </Text>
-              {isActive && <View style={styles.activeIndicator} />}
             </TouchableOpacity>
           );
         })}
@@ -68,55 +61,45 @@ const BottomTabNavigator = ({ activeTab, onTabChange, language = 'en' }) => {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#2C2C2C',
+    backgroundColor: '#FFFFFF',
     borderTopWidth: 1,
-    borderTopColor: '#1A1A1A',
+    borderTopColor: '#E5E7EB',
     shadowColor: '#000',
     shadowOffset: {
       width: 0,
-      height: -2,
+      height: -3,
     },
-    shadowOpacity: 0.1,
-    shadowRadius: 4,
-    elevation: 8,
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 10,
   },
   tabBar: {
     flexDirection: 'row',
-    height: 60,
-    paddingHorizontal: 8,
-    paddingTop: 8,
-    paddingBottom: Platform.OS === 'ios' ? 0 : 8,
+    height: 68,
+    paddingHorizontal: 20,
+    paddingTop: 12,
+    paddingBottom: Platform.OS === 'ios' ? 4 : 12,
+    alignItems: 'center',
   },
   tab: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     position: 'relative',
-    paddingVertical: 4,
+    paddingVertical: 6,
   },
   tabLabel: {
     fontSize: 12,
-    fontWeight: '500',
-    color: '#9CA3AF',
-    marginTop: 4,
+    fontWeight: '600',
+    color: '#8AB4FF',
+    marginTop: 5,
   },
   activeTabLabel: {
-    color: '#3185FC',
-    fontWeight: '600',
+    color: '#1463ff',
+    fontWeight: '700',
   },
   rtl: {
     textAlign: 'center',
-  },
-  activeIndicator: {
-    position: 'absolute',
-    top: 0,
-    left: '50%',
-    marginLeft: -20,
-    width: 40,
-    height: 3,
-    backgroundColor: '#3185FC',
-    borderBottomLeftRadius: 2,
-    borderBottomRightRadius: 2,
   },
 });
 

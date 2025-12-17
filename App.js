@@ -13,6 +13,9 @@ import DriverRegistrationFlow from './screens/drivers/DriverRegistrationFlow';
 import PendingApprovalScreen from './screens/drivers/PendingApprovalScreen';
 import DriverTabNavigator from './components/DriverTabNavigator';
 import TripLiveViewScreen from './screens/drivers/TripLiveViewScreen';
+import DriverTripDetailsScreen from './screens/drivers/DriverTripDetailsScreen';
+import mockDriverScenario from './src/mock/mockDriverData';
+import { DEMO_STUDENT, DEMO_DRIVER } from './src/data/demoData';
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
@@ -22,6 +25,7 @@ export default function App() {
   const [studentData, setStudentData] = useState(null);
   const [driverData, setDriverData] = useState(null);
   const [tripLiveViewData, setTripLiveViewData] = useState(null);
+  const [tripDetailsData, setTripDetailsData] = useState(null);
 
   // Load Ubuntu fonts
   const [fontsLoaded, fontError] = useFonts({
@@ -197,7 +201,32 @@ export default function App() {
             setCurrentScreen('welcome');
           }}
           onTripPress={(tripData) => {
+            setTripDetailsData(tripData);
+            setCurrentScreen('tripDetails');
+          }}
+        />
+      );
+    }
+
+    if (currentScreen === 'tripDetails') {
+      if (!tripDetailsData) {
+        // If no trip data, go back to driver home
+        setCurrentScreen('driverHome');
+        return null;
+      }
+      return (
+        <DriverTripDetailsScreen
+          tripData={tripDetailsData}
+          driverData={driverData}
+          language={language}
+          onBack={() => {
+            setTripDetailsData(null);
+            setCurrentScreen('driverHome');
+          }}
+          onStartTrip={(tripData) => {
+            // Navigate to live trip view when starting trip
             setTripLiveViewData(tripData);
+            setTripDetailsData(null);
             setCurrentScreen('tripLiveView');
           }}
         />
@@ -230,9 +259,22 @@ export default function App() {
         onLogin={() => setCurrentScreen('login')}
         onRegister={() => setCurrentScreen('selectRole')}
         onSkip={() => {
-          // Skip to demo mode: navigate to student home with demo student ID
-          setStudentData({ studentId: 'demo-student-id', email: 'demo@mobi.app', isDemo: true });
+          // Skip to demo mode: navigate to student home with static mock student data
+          setStudentData({
+            studentId: DEMO_STUDENT.id,
+            email: DEMO_STUDENT.email,
+            isDemo: true,
+          });
           setCurrentScreen('studentHome');
+        }}
+        onSkipToDriver={() => {
+          // Skip to driver demo mode: navigate to driver home with static mock driver data
+          setDriverData({
+            driverId: DEMO_DRIVER.id,
+            email: DEMO_DRIVER.email || 'driver.demo@mobi.app',
+            isDemo: true,
+          });
+          setCurrentScreen('driverHome');
         }}
       />
     );

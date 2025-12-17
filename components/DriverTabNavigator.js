@@ -12,6 +12,7 @@ const DriverTabNavigator = ({
   language = 'en',
   onLogout,
   onTripPress,
+  onSkipToProfile,
 }) => {
   const [activeTab, setActiveTab] = useState('home');
 
@@ -24,6 +25,7 @@ const DriverTabNavigator = ({
             isDemo={isDemo}
             language={language}
             onTripPress={onTripPress}
+            onSkipToProfile={() => setActiveTab('profile')}
           />
         );
       case 'history':

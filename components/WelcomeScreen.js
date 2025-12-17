@@ -18,6 +18,7 @@ const translations = {
     register: 'Create Account',
     login: 'Login',
     skip: 'Skip Now',
+    skipDriver: 'Skip to Driver',
     language: 'Language',
   },
   ar: {
@@ -25,6 +26,7 @@ const translations = {
     register: 'إنشاء حساب',
     login: 'تسجيل الدخول',
     skip: 'تخطي الآن',
+    skipDriver: 'تخطي إلى السائق',
     language: 'اللغة',
   },
 };
@@ -35,6 +37,7 @@ const WelcomeScreen = ({
   onLogin,
   onRegister,
   onSkip,
+  onSkipToDriver,
 }) => {
   const [language, setLanguage] = useState(propLanguage || 'ar');
   const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
@@ -70,6 +73,12 @@ const WelcomeScreen = ({
   const handleSkip = () => {
     if (onSkip) {
       onSkip();
+    }
+  };
+
+  const handleSkipToDriver = () => {
+    if (onSkipToDriver) {
+      onSkipToDriver();
     }
   };
 
@@ -171,13 +180,25 @@ const WelcomeScreen = ({
             <Text style={styles.registerButtonText}>{t.register}</Text>
           </TouchableOpacity>
 
-          <TouchableOpacity
-            style={styles.skipButton}
-            onPress={handleSkip}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.skipButtonText}>{t.skip}</Text>
-          </TouchableOpacity>
+          <View style={styles.skipButtonsContainer}>
+            <TouchableOpacity
+              style={styles.skipButton}
+              onPress={handleSkip}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.skipButtonText}>{t.skip}</Text>
+            </TouchableOpacity>
+
+            {onSkipToDriver && (
+              <TouchableOpacity
+                style={styles.skipDriverButton}
+                onPress={handleSkipToDriver}
+                activeOpacity={0.7}
+              >
+                <Text style={styles.skipDriverButtonText}>{t.skipDriver}</Text>
+              </TouchableOpacity>
+            )}
+          </View>
         </View>
       </View>
     </SafeAreaView>
@@ -346,15 +367,32 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontFamily: UbuntuFonts.semiBold,
   },
-  skipButton: {
+  skipButtonsContainer: {
+    flexDirection: 'row',
+    gap: 12,
     marginTop: 8,
+  },
+  skipButton: {
     paddingVertical: 12,
+    flex: 1,
   },
   skipButtonText: {
     color: 'rgba(255, 255, 255, 0.7)',
     fontSize: 16,
     fontWeight: '500',
     fontFamily: UbuntuFonts.medium,
+    textAlign: 'center',
+  },
+  skipDriverButton: {
+    paddingVertical: 12,
+    flex: 1,
+  },
+  skipDriverButtonText: {
+    color: 'rgba(255, 255, 255, 0.7)',
+    fontSize: 16,
+    fontWeight: '500',
+    fontFamily: UbuntuFonts.medium,
+    textAlign: 'center',
   },
 });
 

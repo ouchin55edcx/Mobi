@@ -7,60 +7,57 @@ import {
   Platform,
   ScrollView,
   TextInput,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { UbuntuFonts } from '../../src/utils/fonts';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import BookingModal from '../../components/BookingModal';
 import ActiveTripScreen from './ActiveTripScreen';
+import TripNotification from '../../components/TripNotification';
+import LiveTrackingScreen from './LiveTrackingScreen';
 import { getActiveBooking } from '../../src/services/bookingService';
 import { getDemoActiveTrip, DEMO_STUDENT, DEMO_SCHOOL } from '../../src/data/demoData';
 
 const translations = {
   en: {
-    title: 'Mobi - Student Transport',
-    tagline: 'Book your daily trip to school',
-    studentMap: 'Student Map',
-    availableLocations: 'Available locations',
-    tripDirection: 'Trip Direction',
-    fromHomeToSchool: 'From Home → School',
-    fromSchoolToHome: 'From School → Home',
+    title: 'Mobi',
+    tagline: 'Smart school transportation',
+    studentMap: 'Your Route',
+    availableLocations: 'Available',
     pickupPoint: 'Pickup Point',
     dropoffPoint: 'Dropoff Point',
-    schoolEntryTime: 'School entry time',
-    schoolEntryHint: 'Enter the time you enter school',
-    schoolExitTime: 'School exit time',
-    schoolExitHint: 'Enter the time you leave school',
-    confirmBooking: 'Confirm Booking',
+    schoolEntryTime: 'Departure',
+    schoolEntryHint: 'When do you leave?',
+    schoolExitTime: 'Return',
+    schoolExitHint: 'When do you return?',
+    confirmBooking: 'Book Trip',
     location: 'Rabat, Morocco',
   },
   ar: {
-    title: 'موبي - نقل الطلاب',
-    tagline: 'احجز رحلتك اليومية للمدرسة',
-    studentMap: 'خريطة الطلاب',
-    availableLocations: 'المواقع المتاحة',
-    tripDirection: 'اتجاه الرحلة',
-    fromHomeToSchool: 'من المنزل → المدرسة',
-    fromSchoolToHome: 'من المدرسة → المنزل',
-    pickupPoint: 'نقطة الاستلام',
+    title: 'موبي',
+    tagline: 'النقل المدرسي الذكي',
+    studentMap: 'مسارك',
+    availableLocations: 'متاح',
+    pickupPoint: 'نقطة الالتقاط',
     dropoffPoint: 'نقطة النزول',
-    schoolEntryTime: 'وقت دخول المدرسة',
-    schoolEntryHint: 'أدخل الوقت الذي تدخل فيه المدرسة',
-    schoolExitTime: 'وقت خروج المدرسة',
-    schoolExitHint: 'أدخل الوقت الذي تخرج فيه من المدرسة',
-    confirmBooking: 'تأكيد الحجز',
+    schoolEntryTime: 'المغادرة',
+    schoolEntryHint: 'متى تغادر؟',
+    schoolExitTime: 'العودة',
+    schoolExitHint: 'متى تعود؟',
+    confirmBooking: 'احجز الرحلة',
     location: 'الرباط، المغرب',
   },
 };
 
 const StudentHomeScreen = ({ studentId, isDemo = false, language = 'ar' }) => {
-  // Use demo locations or real student data
   const homeLocation = isDemo 
     ? DEMO_STUDENT.home_location 
-    : { latitude: 33.5731, longitude: -7.5898 }; // Rabat, Morocco
+    : { latitude: 33.5731, longitude: -7.5898 };
   const schoolLocation = isDemo 
     ? DEMO_SCHOOL.location 
     : { latitude: 33.5800, longitude: -7.5920 };
@@ -71,10 +68,17 @@ const StudentHomeScreen = ({ studentId, isDemo = false, language = 'ar' }) => {
   const [showBookingModal, setShowBookingModal] = useState(false);
   const [availableLocations, setAvailableLocations] = useState(1);
   const [showTimePicker, setShowTimePicker] = useState(false);
-  const [showActiveTrip, setShowActiveTrip] = useState(false);
+  const [showExitTimePicker, setShowExitTimePicker] = useState(false);
   const [confirmedTripData, setConfirmedTripData] = useState(null);
-  const [tripDirection, setTripDirection] = useState('homeToSchool'); // 'homeToSchool' or 'schoolToHome'
+  const [showNotification, setShowNotification] = useState(false);
+  const [showLiveTracking, setShowLiveTracking] = useState(false);
+  const [tripStatus, setTripStatus] = useState(null); // 'active', 'completed', 'cancelled'
   const mapRef = useRef(null);
+  const notificationTimeoutRef = useRef(null);
+
+  // Animations
+  const fadeIn = useRef(new Animated.Value(0)).current;
+  const slideUp = useRef(new Animated.Value(30)).current;
 
   const t = translations[language];
   const isRTL = language === 'ar';
@@ -85,6 +89,9 @@ const StudentHomeScreen = ({ studentId, isDemo = false, language = 'ar' }) => {
       if (isDemo) {
         const demoTrip = getDemoActiveTrip();
         setActiveBooking(demoTrip);
+        if (demoTrip && demoTrip.status !== 'COMPLETED' && demoTrip.status !== 'CANCELLED') {
+          setTripStatus('active');
+        }
         return;
       }
 
@@ -92,6 +99,9 @@ const StudentHomeScreen = ({ studentId, isDemo = false, language = 'ar' }) => {
         const { data, error } = await getActiveBooking(studentId);
         if (!error && data) {
           setActiveBooking(data);
+          if (data.status !== 'COMPLETED' && data.status !== 'CANCELLED') {
+            setTripStatus('active');
+          }
         }
       } catch (err) {
         console.error('Exception loading active booking:', err);
@@ -99,7 +109,30 @@ const StudentHomeScreen = ({ studentId, isDemo = false, language = 'ar' }) => {
     };
 
     loadActiveBooking();
+
+    return () => {
+      if (notificationTimeoutRef.current) {
+        clearTimeout(notificationTimeoutRef.current);
+      }
+    };
   }, [studentId, isDemo]);
+
+  // Trigger animations on mount
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeIn, {
+        toValue: 1,
+        duration: 500,
+        useNativeDriver: true,
+      }),
+      Animated.spring(slideUp, {
+        toValue: 0,
+        tension: 40,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
 
   const formatTime = (date) => {
     if (!date) return '';
@@ -108,7 +141,6 @@ const StudentHomeScreen = ({ studentId, isDemo = false, language = 'ar' }) => {
     return `${hours}:${minutes}`;
   };
 
-  // Calculate route coordinates based on direction
   const getRouteCoordinates = () => {
     const markers = getMapMarkers();
     return [
@@ -118,32 +150,21 @@ const StudentHomeScreen = ({ studentId, isDemo = false, language = 'ar' }) => {
     ];
   };
 
-  // Get map markers based on direction
   const getMapMarkers = () => {
-    // Calculate a midpoint for pickup/dropoff (slightly offset from direct route)
     const midLat = (homeLocation.latitude + schoolLocation.latitude) / 2;
     const midLng = (homeLocation.longitude + schoolLocation.longitude) / 2;
     const pickupDropoffLocation = {
-      latitude: midLat + 0.001, // Slight offset for visual distinction
+      latitude: midLat + 0.001,
       longitude: midLng + 0.001,
     };
 
-    if (tripDirection === 'homeToSchool') {
-      return {
-        start: { location: homeLocation, icon: 'home', label: language === 'ar' ? 'المنزل' : 'Home' },
-        middle: { location: pickupDropoffLocation, icon: 'directions-bus', label: t.pickupPoint },
-        end: { location: schoolLocation, icon: 'school', label: language === 'ar' ? 'المدرسة' : 'School' },
-      };
-    } else {
-      return {
-        start: { location: schoolLocation, icon: 'school', label: language === 'ar' ? 'المدرسة' : 'School' },
-        middle: { location: pickupDropoffLocation, icon: 'directions-bus', label: t.dropoffPoint },
-        end: { location: homeLocation, icon: 'home', label: language === 'ar' ? 'المنزل' : 'Home' },
-      };
-    }
+    return {
+      start: { location: homeLocation, icon: 'home', label: language === 'ar' ? 'المنزل' : 'Home' },
+      middle: { location: pickupDropoffLocation, icon: 'directions-bus', label: t.pickupPoint },
+      end: { location: schoolLocation, icon: 'school', label: language === 'ar' ? 'المدرسة' : 'School' },
+    };
   };
 
-  // Animate map when direction changes
   useEffect(() => {
     if (mapRef.current) {
       const routeCoords = getRouteCoordinates();
@@ -157,69 +178,104 @@ const StudentHomeScreen = ({ studentId, isDemo = false, language = 'ar' }) => {
         animated: true,
       });
     }
-  }, [tripDirection]);
-
-  const handleDirectionChange = (direction) => {
-    setTripDirection(direction);
-  };
+  }, []);
 
   const handleConfirmBooking = () => {
-    const timeToUse = tripDirection === 'homeToSchool' ? schoolEntryTime : schoolExitTime;
-    if (!timeToUse) {
-      // Show error or validation message
+    if (!schoolEntryTime) {
       return;
     }
 
     const routeCoords = getRouteCoordinates();
     const markers = getMapMarkers();
 
-    // Create trip data for the active trip screen
     const tripData = {
       homeLocation,
-      pickupLocation: tripDirection === 'homeToSchool' ? schoolLocation : homeLocation,
-      destinationLocation: tripDirection === 'homeToSchool' ? schoolLocation : homeLocation,
+      pickupLocation: markers.middle.location,
+      destinationLocation: schoolLocation,
       routeCoordinates: routeCoords,
-      leaveHomeTime: tripDirection === 'homeToSchool' 
-        ? new Date(timeToUse.getTime() - 50 * 60 * 1000)
-        : new Date(timeToUse.getTime() - 10 * 60 * 1000),
-      reachPickupTime: tripDirection === 'homeToSchool'
-        ? new Date(timeToUse.getTime() - 10 * 60 * 1000)
-        : new Date(timeToUse.getTime() - 5 * 60 * 1000),
-      arriveDestinationTime: timeToUse,
+      leaveHomeTime: new Date(schoolEntryTime.getTime() - 50 * 60 * 1000),
+      reachPickupTime: new Date(schoolEntryTime.getTime() - 10 * 60 * 1000),
+      arriveDestinationTime: schoolEntryTime,
       totalDurationMinutes: 20,
       totalDistanceKm: 20,
-      direction: tripDirection,
+      direction: 'homeToSchool',
+      driverName: language === 'ar' ? 'أحمد محمود' : 'Ahmed Mahmoud',
+      vehicleInfo: language === 'ar' ? 'حافلة مدرسية - AB 1234' : 'School Bus - AB 1234',
     };
 
     setConfirmedTripData(tripData);
-    setShowActiveTrip(true);
-  };
+    setTripStatus('active');
 
-  const handleGoFromActiveTrip = () => {
-    // Navigate to live tracking or start the trip
-    setShowActiveTrip(false);
-    // You can add navigation to live tracking here
+    notificationTimeoutRef.current = setTimeout(() => {
+      setShowNotification(true);
+    }, 10000);
   };
-
 
   const handleBookingSuccess = (newBooking) => {
     setActiveBooking(newBooking);
     setShowBookingModal(false);
   };
 
-  // Show active trip screen if confirmed
-  if (showActiveTrip && confirmedTripData) {
+  const handleViewLiveTrip = () => {
+    setShowNotification(false);
+    // Use confirmedTripData if available, otherwise create from activeBooking
+    const tripDataForTracking = confirmedTripData || (activeBooking ? {
+      homeLocation,
+      pickupLocation: activeBooking.pickup_location || getMapMarkers().middle.location,
+      destinationLocation: schoolLocation,
+      routeCoordinates: getRouteCoordinates(),
+      leaveHomeTime: activeBooking.start_time ? new Date(activeBooking.start_time) : new Date(),
+      reachPickupTime: activeBooking.pickup_time ? new Date(activeBooking.pickup_time) : new Date(),
+      arriveDestinationTime: activeBooking.end_time ? new Date(activeBooking.end_time) : new Date(),
+      driverName: activeBooking.driver?.name || (language === 'ar' ? 'أحمد محمود' : 'Ahmed Mahmoud'),
+      vehicleInfo: activeBooking.vehicle?.plate_number || '',
+    } : null);
+    
+    if (tripDataForTracking) {
+      setConfirmedTripData(tripDataForTracking);
+    }
+    setShowLiveTracking(true);
+  };
+
+  const handleDismissNotification = () => {
+    setShowNotification(false);
+  };
+
+  // Show Live Tracking Screen
+  if (showLiveTracking && confirmedTripData) {
     return (
-      <ActiveTripScreen
-        tripData={confirmedTripData}
-        language={language}
-        onBack={() => setShowActiveTrip(false)}
-        onGo={handleGoFromActiveTrip}
+      <LiveTrackingScreen
+        tripId={null}
         studentId={studentId}
-        isDemo={isDemo}
+        language={language}
+        tripData={confirmedTripData}
+        onBack={() => setShowLiveTracking(false)}
       />
     );
   }
+
+  // Check if there's an active trip (either from confirmed booking or existing active booking)
+  // Check if there's an active trip (either from confirmed booking or existing active booking)
+  const hasActiveTrip = (confirmedTripData && tripStatus === 'active') || 
+                        (activeBooking && activeBooking.status !== 'COMPLETED' && activeBooking.status !== 'CANCELLED');
+
+  // Get current trip data (prefer confirmedTripData, fallback to activeBooking)
+  const getCurrentTripData = () => {
+    if (confirmedTripData) return confirmedTripData;
+    if (activeBooking) {
+      // Convert activeBooking to tripData format
+      return {
+        leaveHomeTime: activeBooking.start_time ? new Date(activeBooking.start_time) : null,
+        reachPickupTime: activeBooking.pickup_time ? new Date(activeBooking.pickup_time) : null,
+        arriveDestinationTime: activeBooking.end_time ? new Date(activeBooking.end_time) : null,
+        driverName: activeBooking.driver?.name || (language === 'ar' ? 'أحمد محمود' : 'Ahmed Mahmoud'),
+        vehicleInfo: activeBooking.vehicle?.plate_number || '',
+      };
+    }
+    return null;
+  };
+
+  const currentTripData = getCurrentTripData();
 
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
@@ -230,90 +286,44 @@ const StudentHomeScreen = ({ studentId, isDemo = false, language = 'ar' }) => {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <View style={styles.headerTitleContainer}>
-            <Text style={[styles.headerTitle, isRTL && styles.rtl]}>
-              {t.title}
-            </Text>
-            <MaterialIcons name="directions-bus" size={24} color="#FFC107" />
+        {/* HEADER - Minimal Clean */}
+        <Animated.View style={[styles.header, { opacity: fadeIn }]}>
+          <View style={[styles.headerContent, isRTL && styles.headerContentRTL]}>
+            <View style={styles.logoCircle}>
+              <MaterialIcons name="directions-bus" size={24} color="#FFF" />
+            </View>
+            <View style={styles.headerText}>
+              <Text style={[styles.title, isRTL && styles.rtl]}>{t.title}</Text>
+              <Text style={[styles.tagline, isRTL && styles.rtl]}>{t.tagline}</Text>
+            </View>
           </View>
-          <Text style={[styles.headerTagline, isRTL && styles.rtl]}>
-            {t.tagline}
-          </Text>
-        </View>
+        </Animated.View>
 
-        {/* Trip Direction Selector */}
-        <View style={styles.directionSelectorContainer}>
-          <Text style={[styles.directionLabel, isRTL && styles.rtl]}>
-            {t.tripDirection}
-          </Text>
-          <View style={[styles.directionSelector, isRTL && styles.directionSelectorRTL]}>
-            <TouchableOpacity
-              style={[
-                styles.directionOption,
-                tripDirection === 'homeToSchool' && styles.directionOptionActive,
-                isRTL && styles.directionOptionRTL,
-              ]}
-              onPress={() => handleDirectionChange('homeToSchool')}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons name="home" size={20} color={tripDirection === 'homeToSchool' ? '#FFFFFF' : '#3185FC'} />
-              <MaterialIcons name="arrow-forward" size={16} color={tripDirection === 'homeToSchool' ? '#FFFFFF' : '#3185FC'} />
-              <MaterialIcons name="school" size={20} color={tripDirection === 'homeToSchool' ? '#FFFFFF' : '#3185FC'} />
-              <Text style={[
-                styles.directionOptionText,
-                tripDirection === 'homeToSchool' && styles.directionOptionTextActive,
-                isRTL && styles.rtl,
-              ]}>
-                {t.fromHomeToSchool}
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.directionOption,
-                tripDirection === 'schoolToHome' && styles.directionOptionActive,
-                isRTL && styles.directionOptionRTL,
-              ]}
-              onPress={() => handleDirectionChange('schoolToHome')}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons name="school" size={20} color={tripDirection === 'schoolToHome' ? '#FFFFFF' : '#3185FC'} />
-              <MaterialIcons name="arrow-forward" size={16} color={tripDirection === 'schoolToHome' ? '#FFFFFF' : '#3185FC'} />
-              <MaterialIcons name="home" size={20} color={tripDirection === 'schoolToHome' ? '#FFFFFF' : '#3185FC'} />
-              <Text style={[
-                styles.directionOptionText,
-                tripDirection === 'schoolToHome' && styles.directionOptionTextActive,
-                isRTL && styles.rtl,
-              ]}>
-                {t.fromSchoolToHome}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Map Card */}
-        <View style={styles.mapCard}>
-          <View style={styles.mapCardHeader}>
-            <View style={styles.mapCardTitleContainer}>
-              <MaterialIcons name="map" size={20} color="#3185FC" />
-              <Text style={[styles.mapCardTitle, isRTL && styles.rtl]}>
+        {/* MAP CARD - Clean Modern */}
+        <Animated.View 
+          style={[
+            styles.mapCard,
+            { opacity: fadeIn, transform: [{ translateY: slideUp }] }
+          ]}
+        >
+          {/* Card Header */}
+          <View style={[styles.cardHeader, isRTL && styles.cardHeaderRTL]}>
+            <View style={styles.cardTitleBox}>
+              <View style={styles.iconBox}>
+                <MaterialIcons name="map" size={16} color="#3B82F6" />
+              </View>
+              <Text style={[styles.cardTitle, isRTL && styles.rtl]}>
                 {t.studentMap}
               </Text>
             </View>
-            <Text style={[styles.availableLocations, isRTL && styles.rtl]}>
-              {t.availableLocations}: {availableLocations}
-            </Text>
+            <View style={styles.badge}>
+              <View style={styles.badgeDot} />
+              <Text style={styles.badgeText}>{availableLocations}</Text>
+            </View>
           </View>
 
-          <View style={styles.locationContainer}>
-            <View style={styles.locationDot} />
-            <Text style={[styles.locationText, isRTL && styles.rtl]}>
-              {t.location}
-            </Text>
-          </View>
-
-          <View style={styles.mapContainer}>
+          {/* Map */}
+          <View style={styles.mapWrapper}>
             <MapView
               ref={mapRef}
               provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
@@ -329,39 +339,35 @@ const StudentHomeScreen = ({ studentId, isDemo = false, language = 'ar' }) => {
               pitchEnabled={false}
               rotateEnabled={false}
             >
-              {/* Route Polyline */}
               <Polyline
                 coordinates={getRouteCoordinates()}
-                strokeColor="#3185FC"
-                strokeWidth={4}
+                strokeColor="#3B82F6"
+                strokeWidth={3}
+                lineCap="round"
               />
 
-              {/* Map Markers */}
               {(() => {
                 const markers = getMapMarkers();
                 return (
                   <>
-                    {/* Start Marker */}
                     <Marker coordinate={markers.start.location}>
-                      <View style={styles.markerContainer}>
-                        <MaterialIcons name={markers.start.icon} size={24} color="#FFFFFF" />
+                      <View style={[styles.marker, styles.homeMarker]}>
+                        <MaterialIcons name={markers.start.icon} size={18} color="#FFF" />
                       </View>
                     </Marker>
 
-                    {/* Middle Marker (Pickup/Dropoff) */}
                     <Marker coordinate={markers.middle.location}>
-                      <View style={styles.middleMarkerContainer}>
-                        <View style={styles.middleMarkerPulse} />
-                        <View style={styles.middleMarkerInner}>
-                          <MaterialIcons name={markers.middle.icon} size={20} color="#FFFFFF" />
+                      <View style={styles.busMarkerWrapper}>
+                        <View style={styles.busMarkerPulse} />
+                        <View style={[styles.marker, styles.busMarker]}>
+                          <MaterialIcons name={markers.middle.icon} size={18} color="#FFF" />
                         </View>
                       </View>
                     </Marker>
 
-                    {/* End Marker */}
                     <Marker coordinate={markers.end.location}>
-                      <View style={styles.markerContainer}>
-                        <MaterialIcons name={markers.end.icon} size={24} color="#FFFFFF" />
+                      <View style={[styles.marker, styles.schoolMarker]}>
+                        <MaterialIcons name={markers.end.icon} size={18} color="#FFF" />
                       </View>
                     </Marker>
                   </>
@@ -369,68 +375,283 @@ const StudentHomeScreen = ({ studentId, isDemo = false, language = 'ar' }) => {
               })()}
             </MapView>
           </View>
-        </View>
 
-        {/* Time Input Fields */}
-        <View style={styles.timeInputsContainer}>
-          {/* Time Input - Changes based on direction */}
-          <View style={styles.timeInputWrapper}>
-            <View style={styles.timeInputLabelContainer}>
-              <MaterialIcons name="access-time" size={18} color="#3185FC" />
-              <Text style={[styles.timeInputLabel, isRTL && styles.rtl]}>
-                {tripDirection === 'homeToSchool' ? t.schoolEntryTime : t.schoolExitTime}
-              </Text>
+          {/* Location Info */}
+          <View style={[styles.locationInfo, isRTL && styles.locationInfoRTL]}>
+            <MaterialIcons name="location-on" size={14} color="#10B981" />
+            <Text style={[styles.locationText, isRTL && styles.rtl]}>
+              {t.location}
+            </Text>
+          </View>
+        </Animated.View>
+
+        {/* ACTIVE TRIP DETAILS */}
+        {hasActiveTrip && (
+          <Animated.View 
+            style={[
+              styles.tripCard,
+              { opacity: fadeIn, transform: [{ translateY: slideUp }] }
+            ]}
+          >
+            <View style={[styles.tripHeader, isRTL && styles.tripHeaderRTL]}>
+              <View style={styles.tripIconBox}>
+                <MaterialIcons name="check-circle" size={20} color="#10B981" />
+              </View>
+              <View style={styles.tripHeaderText}>
+                <Text style={[styles.tripTitle, isRTL && styles.rtl]}>
+                  {language === 'ar' ? 'رحلتك المحجوزة' : 'Your Booked Trip'}
+                </Text>
+                <Text style={[styles.tripSubtitle, isRTL && styles.rtl]}>
+                  {language === 'ar' ? 'جاهز للانطلاق' : 'Ready to go'}
+                </Text>
+              </View>
+              <View style={styles.tripStatusBadge}>
+                <View style={styles.tripStatusDot} />
+                <Text style={styles.tripStatusText}>
+                  {language === 'ar' ? 'نشط' : 'Active'}
+                </Text>
+              </View>
             </View>
+
+            {/* Trip Info */}
+            <View style={styles.tripDetails}>
+              <View style={[styles.tripDetailRow, isRTL && styles.tripDetailRowRTL]}>
+                <MaterialIcons name="schedule" size={18} color="#3B82F6" />
+                <Text style={[styles.tripDetailLabel, isRTL && styles.rtl]}>
+                  {language === 'ar' ? 'وقت المغادرة' : 'Departure Time'}
+                </Text>
+                <Text style={[styles.tripDetailValue, isRTL && styles.rtl]}>
+                  {currentTripData?.leaveHomeTime ? formatTime(currentTripData.leaveHomeTime) : '--:--'}
+                </Text>
+              </View>
+
+              <View style={[styles.tripDetailRow, isRTL && styles.tripDetailRowRTL]}>
+                <MaterialIcons name="location-on" size={18} color="#F59E0B" />
+                <Text style={[styles.tripDetailLabel, isRTL && styles.rtl]}>
+                  {language === 'ar' ? 'نقطة الالتقاط' : 'Pickup Point'}
+                </Text>
+                <Text style={[styles.tripDetailValue, isRTL && styles.rtl]}>
+                  {currentTripData?.reachPickupTime ? formatTime(currentTripData.reachPickupTime) : '--:--'}
+                </Text>
+              </View>
+
+              <View style={[styles.tripDetailRow, isRTL && styles.tripDetailRowRTL]}>
+                <MaterialIcons name="school" size={18} color="#10B981" />
+                <Text style={[styles.tripDetailLabel, isRTL && styles.rtl]}>
+                  {language === 'ar' ? 'الوصول إلى المدرسة' : 'Arrive at School'}
+                </Text>
+                <Text style={[styles.tripDetailValue, isRTL && styles.rtl]}>
+                  {currentTripData?.arriveDestinationTime ? formatTime(currentTripData.arriveDestinationTime) : '--:--'}
+                </Text>
+              </View>
+            </View>
+
+            {/* Driver Info */}
+            <View style={styles.tripDriverSection}>
+              <View style={[styles.tripDriverRow, isRTL && styles.tripDriverRowRTL]}>
+                <View style={styles.driverAvatarSmall}>
+                  <MaterialIcons name="person" size={20} color="#FFF" />
+                </View>
+                <View style={styles.tripDriverInfo}>
+                  <Text style={[styles.tripDriverName, isRTL && styles.rtl]}>
+                    {currentTripData?.driverName || (language === 'ar' ? 'السائق' : 'Driver')}
+                  </Text>
+                  <Text style={[styles.tripVehicleInfo, isRTL && styles.rtl]}>
+                    {currentTripData?.vehicleInfo || (language === 'ar' ? 'المركبة' : 'Vehicle')}
+                  </Text>
+                </View>
+              </View>
+            </View>
+
+            {/* Actions */}
+            <View style={[styles.tripActions, isRTL && styles.tripActionsRTL]}>
+              <TouchableOpacity
+                style={styles.trackButton}
+                onPress={handleViewLiveTrip}
+                activeOpacity={0.8}
+              >
+                <LinearGradient
+                  colors={['#3B82F6', '#2563EB']}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.trackGradient}
+                >
+                  <MaterialIcons name="my-location" size={18} color="#FFF" />
+                  <Text style={[styles.trackButtonText, isRTL && styles.rtl]}>
+                    {language === 'ar' ? 'تتبع الرحلة' : 'Track Trip'}
+                  </Text>
+                </LinearGradient>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.cancelButton}
+                onPress={() => {
+                  setTripStatus('cancelled');
+                  setConfirmedTripData(null);
+                }}
+                activeOpacity={0.8}
+              >
+                <MaterialIcons name="close" size={18} color="#EF4444" />
+                <Text style={[styles.cancelButtonText, isRTL && styles.rtl]}>
+                  {language === 'ar' ? 'إلغاء' : 'Cancel'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        )}
+
+        {/* TIME INPUTS - Clean Minimal (Hidden when trip is active) */}
+        {!hasActiveTrip && (
+          <Animated.View 
+            style={[
+              styles.timesSection,
+              { opacity: fadeIn, transform: [{ translateY: slideUp }] }
+            ]}
+          >
+          {/* Departure Time */}
+          <View style={styles.timeCard}>
+            <View style={[styles.timeHeader, isRTL && styles.timeHeaderRTL]}>
+              <View style={[styles.timeIconBox, { backgroundColor: 'rgba(59, 130, 246, 0.1)' }]}>
+                <MaterialIcons name="login" size={16} color="#3B82F6" />
+              </View>
+              <View style={styles.timeInfo}>
+                <Text style={[styles.timeLabel, isRTL && styles.rtl]}>
+                  {t.schoolEntryTime}
+                </Text>
+                <Text style={[styles.timeHint, isRTL && styles.rtl]}>
+                  {t.schoolEntryHint}
+                </Text>
+              </View>
+            </View>
+
             <TouchableOpacity
-              style={styles.timeInputField}
+              style={[
+                styles.timeField,
+                schoolEntryTime && styles.timeFieldActive
+              ]}
               onPress={() => setShowTimePicker(true)}
               activeOpacity={0.7}
             >
+              <MaterialIcons 
+                name="schedule" 
+                size={18} 
+                color={schoolEntryTime ? '#3B82F6' : '#D1D5DB'}
+              />
               <Text style={[
-                styles.timeInputText,
-                !(tripDirection === 'homeToSchool' ? schoolEntryTime : schoolExitTime) && styles.timeInputPlaceholder,
+                styles.timeValue,
+                !schoolEntryTime && styles.timePlaceholder,
                 isRTL && styles.rtl
               ]}>
-                {(tripDirection === 'homeToSchool' ? schoolEntryTime : schoolExitTime) 
-                  ? formatTime(tripDirection === 'homeToSchool' ? schoolEntryTime : schoolExitTime) 
-                  : (language === 'ar' ? 'مثال: 08:00' : 'Example: 08:00')}
+                {schoolEntryTime ? formatTime(schoolEntryTime) : '08:00'}
               </Text>
             </TouchableOpacity>
-            <Text style={[styles.timeInputHint, isRTL && styles.rtl]}>
-              {tripDirection === 'homeToSchool' ? t.schoolEntryHint : t.schoolExitHint}
-            </Text>
+
             {showTimePicker && (
               <DateTimePicker
-                value={(tripDirection === 'homeToSchool' ? schoolEntryTime : schoolExitTime) || new Date()}
+                value={schoolEntryTime || new Date()}
                 mode="time"
                 is24Hour={true}
                 display="default"
                 onChange={(event, selectedTime) => {
                   setShowTimePicker(false);
                   if (selectedTime) {
-                    if (tripDirection === 'homeToSchool') {
-                      setSchoolEntryTime(selectedTime);
-                    } else {
-                      setSchoolExitTime(selectedTime);
-                    }
+                    setSchoolEntryTime(selectedTime);
                   }
                 }}
               />
             )}
           </View>
-        </View>
 
-        {/* Confirm Booking Button */}
-        <TouchableOpacity
-          style={styles.confirmButton}
-          onPress={handleConfirmBooking}
-          activeOpacity={0.8}
-        >
-          <MaterialIcons name="check-circle" size={24} color="#4CAF50" />
-          <Text style={[styles.confirmButtonText, isRTL && styles.rtl]}>
-            {t.confirmBooking}
-          </Text>
-        </TouchableOpacity>
+          {/* Return Time */}
+          <View style={styles.timeCard}>
+            <View style={[styles.timeHeader, isRTL && styles.timeHeaderRTL]}>
+              <View style={[styles.timeIconBox, { backgroundColor: 'rgba(16, 185, 129, 0.1)' }]}>
+                <MaterialIcons name="logout" size={16} color="#10B981" />
+              </View>
+              <View style={styles.timeInfo}>
+                <Text style={[styles.timeLabel, isRTL && styles.rtl]}>
+                  {t.schoolExitTime}
+                </Text>
+                <Text style={[styles.timeHint, isRTL && styles.rtl]}>
+                  {t.schoolExitHint}
+                </Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={[
+                styles.timeField,
+                schoolExitTime && styles.timeFieldActive
+              ]}
+              onPress={() => setShowExitTimePicker(true)}
+              activeOpacity={0.7}
+            >
+              <MaterialIcons 
+                name="schedule" 
+                size={18} 
+                color={schoolExitTime ? '#10B981' : '#D1D5DB'}
+              />
+              <Text style={[
+                styles.timeValue,
+                !schoolExitTime && styles.timePlaceholder,
+                isRTL && styles.rtl
+              ]}>
+                {schoolExitTime ? formatTime(schoolExitTime) : '16:00'}
+              </Text>
+            </TouchableOpacity>
+
+            {showExitTimePicker && (
+              <DateTimePicker
+                value={schoolExitTime || new Date()}
+                mode="time"
+                is24Hour={true}
+                display="default"
+                onChange={(event, selectedTime) => {
+                  setShowExitTimePicker(false);
+                  if (selectedTime) {
+                    setSchoolExitTime(selectedTime);
+                  }
+                }}
+              />
+            )}
+          </View>
+        </Animated.View>
+        )}
+
+        {/* CONFIRM BUTTON - Clean CTA (Hidden when trip is active) */}
+        {!hasActiveTrip && (
+          <Animated.View style={{ opacity: fadeIn, transform: [{ translateY: slideUp }] }}>
+            <TouchableOpacity
+              style={[
+                styles.bookButton,
+                !schoolEntryTime && styles.bookButtonDisabled
+              ]}
+              onPress={handleConfirmBooking}
+              disabled={!schoolEntryTime}
+              activeOpacity={0.8}
+            >
+            <LinearGradient
+              colors={schoolEntryTime ? ['#3B82F6', '#2563EB'] : ['#E5E7EB', '#D1D5DB']}
+              start={{ x: 0, y: 0 }}
+              end={{ x: 1, y: 0 }}
+              style={styles.bookGradient}
+            >
+              <MaterialIcons 
+                name="check-circle" 
+                size={20} 
+                color={schoolEntryTime ? "#FFF" : "#9CA3AF"} 
+              />
+              <Text style={[
+                styles.bookText,
+                !schoolEntryTime && styles.bookTextDisabled,
+                isRTL && styles.rtl
+              ]}>
+                {t.confirmBooking}
+              </Text>
+            </LinearGradient>
+          </TouchableOpacity>
+        </Animated.View>
+        )}
       </ScrollView>
 
       {/* Booking Modal */}
@@ -444,6 +665,16 @@ const StudentHomeScreen = ({ studentId, isDemo = false, language = 'ar' }) => {
         schoolEntryTime={schoolEntryTime}
         schoolExitTime={schoolExitTime}
       />
+
+      {/* Trip Started Notification */}
+      <TripNotification
+        visible={showNotification}
+        driverName={currentTripData?.driverName || (language === 'ar' ? 'أحمد محمود' : 'Ahmed Mahmoud')}
+        vehicleInfo={currentTripData?.vehicleInfo || ''}
+        onViewTrip={handleViewLiveTrip}
+        onDismiss={handleDismissNotification}
+        language={language}
+      />
     </SafeAreaView>
   );
 };
@@ -451,258 +682,466 @@ const StudentHomeScreen = ({ studentId, isDemo = false, language = 'ar' }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
   },
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 24,
+    padding: 20,
+    paddingBottom: 40,
   },
+
+  // Header
   header: {
     marginBottom: 24,
   },
-  headerTitleContainer: {
+  headerContent: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 12,
+  },
+  headerContentRTL: {
+    flexDirection: 'row-reverse',
+  },
+  logoCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#3B82F6',
+    alignItems: 'center',
     justifyContent: 'center',
-    gap: 8,
-    marginBottom: 8,
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    elevation: 3,
   },
-  headerTitle: {
-    fontSize: 20,
+  headerText: {
+    flex: 1,
+  },
+  title: {
+    fontSize: 22,
     fontWeight: '700',
-    color: '#1A1A1A',
+    color: '#1E293B',
     fontFamily: UbuntuFonts.bold,
+    letterSpacing: -0.5,
   },
-  headerTagline: {
-    fontSize: 14,
-    color: '#666666',
-    textAlign: 'center',
+  tagline: {
+    fontSize: 13,
+    color: '#64748B',
+    marginTop: 2,
     fontFamily: UbuntuFonts.regular,
   },
-  directionSelectorContainer: {
-    marginBottom: 20,
-  },
-  directionLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1A1A1A',
-    fontFamily: UbuntuFonts.semiBold,
-    marginBottom: 12,
-  },
-  directionSelector: {
-    flexDirection: 'row',
-    backgroundColor: '#F5F5F5',
-    borderRadius: 12,
-    padding: 4,
-    gap: 4,
-  },
-  directionSelectorRTL: {
-    flexDirection: 'row-reverse',
-  },
-  directionOption: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    gap: 6,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 2,
-    borderColor: 'transparent',
-  },
-  directionOptionRTL: {
-    flexDirection: 'row-reverse',
-  },
-  directionOptionActive: {
-    backgroundColor: '#3185FC',
-    borderColor: '#3185FC',
-  },
-  directionOptionText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#3185FC',
-    fontFamily: UbuntuFonts.semiBold,
-    marginLeft: 4,
-  },
-  directionOptionTextActive: {
-    color: '#FFFFFF',
-  },
+
+  // Map Card
   mapCard: {
-    backgroundColor: '#F5F5F5',
+    backgroundColor: '#FFF',
     borderRadius: 16,
     padding: 16,
-    marginBottom: 24,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  mapCardHeader: {
+  cardHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 12,
   },
-  mapCardTitleContainer: {
+  cardHeaderRTL: {
+    flexDirection: 'row-reverse',
+  },
+  cardTitleBox: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  mapCardTitle: {
-    fontSize: 16,
+  iconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  cardTitle: {
+    fontSize: 15,
     fontWeight: '600',
-    color: '#1A1A1A',
+    color: '#1E293B',
     fontFamily: UbuntuFonts.semiBold,
   },
-  availableLocations: {
-    fontSize: 14,
-    color: '#666666',
-    fontFamily: UbuntuFonts.regular,
-  },
-  locationContainer: {
+  badge: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
+    gap: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderRadius: 8,
   },
-  locationDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#4CAF50',
+  badgeDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: '#10B981',
   },
-  locationText: {
-    fontSize: 14,
-    color: '#1A1A1A',
-    fontFamily: UbuntuFonts.regular,
+  badgeText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#059669',
+    fontFamily: UbuntuFonts.semiBold,
   },
-  mapContainer: {
-    height: 200,
+  mapWrapper: {
+    height: 180,
     borderRadius: 12,
     overflow: 'hidden',
-    backgroundColor: '#E5E7EB',
+    backgroundColor: '#F1F5F9',
+    marginBottom: 12,
   },
   map: {
     flex: 1,
   },
-  markerContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#3185FC',
+  locationInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 8,
+  },
+  locationInfoRTL: {
+    flexDirection: 'row-reverse',
+  },
+  locationText: {
+    fontSize: 12,
+    color: '#059669',
+    fontWeight: '500',
+    fontFamily: UbuntuFonts.medium,
+  },
+
+  // Markers
+  marker: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 4,
-    borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  middleMarkerContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-  },
-  middleMarkerPulse: {
-    position: 'absolute',
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(49, 133, 252, 0.2)',
     borderWidth: 2,
-    borderColor: '#3185FC',
+    borderColor: '#FFF',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    shadowRadius: 3,
+    elevation: 4,
   },
-  middleMarkerInner: {
+  homeMarker: {
+    backgroundColor: '#6366F1',
+  },
+  busMarkerWrapper: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  busMarkerPulse: {
+    position: 'absolute',
     width: 48,
     height: 48,
     borderRadius: 24,
-    backgroundColor: '#3185FC',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 4,
-    borderColor: '#FFFFFF',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
+    backgroundColor: 'rgba(59, 130, 246, 0.2)',
   },
-  timeInputsContainer: {
+  busMarker: {
+    backgroundColor: '#3B82F6',
+  },
+  schoolMarker: {
+    backgroundColor: '#F59E0B',
+  },
+
+  // Time Section
+  timesSection: {
+    gap: 16,
     marginBottom: 24,
   },
-  timeInputWrapper: {
-    marginBottom: 20,
-  },
-  timeInputLabelContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 12,
-  },
-  timeInputLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#1A1A1A',
-    fontFamily: UbuntuFonts.semiBold,
-  },
-  timeInputField: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#B3D9FF',
+  timeCard: {
+    backgroundColor: '#FFF',
     borderRadius: 12,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    minHeight: 48,
+    padding: 14,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 4,
+    elevation: 2,
+  },
+  timeHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 10,
+  },
+  timeHeaderRTL: {
+    flexDirection: 'row-reverse',
+  },
+  timeIconBox: {
+    width: 32,
+    height: 32,
+    borderRadius: 8,
+    alignItems: 'center',
     justifyContent: 'center',
   },
-  timeInputText: {
-    fontSize: 16,
-    color: '#1A1A1A',
+  timeInfo: {
+    flex: 1,
+  },
+  timeLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1E293B',
+    fontFamily: UbuntuFonts.semiBold,
+    marginBottom: 2,
+  },
+  timeHint: {
+    fontSize: 11,
+    color: '#94A3B8',
     fontFamily: UbuntuFonts.regular,
   },
-  timeInputPlaceholder: {
-    color: '#999999',
+  timeField: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    backgroundColor: '#F8FAFC',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
   },
-  timeInputHint: {
-    fontSize: 12,
-    color: '#999999',
-    marginTop: 8,
-    fontFamily: UbuntuFonts.regular,
+  timeFieldActive: {
+    borderColor: '#3B82F6',
+    backgroundColor: 'rgba(59, 130, 246, 0.05)',
   },
-  confirmButton: {
+  timeValue: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1E293B',
+    fontFamily: UbuntuFonts.semiBold,
+  },
+  timePlaceholder: {
+    color: '#CBD5E1',
+    fontWeight: '400',
+  },
+
+  // Book Button
+  bookButton: {
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  bookButtonDisabled: {
+    shadowOpacity: 0,
+    elevation: 0,
+  },
+  bookGradient: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#3185FC',
-    borderRadius: 16,
-    paddingVertical: 18,
-    paddingHorizontal: 24,
-    gap: 12,
-    shadowColor: '#3185FC',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    paddingVertical: 15,
+    gap: 8,
   },
-  confirmButtonText: {
-    fontSize: 18,
+  bookText: {
+    fontSize: 15,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: '#FFF',
     fontFamily: UbuntuFonts.semiBold,
   },
+  bookTextDisabled: {
+    color: '#9CA3AF',
+  },
+
+  // Trip Details Card
+  tripCard: {
+    backgroundColor: '#FFF',
+    borderRadius: 16,
+    padding: 20,
+    marginBottom: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 12,
+    elevation: 4,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  tripHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    gap: 12,
+  },
+  tripHeaderRTL: {
+    flexDirection: 'row-reverse',
+  },
+  tripIconBox: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tripHeaderText: {
+    flex: 1,
+  },
+  tripTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#1E293B',
+    fontFamily: UbuntuFonts.bold,
+    marginBottom: 2,
+  },
+  tripSubtitle: {
+    fontSize: 13,
+    color: '#64748B',
+    fontFamily: UbuntuFonts.regular,
+  },
+  tripStatusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    borderRadius: 12,
+  },
+  tripStatusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: '#10B981',
+  },
+  tripStatusText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: '#059669',
+    fontFamily: UbuntuFonts.semiBold,
+  },
+  tripDetails: {
+    gap: 14,
+    marginBottom: 20,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  tripDetailRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  tripDetailRowRTL: {
+    flexDirection: 'row-reverse',
+  },
+  tripDetailLabel: {
+    flex: 1,
+    fontSize: 14,
+    color: '#64748B',
+    fontFamily: UbuntuFonts.medium,
+  },
+  tripDetailValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#1E293B',
+    fontFamily: UbuntuFonts.semiBold,
+  },
+  tripDriverSection: {
+    marginBottom: 20,
+    paddingBottom: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E2E8F0',
+  },
+  tripDriverRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  tripDriverRowRTL: {
+    flexDirection: 'row-reverse',
+  },
+  driverAvatarSmall: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#3B82F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tripDriverInfo: {
+    flex: 1,
+  },
+  tripDriverName: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#1E293B',
+    fontFamily: UbuntuFonts.semiBold,
+    marginBottom: 2,
+  },
+  tripVehicleInfo: {
+    fontSize: 13,
+    color: '#64748B',
+    fontFamily: UbuntuFonts.regular,
+  },
+  tripActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  tripActionsRTL: {
+    flexDirection: 'row-reverse',
+  },
+  trackButton: {
+    flex: 1,
+    borderRadius: 12,
+    overflow: 'hidden',
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  trackGradient: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    gap: 8,
+  },
+  trackButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#FFF',
+    fontFamily: UbuntuFonts.semiBold,
+  },
+  cancelButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    gap: 8,
+    backgroundColor: '#FEF2F2',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+  },
+  cancelButtonText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: '#EF4444',
+    fontFamily: UbuntuFonts.semiBold,
+  },
+
+  // RTL
   rtl: {
     textAlign: 'right',
   },

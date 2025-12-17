@@ -1,10 +1,14 @@
 import React from 'react';
-import { View, Text, StyleSheet } from 'react-native';
+import { View, Image, StyleSheet } from 'react-native';
 
 const SplashScreen = () => {
   return (
     <View style={styles.container}>
-      <Text style={styles.text}>Mobi</Text>
+      <Image 
+        source={require('../assets/Logo.png')} 
+        style={styles.logo}
+        resizeMode="contain"
+      />
     </View>
   );
 };
@@ -16,10 +20,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  text: {
-    color: 'rgba(23, 81, 204, 0.98)',
-    fontSize: 72,
-    fontWeight: 'bold',
+  logo: {
+    width: 250,
+    height: 250,
   },
 });
 

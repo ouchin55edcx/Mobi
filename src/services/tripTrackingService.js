@@ -138,3 +138,131 @@ export const getDriverLocation = async (driverId) => {
   }
 };
 
+/**
+ * Get trips assigned to a driver with students
+ * @param {string} driverId - Driver ID
+ * @param {Object} options - Query options
+ * @returns {Promise<Object>} Trips with students
+ */
+export const getDriverTripsWithStudents = async (driverId, options = {}) => {
+  try {
+    let query = supabase
+      .from('trips')
+      .select(`
+        *,
+        students (
+          id,
+          fullname,
+          phone,
+          home_location
+        ),
+        bookings (
+          id,
+          student_id,
+          type,
+          start_time,
+          end_time,
+          status
+        )
+      `)
+      .eq('driver_id', driverId)
+      .in('status', options.status || ['CONFIRMED', 'ACTIVE', 'IN_PROGRESS', 'GENERATED']);
+
+    if (options.date) {
+      const startOfDay = new Date(options.date);
+      startOfDay.setHours(0, 0, 0, 0);
+      const endOfDay = new Date(options.date);
+      endOfDay.setHours(23, 59, 59, 999);
+      
+      query = query
+        .gte('reach_pickup_time', startOfDay.toISOString())
+        .lte('reach_pickup_time', endOfDay.toISOString());
+    }
+
+    query = query.order('reach_pickup_time', { ascending: true });
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+
+    // Group trips by time slot and aggregate students
+    const groupedTrips = {};
+    if (data) {
+      data.forEach(trip => {
+        const timeSlot = trip.reach_pickup_time 
+          ? new Date(trip.reach_pickup_time).toLocaleTimeString('en-US', { 
+              hour: '2-digit', 
+              minute: '2-digit',
+              hour12: false 
+            })
+          : '00:00';
+        
+        const key = `${trip.destination_location?.name || 'Unknown'}_${timeSlot}`;
+        
+        if (!groupedTrips[key]) {
+          groupedTrips[key] = {
+            id: trip.id,
+            destination: trip.destination_location?.name || 'Unknown Destination',
+            destinationLocation: trip.destination_location || trip.destinationLocation,
+            pickupLocation: trip.pickup_location || trip.pickupLocation,
+            timeSlot: timeSlot,
+            status: trip.status,
+            students: [],
+            studentCount: 0,
+          };
+        }
+        
+        // Add student if not already added
+        if (trip.students && !groupedTrips[key].students.find(s => s.id === trip.students.id)) {
+          groupedTrips[key].students.push({
+            id: trip.students.id,
+            name: trip.students.fullname,
+            phone: trip.students.phone,
+            homeLocation: trip.students.home_location,
+          });
+          groupedTrips[key].studentCount++;
+        }
+      });
+    }
+
+    return { data: Object.values(groupedTrips), error: null };
+  } catch (error) {
+    console.error('Error fetching driver trips with students:', error);
+    return { data: null, error };
+  }
+};
+
+/**
+ * Get bookings for a specific time slot and destination (for grouping into trips)
+ * @param {Date} startTime - Start time
+ * @param {Date} endTime - End time
+ * @param {string} destination - Destination name or location
+ * @returns {Promise<Object>} Bookings
+ */
+export const getBookingsForTimeSlot = async (startTime, endTime, destination = null) => {
+  try {
+    let query = supabase
+      .from('bookings')
+      .select(`
+        *,
+        students (
+          id,
+          fullname,
+          phone,
+          home_location
+        )
+      `)
+      .eq('status', 'PENDING')
+      .gte('start_time', startTime.toISOString())
+      .lte('start_time', endTime.toISOString());
+
+    const { data, error } = await query;
+
+    if (error) throw error;
+    return { data, error: null };
+  } catch (error) {
+    console.error('Error fetching bookings for time slot:', error);
+    return { data: null, error };
+  }
+};
+

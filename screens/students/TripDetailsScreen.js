@@ -9,47 +9,59 @@ import {
   ActivityIndicator,
   Dimensions,
   Alert,
+  Linking,
+  Animated,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
+import { LinearGradient } from 'expo-linear-gradient';
 import * as Location from 'expo-location';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import LiveTrackingScreen from './LiveTrackingScreen';
 import { validateAndReturnUUID } from '../../src/utils/validation';
+import { UbuntuFonts } from '../../src/utils/fonts';
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
 
 const translations = {
   en: {
-    title: 'Your Trip',
+    title: 'Trip Details',
+    busPath: 'Bus route',
+    yourPathToStation: 'Your route',
+    estimatedArrival: 'Estimated arrival',
+    minutes: 'min',
+    km: 'km',
+    tripStations: 'Trip Stops',
+    done: 'Done',
+    now: 'Now',
+    soon: 'Soon',
+    captain: 'Driver',
+    onlineNow: 'Online',
+    call: 'Call',
+    message: 'Message',
     leaveHome: 'Leave Home',
-    reachPickup: 'Reach Pickup Point',
+    reachPickup: 'Reach Pickup',
     arriveDestination: 'Arrive at School',
-    totalDuration: 'Total Duration',
-    totalDistance: 'Total Distance',
-    home: 'Home',
-    pickupPoint: 'Pickup Point',
-    destination: 'School',
-    liveTracking: 'Live Tracking',
-    trackTrip: 'Track Trip',
-    viewDemo: 'View Live Trip Demo',
-    demoDescription: 'See how live tracking works',
   },
   ar: {
-    title: 'رحلتك',
-    leaveHome: 'مغادرة المنزل',
-    reachPickup: 'الوصول إلى نقطة الاستلام',
-    arriveDestination: 'الوصول إلى المدرسة',
-    totalDuration: 'المدة الإجمالية',
-    totalDistance: 'المسافة الإجمالية',
-    home: 'المنزل',
-    pickupPoint: 'نقطة الاستلام',
-    destination: 'المدرسة',
-    liveTracking: 'التتبع المباشر',
-    trackTrip: 'تتبع الرحلة',
-    viewDemo: 'عرض تجريبي للتتبع المباشر',
-    demoDescription: 'شاهد كيف يعمل التتبع المباشر',
+    title: 'تفاصيل الرحلة',
+    busPath: 'مسار الحافلة',
+    yourPathToStation: 'مسارك',
+    estimatedArrival: 'الوقت المقدر',
+    minutes: 'دقيقة',
+    km: 'كم',
+    tripStations: 'محطات الرحلة',
+    done: 'تم',
+    now: 'الآن',
+    soon: 'قريباً',
+    captain: 'السائق',
+    onlineNow: 'متصل',
+    call: 'اتصال',
+    message: 'رسالة',
+    leaveHome: 'مغادرة',
+    reachPickup: 'الوصول',
+    arriveDestination: 'الوصول للمدرسة',
   },
 };
 
@@ -66,6 +78,13 @@ const TripDetailsScreen = ({
   const [showLiveTracking, setShowLiveTracking] = useState(false);
   const [isDemoMode, setIsDemoMode] = useState(false);
 
+  // Animations
+  const headerSlide = useRef(new Animated.Value(-100)).current;
+  const cardSlide = useRef(new Animated.Value(50)).current;
+  const stationsSlide = useRef(new Animated.Value(50)).current;
+  const driverCardOpacity = useRef(new Animated.Value(0)).current;
+  const buttonScale = useRef(new Animated.Value(0.9)).current;
+
   const t = translations[language];
   const isRTL = language === 'ar';
 
@@ -74,31 +93,86 @@ const TripDetailsScreen = ({
   const pickupLocation = tripData?.pickupLocation || { latitude: 33.5750, longitude: -7.5900 };
   const destinationLocation = tripData?.destinationLocation || { latitude: 33.5800, longitude: -7.5920 };
 
-  // Route coordinates
   const routeCoordinates = tripData?.routeCoordinates || [
     homeLocation,
-    {
-      latitude: (homeLocation.latitude + pickupLocation.latitude) / 2,
-      longitude: (homeLocation.longitude + pickupLocation.longitude) / 2,
-    },
+    { latitude: (homeLocation.latitude + pickupLocation.latitude) / 2, longitude: (homeLocation.longitude + pickupLocation.longitude) / 2 },
     pickupLocation,
-    {
-      latitude: (pickupLocation.latitude + destinationLocation.latitude) / 2,
-      longitude: (pickupLocation.longitude + destinationLocation.longitude) / 2,
-    },
+    { latitude: (pickupLocation.latitude + destinationLocation.latitude) / 2, longitude: (pickupLocation.longitude + destinationLocation.longitude) / 2 },
     destinationLocation,
   ];
 
-  // Trip timing
+  const userPathCoordinates = tripData?.userPathCoordinates || [
+    homeLocation,
+    { latitude: (homeLocation.latitude + pickupLocation.latitude) / 2, longitude: (homeLocation.longitude + pickupLocation.longitude) / 2 },
+    pickupLocation,
+  ];
+
   const leaveHomeTime = tripData?.leaveHomeTime || new Date(Date.now() + 30 * 60 * 1000);
   const reachPickupTime = tripData?.reachPickupTime || new Date(Date.now() + 45 * 60 * 1000);
   const arriveDestinationTime = tripData?.arriveDestinationTime || new Date(Date.now() + 60 * 60 * 1000);
 
-  // Calculate total duration and distance
-  const totalDurationMinutes = tripData?.totalDurationMinutes || 45;
-  const totalDistanceKm = tripData?.totalDistanceKm || 5.2;
+  const estimatedArrivalMinutes = tripData?.estimatedArrivalMinutes || 10;
+  const distanceToStation = tripData?.distanceToStation || 2.5;
 
-  // Calculate region to fit all markers
+  const driverName = tripData?.driverName || tripData?.driver?.name || 'Ahmed';
+  const driverPhone = tripData?.driverPhone || tripData?.driver?.phone || null;
+  const isDriverOnline = tripData?.isDriverOnline !== undefined ? tripData.isDriverOnline : true;
+
+  const stations = tripData?.stations || [
+    {
+      id: 1,
+      name: language === 'ar' ? 'محطة الكوب' : 'Al-Koub Station',
+      time: new Date(leaveHomeTime.getTime() - 20 * 60 * 1000),
+      status: 'done',
+    },
+    {
+      id: 2,
+      name: language === 'ar' ? 'الجامعة' : 'University',
+      time: reachPickupTime,
+      status: 'now',
+    },
+    {
+      id: 3,
+      name: language === 'ar' ? 'المركز التجاري' : 'Commercial Center',
+      time: arriveDestinationTime,
+      status: 'soon',
+    },
+  ];
+
+  // Trigger animations on mount
+  useEffect(() => {
+    Animated.stagger(150, [
+      Animated.timing(headerSlide, {
+        toValue: 0,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.spring(cardSlide, {
+        toValue: 0,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+      Animated.spring(stationsSlide, {
+        toValue: 0,
+        friction: 8,
+        useNativeDriver: true,
+      }),
+    ]).start();
+
+    Animated.parallel([
+      Animated.timing(driverCardOpacity, {
+        toValue: 1,
+        duration: 600,
+        useNativeDriver: true,
+      }),
+      Animated.spring(buttonScale, {
+        toValue: 1,
+        friction: 6,
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
+
   const getRegion = () => {
     const minLat = Math.min(homeLocation.latitude, pickupLocation.latitude, destinationLocation.latitude);
     const maxLat = Math.max(homeLocation.latitude, pickupLocation.latitude, destinationLocation.latitude);
@@ -124,16 +198,11 @@ const TripDetailsScreen = ({
     if (mapReady && mapRef.current) {
       const coordinates = [homeLocation, pickupLocation, destinationLocation];
       mapRef.current.fitToCoordinates(coordinates, {
-        edgePadding: {
-          top: 80,
-          right: 20,
-          bottom: 20,
-          left: 20,
-        },
+        edgePadding: { top: 80, right: 20, bottom: 20, left: 20 },
         animated: true,
       });
     }
-  }, [mapReady, homeLocation, pickupLocation, destinationLocation]);
+  }, [mapReady]);
 
   const requestLocationPermission = async () => {
     try {
@@ -164,11 +233,7 @@ const TripDetailsScreen = ({
 
       if (mapRef.current) {
         mapRef.current.animateToRegion(
-          {
-            ...newLocation,
-            latitudeDelta: 0.01,
-            longitudeDelta: 0.01,
-          },
+          { ...newLocation, latitudeDelta: 0.01, longitudeDelta: 0.01 },
           500
         );
       }
@@ -187,28 +252,26 @@ const TripDetailsScreen = ({
     return `${hours}:${minutes}`;
   };
 
-  const formatDuration = (minutes) => {
-    if (minutes < 60) {
-      return `${minutes} ${language === 'ar' ? 'دقيقة' : 'min'}`;
-    }
-    const hours = Math.floor(minutes / 60);
-    const mins = minutes % 60;
-    return `${hours}h ${mins > 0 ? `${mins}min` : ''}`;
+  const formatTimeWithPeriod = (date) => {
+    if (!date) return '--:--';
+    const d = new Date(date);
+    const hours = d.getHours();
+    const minutes = d.getMinutes().toString().padStart(2, '0');
+    const displayHours = hours > 12 ? hours - 12 : (hours === 0 ? 12 : hours);
+    return `${displayHours.toString().padStart(2, '0')}:${minutes}`;
   };
 
-  // Extract and validate tripId and studentId for LiveTrackingScreen
   const rawTripId = tripData?.tripId || tripData?.bookingId || tripData?.id;
   const tripId = validateAndReturnUUID(rawTripId);
   const studentId = tripData?.studentId || 'demo-student-id';
 
-  // Handle navigation to Live Tracking
   const handleNavigateToLiveTracking = () => {
     if (!tripId) {
       Alert.alert(
         language === 'ar' ? 'معرف الرحلة غير صالح' : 'Invalid Trip ID',
         language === 'ar'
-          ? 'لا يمكن تتبع هذه الرحلة لأن معرف الرحلة غير صالح. يرجى إنشاء رحلة جديدة.'
-          : 'This trip cannot be tracked because the trip ID is invalid. Please create a new trip.',
+          ? 'لا يمكن تتبع هذه الرحلة'
+          : 'This trip cannot be tracked',
         [{ text: language === 'ar' ? 'موافق' : 'OK' }]
       );
       return;
@@ -218,13 +281,44 @@ const TripDetailsScreen = ({
     setShowLiveTracking(true);
   };
 
-  // Handle navigation to Live Tracking Demo
-  const handleNavigateToDemo = () => {
-    setIsDemoMode(true);
-    setShowLiveTracking(true);
+  const handleCall = () => {
+    if (driverPhone) {
+      Linking.openURL(`tel:${driverPhone}`);
+    } else {
+      Alert.alert(
+        language === 'ar' ? 'رقم الهاتف غير متاح' : 'Phone not available'
+      );
+    }
   };
 
-  // Show LiveTrackingScreen if enabled
+  const handleMessage = () => {
+    if (driverPhone) {
+      Linking.openURL(`sms:${driverPhone}`);
+    } else {
+      Alert.alert(
+        language === 'ar' ? 'رقم الهاتف غير متاح' : 'Phone not available'
+      );
+    }
+  };
+
+  const getStationStatusColor = (status) => {
+    switch (status) {
+      case 'done': return '#10B981';
+      case 'now': return '#3B82F6';
+      case 'soon': return '#94A3B8';
+      default: return '#94A3B8';
+    }
+  };
+
+  const getStationStatusText = (status) => {
+    switch (status) {
+      case 'done': return t.done;
+      case 'now': return t.now;
+      case 'soon': return t.soon;
+      default: return '';
+    }
+  };
+
   if (showLiveTracking) {
     return (
       <LiveTrackingScreen
@@ -243,32 +337,44 @@ const TripDetailsScreen = ({
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar style="dark" />
 
-      {/* Page Header */}
-      <View style={[styles.header, isRTL && styles.headerRTL]}>
+      {/* HEADER */}
+      <Animated.View 
+        style={[
+          styles.header,
+          { transform: [{ translateY: headerSlide }] }
+        ]}
+      >
         <TouchableOpacity
           style={styles.backButton}
           onPress={onBack}
           activeOpacity={0.7}
         >
-          <MaterialIcons
-            name={isRTL ? "arrow-forward" : "arrow-back"}
-            size={24}
-            color="#1A1A1A"
-          />
+          <View style={styles.backButtonInner}>
+            <MaterialIcons
+              name={isRTL ? "arrow-forward" : "arrow-back"}
+              size={24}
+              color="#1F2937"
+            />
+          </View>
         </TouchableOpacity>
         <Text style={[styles.headerTitle, isRTL && styles.rtl]}>
           {t.title}
         </Text>
         <View style={styles.headerPlaceholder} />
-      </View>
+      </Animated.View>
 
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Map Section */}
-        <View style={styles.mapSection}>
+        {/* MAP SECTION */}
+        <Animated.View 
+          style={[
+            styles.mapCard,
+            { transform: [{ translateY: cardSlide }] }
+          ]}
+        >
           <View style={styles.mapContainer}>
             <MapView
               ref={mapRef}
@@ -283,228 +389,246 @@ const TripDetailsScreen = ({
               pitchEnabled={false}
               rotateEnabled={false}
             >
-              {/* Route Line */}
+              {/* Bus Route */}
               <Polyline
                 coordinates={routeCoordinates}
-                strokeColor="#3185FC"
-                strokeWidth={4}
+                strokeColor="#3B82F6"
+                strokeWidth={3}
                 lineCap="round"
                 lineJoin="round"
               />
 
-              {/* Home Marker */}
-              <Marker
-                coordinate={homeLocation}
-                anchor={{ x: 0.5, y: 0.5 }}
-              >
+              {/* User Path */}
+              <Polyline
+                coordinates={userPathCoordinates}
+                strokeColor="#F59E0B"
+                strokeWidth={3}
+                lineCap="round"
+                lineJoin="round"
+              />
+
+              {/* Markers */}
+              <Marker coordinate={homeLocation}>
                 <View style={styles.markerContainer}>
-                  <View style={styles.markerPulse} />
                   <View style={[styles.markerPin, styles.homeMarker]}>
-                    <View style={styles.markerInnerDot} />
+                    <MaterialIcons name="home" size={20} color="#FFFFFF" />
                   </View>
                 </View>
               </Marker>
 
-              {/* Pickup Marker */}
-              <Marker
-                coordinate={pickupLocation}
-                anchor={{ x: 0.5, y: 0.5 }}
-              >
+              <Marker coordinate={pickupLocation}>
                 <View style={styles.markerContainer}>
                   <View style={[styles.markerPin, styles.pickupMarker]}>
-                    <MaterialIcons name="directions-bus" size={18} color="#FFFFFF" />
-                  </View>
-                  <View style={styles.markerLabelContainer}>
-                    <Text style={styles.markerLabelText}>{t.pickupPoint}</Text>
+                    <MaterialIcons name="directions-bus" size={20} color="#FFFFFF" />
                   </View>
                 </View>
               </Marker>
 
-              {/* School Marker */}
-              <Marker
-                coordinate={destinationLocation}
-                anchor={{ x: 0.5, y: 0.5 }}
-              >
+              <Marker coordinate={destinationLocation}>
                 <View style={styles.markerContainer}>
                   <View style={[styles.markerPin, styles.schoolMarker]}>
-                    <MaterialIcons name="school" size={18} color="#FFFFFF" />
-                  </View>
-                  <View style={styles.markerLabelContainer}>
-                    <Text style={styles.markerLabelText}>{t.destination}</Text>
+                    <MaterialIcons name="school" size={20} color="#FFFFFF" />
                   </View>
                 </View>
               </Marker>
             </MapView>
 
-            {/* My Location Button */}
-            <TouchableOpacity
-              style={styles.locationButton}
-              onPress={getCurrentLocation}
-              disabled={isLoadingLocation}
-              activeOpacity={0.7}
-            >
-              {isLoadingLocation ? (
-                <ActivityIndicator color="#3185FC" size="small" />
-              ) : (
-                <View style={styles.locationButtonContent}>
-                  <MaterialIcons name="send" size={18} color="#3185FC" />
-                  <Text style={styles.locationButtonText}>
-                    {language === 'ar' ? 'موقعي' : 'My Location'}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </View>
-        </View>
-
-        {/* Trip Summary Cards */}
-        <View style={[styles.summaryCards, isRTL && styles.summaryCardsRTL]}>
-          <View style={[styles.summaryCard, styles.durationCard]}>
-            <View style={styles.summaryIconContainer}>
-              <MaterialIcons name="access-time" size={24} color="#3185FC" />
-            </View>
-            <View style={styles.summaryContent}>
-              <Text style={[styles.summaryLabel, isRTL && styles.rtl]}>
-                {t.totalDuration}
-              </Text>
-              <Text style={[styles.summaryValue, isRTL && styles.rtl]}>
-                {formatDuration(totalDurationMinutes)}
-              </Text>
-            </View>
-          </View>
-
-          <View style={[styles.summaryCard, styles.distanceCard]}>
-            <View style={styles.summaryIconContainer}>
-              <MaterialIcons name="straighten" size={24} color="#3185FC" />
-            </View>
-            <View style={styles.summaryContent}>
-              <Text style={[styles.summaryLabel, isRTL && styles.rtl]}>
-                {t.totalDistance}
-              </Text>
-              <Text style={[styles.summaryValue, isRTL && styles.rtl]}>
-                {totalDistanceKm.toFixed(1)} {language === 'ar' ? 'كم' : 'km'}
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Trip Timeline */}
-        <View style={styles.timelineSection}>
-          <View style={styles.timelineContainer}>
-            {/* Leave Home */}
-            <View style={[styles.timelineItem, isRTL && styles.timelineItemRTL]}>
-              <View style={styles.timelineLeft}>
-                <View style={[styles.timelineDot, styles.blueDot]}>
-                  <MaterialIcons name="home" size={16} color="#FFFFFF" />
-                </View>
-                <View style={styles.timelineLine} />
-              </View>
-              <View style={[styles.timelineCard, isRTL && styles.timelineCardRTL]}>
-                <View style={[styles.timelineCardContent, isRTL && styles.timelineCardContentRTL]}>
-                  <Text style={[styles.timelineLabel, isRTL && styles.rtl]}>
-                    {t.leaveHome}
-                  </Text>
-                  <Text style={[styles.timelineTime, isRTL && styles.timelineTimeRTL]}>
-                    {formatTime(leaveHomeTime)}
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Reach Pickup */}
-            <View style={[styles.timelineItem, isRTL && styles.timelineItemRTL]}>
-              <View style={styles.timelineLeft}>
-                <View style={[styles.timelineDot, styles.blueDot]}>
-                  <MaterialIcons name="directions-bus" size={16} color="#FFFFFF" />
-                </View>
-                <View style={styles.timelineLine} />
-              </View>
-              <View style={[styles.timelineCard, isRTL && styles.timelineCardRTL]}>
-                <View style={[styles.timelineCardContent, isRTL && styles.timelineCardContentRTL]}>
-                  <Text style={[styles.timelineLabel, isRTL && styles.rtl]}>
-                    {t.reachPickup}
-                  </Text>
-                  <Text style={[styles.timelineTime, isRTL && styles.timelineTimeRTL]}>
-                    {formatTime(reachPickupTime)}
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Arrive at School */}
-            <View style={[styles.timelineItem, isRTL && styles.timelineItemRTL]}>
-              <View style={styles.timelineLeft}>
-                <View style={[styles.timelineDot, styles.blueDot]}>
-                  <MaterialIcons name="school" size={16} color="#FFFFFF" />
-                </View>
-              </View>
-              <View style={[styles.timelineCard, isRTL && styles.timelineCardRTL]}>
-                <View style={[styles.timelineCardContent, isRTL && styles.timelineCardContentRTL]}>
-                  <Text style={[styles.timelineLabel, isRTL && styles.rtl]}>
-                    {t.arriveDestination}
-                  </Text>
-                  <Text style={[styles.timelineTime, isRTL && styles.timelineTimeRTL]}>
-                    {formatTime(arriveDestinationTime)}
-                  </Text>
-                </View>
-              </View>
-            </View>
-          </View>
-        </View>
-
-        {/* Live Tracking Button */}
-        {tripId && (
-          <TouchableOpacity
-            style={[styles.liveTrackingButton, isRTL && styles.liveTrackingButtonRTL]}
-            onPress={handleNavigateToLiveTracking}
-            activeOpacity={0.8}
-          >
-            <View style={styles.liveTrackingButtonContent}>
-              <View style={styles.liveTrackingIconContainer}>
-                <MaterialIcons name="gps-fixed" size={24} color="#FFFFFF" />
-              </View>
-              <View style={styles.liveTrackingTextContainer}>
-                <Text style={[styles.liveTrackingTitle, isRTL && styles.rtl]}>
-                  {t.liveTracking}
-                </Text>
-                <Text style={[styles.liveTrackingSubtitle, isRTL && styles.rtl]}>
-                  {t.trackTrip}
+            {/* Legend */}
+            <View style={[styles.legendBox, isRTL && styles.legendBoxRTL]}>
+              <View style={styles.legendItem}>
+                <View style={[styles.legendIndicator, { backgroundColor: '#3B82F6' }]} />
+                <Text style={[styles.legendLabel, isRTL && styles.rtl]}>
+                  {t.busPath}
                 </Text>
               </View>
-              <MaterialIcons
-                name={isRTL ? "arrow-forward" : "arrow-forward"}
-                size={24}
-                color="#FFFFFF"
-              />
+              <View style={styles.legendItem}>
+                <View style={[styles.legendIndicator, { backgroundColor: '#F59E0B' }]} />
+                <Text style={[styles.legendLabel, isRTL && styles.rtl]}>
+                  {t.yourPathToStation}
+                </Text>
+              </View>
             </View>
-          </TouchableOpacity>
-        )}
 
-        {/* Live Trip Demo Button */}
-        <TouchableOpacity
-          style={[styles.demoButton, isRTL && styles.demoButtonRTL]}
-          onPress={handleNavigateToDemo}
-          activeOpacity={0.8}
+            {/* Map Controls */}
+            <View style={styles.mapControls}>
+              <TouchableOpacity
+                style={styles.mapControlButton}
+                onPress={getCurrentLocation}
+                disabled={isLoadingLocation}
+                activeOpacity={0.8}
+              >
+                {isLoadingLocation ? (
+                  <ActivityIndicator color="#3B82F6" size="small" />
+                ) : (
+                  <MaterialIcons name="my-location" size={22} color="#3B82F6" />
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </Animated.View>
+
+        {/* ESTIMATED ARRIVAL CARD - Modern Design */}
+        <Animated.View 
+          style={[
+            styles.arrivalCard,
+            { transform: [{ translateY: cardSlide }] }
+          ]}
         >
-          <View style={styles.demoButtonContent}>
-            <View style={styles.demoIconContainer}>
-              <MaterialIcons name="play-circle-outline" size={24} color="#FFFFFF" />
+          <View style={styles.arrivalLeft}>
+            <View style={styles.arrivalIconBox}>
+              <MaterialIcons name="schedule" size={24} color="#3B82F6" />
             </View>
-            <View style={styles.demoTextContainer}>
-              <Text style={[styles.demoTitle, isRTL && styles.rtl]}>
-                {t.viewDemo}
+            <View style={styles.arrivalTextBox}>
+              <Text style={[styles.arrivalLabel, isRTL && styles.rtl]}>
+                {t.estimatedArrival}
               </Text>
-              <Text style={[styles.demoSubtitle, isRTL && styles.rtl]}>
-                {t.demoDescription}
+              <Text style={[styles.arrivalValue, isRTL && styles.rtl]}>
+                {estimatedArrivalMinutes} {t.minutes}
               </Text>
             </View>
-            <MaterialIcons
-              name={isRTL ? "arrow-forward" : "arrow-forward"}
-              size={24}
-              color="#FFFFFF"
-            />
           </View>
-        </TouchableOpacity>
+          <View style={styles.dividerVertical} />
+          <View style={styles.arrivalRight}>
+            <View style={styles.distanceIconBox}>
+              <MaterialIcons name="directions" size={24} color="#10B981" />
+            </View>
+            <View style={styles.distanceTextBox}>
+              <Text style={[styles.distanceLabel, isRTL && styles.rtl]}>
+                {language === 'ar' ? 'المسافة' : 'Distance'}
+              </Text>
+              <Text style={[styles.distanceValue, isRTL && styles.rtl]}>
+                {distanceToStation.toFixed(1)} {t.km}
+              </Text>
+            </View>
+          </View>
+        </Animated.View>
+
+        {/* TRIP STATIONS */}
+        <Animated.View 
+          style={[
+            styles.stationsContainer,
+            { transform: [{ translateY: stationsSlide }] }
+          ]}
+        >
+          <View style={styles.stationsSectionHeader}>
+            <View style={styles.stationsIconBox}>
+              <MaterialIcons name="location-on" size={20} color="#3B82F6" />
+            </View>
+            <Text style={[styles.stationsTitle, isRTL && styles.rtl]}>
+              {t.tripStations}
+            </Text>
+          </View>
+
+          <View style={styles.stationsBox}>
+            {stations.map((station, index) => {
+              const statusColor = getStationStatusColor(station.status);
+              const isLast = index === stations.length - 1;
+
+              return (
+                <View key={station.id}>
+                  <View style={[styles.stationItem, isRTL && styles.stationItemRTL]}>
+                    {/* Timeline Dot */}
+                    <View style={styles.stationTimeline}>
+                      <View
+                        style={[
+                          styles.stationDot,
+                          { backgroundColor: statusColor, borderColor: statusColor }
+                        ]}
+                      />
+                      {!isLast && (
+                        <View
+                          style={[
+                            styles.stationConnector,
+                            { backgroundColor: statusColor }
+                          ]}
+                        />
+                      )}
+                    </View>
+
+                    {/* Station Info */}
+                    <View style={[styles.stationInfo, isRTL && styles.stationInfoRTL]}>
+                      <Text style={[styles.stationName, isRTL && styles.rtl]}>
+                        {station.name}
+                      </Text>
+                      <Text style={[styles.stationTime, isRTL && styles.rtl]}>
+                        {formatTimeWithPeriod(station.time)}
+                      </Text>
+                    </View>
+
+                    {/* Status Badge */}
+                    <View style={[styles.statusBadge, { backgroundColor: statusColor }]}>
+                      <Text style={styles.statusBadgeText}>
+                        {getStationStatusText(station.status)}
+                      </Text>
+                    </View>
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        </Animated.View>
+
+        {/* DRIVER INFORMATION */}
+        <Animated.View 
+          style={[
+            styles.driverCard,
+            { opacity: driverCardOpacity }
+          ]}
+        >
+          <View style={[styles.driverContent, isRTL && styles.driverContentRTL]}>
+            <View style={styles.driverAvatarBox}>
+              <LinearGradient
+                colors={['#3B82F6', '#2563EB']}
+                style={styles.driverAvatarGradient}
+              >
+                <MaterialIcons name="person" size={28} color="#FFFFFF" />
+              </LinearGradient>
+            </View>
+
+            <View style={styles.driverInfo}>
+              <Text style={[styles.driverName, isRTL && styles.rtl]}>
+                {t.captain} {driverName}
+              </Text>
+              <View style={styles.driverStatusPill}>
+                <View style={styles.statusDot} />
+                <Text style={[styles.driverStatus, isRTL && styles.rtl]}>
+                  {t.onlineNow}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </Animated.View>
+
+        {/* ACTION BUTTONS */}
+        <Animated.View 
+          style={[
+            styles.actionButtonsContainer,
+            { transform: [{ scale: buttonScale }] }
+          ]}
+        >
+          <TouchableOpacity
+            style={styles.callButtonWrapper}
+            onPress={handleCall}
+            activeOpacity={0.85}
+          >
+            <LinearGradient
+              colors={['#3B82F6', '#2563EB']}
+              style={styles.callButton}
+            >
+              <MaterialIcons name="phone" size={22} color="#FFFFFF" />
+              <Text style={styles.callButtonText}>{t.call}</Text>
+            </LinearGradient>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.messageButton}
+            onPress={handleMessage}
+            activeOpacity={0.85}
+          >
+            <MaterialIcons name="chat-bubble-outline" size={22} color="#3B82F6" />
+            <Text style={styles.messageButtonText}>{t.message}</Text>
+          </TouchableOpacity>
+        </Animated.View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -513,110 +637,133 @@ const TripDetailsScreen = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F8FAFC',
   },
-  // Header Styles
+
+  // ========== HEADER ==========
   header: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 24,
-    paddingTop: Platform.OS === 'ios' ? 8 : 12,
-    paddingBottom: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
-  },
-  headerRTL: {
-    flexDirection: 'row-reverse',
+    borderBottomColor: '#F1F5F9',
   },
   backButton: {
     padding: 8,
     marginLeft: -8,
   },
+  backButtonInner: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: '#F1F5F9',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
   headerTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: '700',
-    color: '#1A1A1A',
-    flex: 1,
-    textAlign: 'center',
+    color: '#1F2937',
+    fontFamily: UbuntuFonts.bold,
   },
   headerPlaceholder: {
     width: 40,
   },
-  // Scroll View
+
+  // ========== SCROLL VIEW ==========
   scrollView: {
     flex: 1,
   },
   scrollContent: {
-    paddingBottom: 24,
+    paddingHorizontal: 16,
+    paddingTop: 16,
+    paddingBottom: 32,
   },
-  // Map Section
-  mapSection: {
-    paddingHorizontal: 24,
-    paddingTop: 24,
-    marginBottom: 24,
+
+  // ========== MAP CARD ==========
+  mapCard: {
+    marginBottom: 20,
   },
   mapContainer: {
-    height: 280,
-    borderRadius: 16,
+    height: 240,
+    borderRadius: 20,
     overflow: 'hidden',
     backgroundColor: '#E5E7EB',
-    position: 'relative',
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
     shadowRadius: 8,
-    elevation: 4,
+    elevation: 3,
   },
   map: {
     flex: 1,
   },
-  locationButton: {
+
+  // ========== LEGEND ==========
+  legendBox: {
     position: 'absolute',
-    bottom: 16,
-    right: 16,
+    top: 12,
+    left: 12,
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 14,
     paddingHorizontal: 12,
-    paddingVertical: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    paddingVertical: 10,
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 4,
+    gap: 8,
   },
-  locationButtonContent: {
+  legendBoxRTL: {
+    left: 'auto',
+    right: 12,
+  },
+  legendItem: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  locationButtonText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#3185FC',
+  legendIndicator: {
+    width: 12,
+    height: 3,
+    borderRadius: 2,
   },
-  // Marker Styles
+  legendLabel: {
+    fontSize: 11,
+    fontWeight: '600',
+    color: '#475569',
+    fontFamily: UbuntuFonts.semiBold,
+  },
+
+  // ========== MAP CONTROLS ==========
+  mapControls: {
+    position: 'absolute',
+    right: 12,
+    top: '50%',
+    transform: [{ translateY: -24 }],
+  },
+  mapControlButton: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#FFFFFF',
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+
+  // ========== MARKERS ==========
   markerContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
-  },
-  markerPulse: {
-    position: 'absolute',
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: '#3185FC',
-    opacity: 0.3,
   },
   markerPin: {
     width: 40,
@@ -627,302 +774,300 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 5,
-    zIndex: 1,
-  },
-  markerInnerDot: {
-    width: 12,
-    height: 12,
-    borderRadius: 6,
-    backgroundColor: '#3185FC',
-  },
-  homeMarker: {
-    backgroundColor: '#FFFFFF',
-  },
-  pickupMarker: {
-    backgroundColor: '#3185FC',
-  },
-  schoolMarker: {
-    backgroundColor: '#8B4513',
-  },
-  markerLabelContainer: {
-    position: 'absolute',
-    top: 48,
-    backgroundColor: '#FFFFFF',
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.15,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  markerLabelText: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: '#1A1A1A',
-  },
-  // Summary Cards
-  summaryCards: {
-    flexDirection: 'row',
-    paddingHorizontal: 24,
-    gap: 12,
-    marginBottom: 32,
-  },
-  summaryCardsRTL: {
-    flexDirection: 'row-reverse',
-  },
-  summaryCard: {
-    flex: 1,
-    backgroundColor: '#F0F7FF',
-    borderRadius: 16,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    shadowColor: '#3185FC',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  durationCard: {
-    backgroundColor: '#F0F7FF',
-  },
-  distanceCard: {
-    backgroundColor: '#F0F7FF',
-  },
-  summaryIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  summaryContent: {
-    flex: 1,
-  },
-  summaryLabel: {
-    fontSize: 12,
-    color: '#666666',
-    marginBottom: 2,
-    fontWeight: '500',
-  },
-  summaryValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1A1A1A',
-    letterSpacing: -0.3,
-  },
-  // Timeline Section
-  timelineSection: {
-    paddingHorizontal: 24,
-    marginBottom: 24,
-  },
-  timelineContainer: {
-    paddingLeft: 20,
-  },
-  timelineItem: {
-    flexDirection: 'row',
-    marginBottom: 20,
-  },
-  timelineItemRTL: {
-    flexDirection: 'row-reverse',
-    paddingRight: 20,
-    paddingLeft: 0,
-  },
-  timelineLeft: {
-    width: 24,
-    alignItems: 'center',
-    marginRight: 16,
-  },
-  timelineDot: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    borderWidth: 3,
-    borderColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
     shadowRadius: 4,
     elevation: 4,
-    zIndex: 1,
   },
-  blueDot: {
-    backgroundColor: '#3185FC',
+  homeMarker: {
+    backgroundColor: '#6366F1',
   },
-  timelineLine: {
-    width: 2,
-    flex: 1,
-    backgroundColor: '#E5E7EB',
-    marginTop: 4,
-    marginBottom: 4,
-    minHeight: 20,
+  pickupMarker: {
+    backgroundColor: '#3B82F6',
   },
-  timelineCard: {
-    flex: 1,
+  schoolMarker: {
+    backgroundColor: '#F59E0B',
+  },
+
+  // ========== ARRIVAL CARD ==========
+  arrivalCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 16,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
+    marginBottom: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 1,
-    },
-    shadowOpacity: 0.06,
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
     shadowRadius: 4,
     elevation: 2,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
   },
-  timelineCardRTL: {
-    marginRight: 0,
-    marginLeft: 0,
-  },
-  timelineCardContent: {
+  arrivalLeft: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 12,
   },
-  timelineCardContentRTL: {
-    flexDirection: 'row-reverse',
+  arrivalIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  timelineLabel: {
-    fontSize: 14,
-    color: '#666666',
-    fontWeight: '500',
+  arrivalTextBox: {
     flex: 1,
   },
-  timelineTime: {
+  arrivalLabel: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontWeight: '500',
+    fontFamily: UbuntuFonts.medium,
+    marginBottom: 2,
+  },
+  arrivalValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#3B82F6',
+    fontFamily: UbuntuFonts.bold,
+  },
+  dividerVertical: {
+    width: 1,
+    height: 40,
+    backgroundColor: '#E5E7EB',
+    marginHorizontal: 12,
+  },
+  arrivalRight: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  distanceIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: 'rgba(16, 185, 129, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  distanceTextBox: {
+    flex: 1,
+  },
+  distanceLabel: {
+    fontSize: 12,
+    color: '#9CA3AF',
+    fontWeight: '500',
+    fontFamily: UbuntuFonts.medium,
+    marginBottom: 2,
+  },
+  distanceValue: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: '#10B981',
+    fontFamily: UbuntuFonts.bold,
+  },
+
+  // ========== STATIONS SECTION ==========
+  stationsContainer: {
+    marginBottom: 24,
+  },
+  stationsSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 16,
+  },
+  stationsIconBox: {
+    width: 36,
+    height: 36,
+    borderRadius: 10,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  stationsTitle: {
     fontSize: 16,
     fontWeight: '700',
-    color: '#1A1A1A',
-    marginLeft: 12,
+    color: '#1F2937',
+    fontFamily: UbuntuFonts.bold,
   },
-  timelineTimeRTL: {
-    marginLeft: 0,
-    marginRight: 12,
-  },
-  // Live Tracking Button
-  liveTrackingButton: {
-    backgroundColor: '#3185FC',
+
+  stationsBox: {
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 20,
-    marginHorizontal: 24,
-    marginTop: 8,
-    marginBottom: 12,
-    shadowColor: '#3185FC',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
   },
-  liveTrackingButtonRTL: {
-    flexDirection: 'row-reverse',
-  },
-  liveTrackingButtonContent: {
+  stationItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 12,
+    marginBottom: 16,
   },
-  liveTrackingIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
+  stationItemRTL: {
+    flexDirection: 'row-reverse',
+  },
+  stationTimeline: {
     alignItems: 'center',
-    justifyContent: 'center',
+    width: 32,
+    minHeight: 60,
   },
-  liveTrackingTextContainer: {
+  stationDot: {
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    borderWidth: 3,
+  },
+  stationConnector: {
+    width: 2,
     flex: 1,
-    marginLeft: 16,
-    marginRight: 16,
+    marginTop: 4,
   },
-  liveTrackingTitle: {
-    fontSize: 18,
+  stationInfo: {
+    flex: 1,
+  },
+  stationInfoRTL: {
+    alignItems: 'flex-end',
+  },
+  stationName: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#1F2937',
+    fontFamily: UbuntuFonts.bold,
+    marginBottom: 2,
+  },
+  stationTime: {
+    fontSize: 13,
+    color: '#9CA3AF',
+    fontFamily: UbuntuFonts.regular,
+  },
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+    minWidth: 50,
+    alignItems: 'center',
+  },
+  statusBadgeText: {
+    fontSize: 11,
     fontWeight: '700',
     color: '#FFFFFF',
+    fontFamily: UbuntuFonts.bold,
+  },
+
+  // ========== DRIVER CARD ==========
+  driverCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 20,
+    borderWidth: 1,
+    borderColor: '#F1F5F9',
+  },
+  driverContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  driverContentRTL: {
+    flexDirection: 'row-reverse',
+  },
+  driverAvatarBox: {
+    width: 56,
+    height: 56,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  driverAvatarGradient: {
+    width: '100%',
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  driverInfo: {
+    flex: 1,
+  },
+  driverName: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#1F2937',
+    fontFamily: UbuntuFonts.bold,
     marginBottom: 4,
-    letterSpacing: -0.3,
   },
-  liveTrackingSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontWeight: '500',
+  driverStatusPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    width: 'auto',
   },
-  // Demo Button
-  demoButton: {
+  statusDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
     backgroundColor: '#10B981',
-    borderRadius: 16,
-    padding: 20,
-    marginHorizontal: 24,
-    marginBottom: 24,
-    shadowColor: '#10B981',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 8,
   },
-  demoButtonRTL: {
-    flexDirection: 'row-reverse',
+  driverStatus: {
+    fontSize: 12,
+    color: '#10B981',
+    fontWeight: '600',
+    fontFamily: UbuntuFonts.semiBold,
   },
-  demoButtonContent: {
+
+  // ========== ACTION BUTTONS ==========
+  actionButtonsContainer: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 8,
+  },
+  callButtonWrapper: {
+    flex: 1,
+  },
+  callButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  demoIconContainer: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    alignItems: 'center',
     justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 14,
+    gap: 8,
+    shadowColor: '#3B82F6',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 12,
+    elevation: 5,
   },
-  demoTextContainer: {
-    flex: 1,
-    marginLeft: 16,
-    marginRight: 16,
-  },
-  demoTitle: {
-    fontSize: 18,
+  callButtonText: {
+    fontSize: 15,
     fontWeight: '700',
     color: '#FFFFFF',
-    marginBottom: 4,
-    letterSpacing: -0.3,
+    fontFamily: UbuntuFonts.bold,
   },
-  demoSubtitle: {
-    fontSize: 14,
-    color: 'rgba(255, 255, 255, 0.9)',
-    fontWeight: '500',
+  messageButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 14,
+    borderRadius: 14,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: '#3B82F6',
+    gap: 8,
   },
-  // RTL Support
+  messageButtonText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: '#3B82F6',
+    fontFamily: UbuntuFonts.bold,
+  },
+
+  // ========== RTL ==========
   rtl: {
     textAlign: 'right',
   },
