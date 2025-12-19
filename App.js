@@ -14,6 +14,7 @@ import PendingApprovalScreen from './screens/drivers/PendingApprovalScreen';
 import DriverTabNavigator from './components/DriverTabNavigator';
 import TripLiveViewScreen from './screens/drivers/TripLiveViewScreen';
 import DriverTripDetailsScreen from './screens/drivers/DriverTripDetailsScreen';
+import TripDetailsScreen from './screens/students/TripDetailsScreen';
 import mockDriverScenario from './src/mock/mockDriverData';
 import { DEMO_STUDENT, DEMO_DRIVER } from './src/data/demoData';
 
@@ -22,10 +23,12 @@ export default function App() {
   const [currentScreen, setCurrentScreen] = useState('welcome');
   const [language, setLanguage] = useState('en');
   const [selectedRole, setSelectedRole] = useState(null);
+  const [isDemoMode, setIsDemoMode] = useState(false);
   const [studentData, setStudentData] = useState(null);
   const [driverData, setDriverData] = useState(null);
   const [tripLiveViewData, setTripLiveViewData] = useState(null);
   const [tripDetailsData, setTripDetailsData] = useState(null);
+  const [studentTripDetailsData, setStudentTripDetailsData] = useState(null);
 
   // Load Ubuntu fonts
   const [fontsLoaded, fontError] = useFonts({
@@ -82,12 +85,37 @@ export default function App() {
       return (
         <SelectRoleScreen
           language={language}
-          onBack={() => setCurrentScreen('welcome')}
+          onBack={() => {
+            setIsDemoMode(false);
+            setCurrentScreen('welcome');
+          }}
           onRoleSelect={(role) => {
-            if (role === 'student') {
-              setCurrentScreen('studentRegister');
-            } else if (role === 'driver') {
-              setCurrentScreen('driverRegister');
+            if (isDemoMode) {
+              // Demo mode: redirect to home screen with demo data
+              if (role === 'student') {
+                setStudentData({
+                  studentId: DEMO_STUDENT.id,
+                  email: DEMO_STUDENT.email,
+                  isDemo: true,
+                });
+                setIsDemoMode(false);
+                setCurrentScreen('studentHome');
+              } else if (role === 'driver') {
+                setDriverData({
+                  driverId: DEMO_DRIVER.id,
+                  email: DEMO_DRIVER.email || 'driver.demo@mobi.app',
+                  isDemo: true,
+                });
+                setIsDemoMode(false);
+                setCurrentScreen('driverHome');
+              }
+            } else {
+              // Normal mode: go to registration
+              if (role === 'student') {
+                setCurrentScreen('studentRegister');
+              } else if (role === 'driver') {
+                setCurrentScreen('driverRegister');
+              }
             }
           }}
         />
@@ -139,6 +167,28 @@ export default function App() {
           onLogout={() => {
             setStudentData(null);
             setCurrentScreen('welcome');
+          }}
+          onNavigateToTripDetails={(tripData) => {
+            setStudentTripDetailsData(tripData);
+            setCurrentScreen('studentTripDetails');
+          }}
+        />
+      );
+    }
+
+    if (currentScreen === 'studentTripDetails') {
+      if (!studentTripDetailsData) {
+        // If no trip data, go back to student home
+        setCurrentScreen('studentHome');
+        return null;
+      }
+      return (
+        <TripDetailsScreen
+          tripData={studentTripDetailsData}
+          language={language}
+          onBack={() => {
+            setStudentTripDetailsData(null);
+            setCurrentScreen('studentHome');
           }}
         />
       );
@@ -258,23 +308,10 @@ export default function App() {
         onLanguageChange={setLanguage}
         onLogin={() => setCurrentScreen('login')}
         onRegister={() => setCurrentScreen('selectRole')}
-        onSkip={() => {
-          // Skip to demo mode: navigate to student home with static mock student data
-          setStudentData({
-            studentId: DEMO_STUDENT.id,
-            email: DEMO_STUDENT.email,
-            isDemo: true,
-          });
-          setCurrentScreen('studentHome');
-        }}
-        onSkipToDriver={() => {
-          // Skip to driver demo mode: navigate to driver home with static mock driver data
-          setDriverData({
-            driverId: DEMO_DRIVER.id,
-            email: DEMO_DRIVER.email || 'driver.demo@mobi.app',
-            isDemo: true,
-          });
-          setCurrentScreen('driverHome');
+        onDemoMode={() => {
+          // Navigate to role selection in demo mode
+          setIsDemoMode(true);
+          setCurrentScreen('selectRole');
         }}
       />
     );

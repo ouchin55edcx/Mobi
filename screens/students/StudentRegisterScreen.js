@@ -19,6 +19,8 @@ import { getValidationError, validateEmail, validatePhone, validateCIN, validate
 import StepIndicator from '../../components/StepIndicator';
 import SchoolPicker from '../../components/SchoolPicker';
 import MapLocationPicker from '../../components/MapLocationPicker';
+import SchoolMapCard from '../../components/SchoolMapCard';
+import { getSchoolById } from '../../src/services/schoolService';
 
 const translations = {
   en: {
@@ -133,6 +135,8 @@ const StudentRegisterScreen = ({ language = 'en', onBack, onSuccess }) => {
 
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
+  const [selectedSchool, setSelectedSchool] = useState(null);
+  const [loadingSchool, setLoadingSchool] = useState(false);
   const { registerStudent, loading } = useStudent();
 
   const t = translations[language];
@@ -146,6 +150,30 @@ const StudentRegisterScreen = ({ language = 'en', onBack, onSuccess }) => {
       }
       return prev;
     });
+
+    // Fetch school details when school is selected
+    if (field === 'school' && value) {
+      fetchSchoolDetails(value);
+    } else if (field === 'school' && !value) {
+      setSelectedSchool(null);
+    }
+  }, []);
+
+  const fetchSchoolDetails = useCallback(async (schoolId) => {
+    setLoadingSchool(true);
+    try {
+      const result = await getSchoolById(schoolId);
+      if (result.data) {
+        setSelectedSchool(result.data);
+      } else {
+        setSelectedSchool(null);
+      }
+    } catch (error) {
+      console.error('Error fetching school details:', error);
+      setSelectedSchool(null);
+    } finally {
+      setLoadingSchool(false);
+    }
   }, []);
 
   const handleBlur = useCallback((field) => {
@@ -374,6 +402,23 @@ const StudentRegisterScreen = ({ language = 'en', onBack, onSuccess }) => {
                 error={touched.school && errors.school ? errors.school : null}
                 disabled={loading}
               />
+
+              {/* Display school map card after selection */}
+              {selectedSchool && (
+                <SchoolMapCard
+                  school={selectedSchool}
+                  language={language}
+                />
+              )}
+
+              {loadingSchool && (
+                <View style={styles.loadingContainer}>
+                  <ActivityIndicator size="small" color="#3185FC" />
+                  <Text style={styles.loadingText}>
+                    {language === 'ar' ? 'جاري تحميل موقع المدرسة...' : 'Loading school location...'}
+                  </Text>
+                </View>
+              )}
             </View>
           </View>
         );
@@ -659,6 +704,17 @@ const styles = StyleSheet.create({
   },
   nextButtonIcon: {
     marginLeft: 8,
+  },
+  loadingContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 16,
+    gap: 8,
+  },
+  loadingText: {
+    fontSize: 14,
+    color: '#666666',
   },
 });
 

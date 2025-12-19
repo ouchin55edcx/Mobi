@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   View,
   Text,
@@ -8,22 +8,10 @@ import {
   FlatList,
   Platform,
   TextInput,
+  ActivityIndicator,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
-
-// Sample schools list - Replace with your actual data source
-const SCHOOLS = [
-  { id: '1', name: 'University of Casablanca', nameAr: 'جامعة الدار البيضاء' },
-  { id: '2', name: 'Mohammed V University', nameAr: 'جامعة محمد الخامس' },
-  { id: '3', name: 'Ibn Tofail University', nameAr: 'جامعة ابن طفيل' },
-  { id: '4', name: 'Cadi Ayyad University', nameAr: 'جامعة القاضي عياض' },
-  { id: '5', name: 'Hassan II University', nameAr: 'جامعة الحسن الثاني' },
-  { id: '6', name: 'Sidi Mohamed Ben Abdellah University', nameAr: 'جامعة سيدي محمد بن عبد الله' },
-  { id: '7', name: 'Ibn Zohr University', nameAr: 'جامعة ابن زهر' },
-  { id: '8', name: 'Abdelmalek Essaâdi University', nameAr: 'جامعة عبد المالك السعدي' },
-  { id: '9', name: 'Moulay Ismail University', nameAr: 'جامعة مولاي إسماعيل' },
-  { id: '10', name: 'Chouaib Doukkali University', nameAr: 'جامعة شعيب الدكالي' },
-];
+import { getAllSchools } from '../src/services/schoolService';
 
 const SchoolPicker = ({ 
   value, 
@@ -34,10 +22,40 @@ const SchoolPicker = ({
 }) => {
   const [isVisible, setIsVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [schools, setSchools] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [errorFetching, setErrorFetching] = useState(null);
 
-  const selectedSchool = SCHOOLS.find((school) => school.id === value);
+  useEffect(() => {
+    const fetchSchools = async () => {
+      setLoading(true);
+      setErrorFetching(null);
+      const result = await getAllSchools();
+      
+      if (result.error) {
+        setErrorFetching(result.error.message || 'Failed to load schools');
+        setLoading(false);
+        return;
+      }
 
-  const filteredSchools = SCHOOLS.filter((school) => {
+      if (result.data) {
+        // Map the database fields to match the component's expected format
+        const mappedSchools = result.data.map(school => ({
+          id: school.id,
+          name: school.name,
+          nameAr: school.name_ar,
+        }));
+        setSchools(mappedSchools);
+      }
+      setLoading(false);
+    };
+
+    fetchSchools();
+  }, []);
+
+  const selectedSchool = schools.find((school) => school.id === value);
+
+  const filteredSchools = schools.filter((school) => {
     const name = language === 'ar' ? school.nameAr : school.name;
     return name.toLowerCase().includes(searchQuery.toLowerCase());
   });
@@ -128,35 +146,57 @@ const SchoolPicker = ({
             </View>
 
             {/* Schools List */}
-            <FlatList
-              data={filteredSchools}
-              keyExtractor={(item) => item.id}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={[
-                    styles.schoolItem,
-                    value === item.id && styles.schoolItemSelected,
-                  ]}
-                  onPress={() => handleSelect(item)}
-                  activeOpacity={0.7}
-                >
-                  <Text
+            {loading ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color="#3185FC" />
+                <Text style={styles.loadingText}>
+                  {language === 'ar' ? 'جاري التحميل...' : 'Loading schools...'}
+                </Text>
+              </View>
+            ) : errorFetching ? (
+              <View style={styles.errorContainer}>
+                <MaterialIcons name="error-outline" size={48} color="#EF4444" />
+                <Text style={styles.errorText}>
+                  {errorFetching}
+                </Text>
+              </View>
+            ) : filteredSchools.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>
+                  {language === 'ar' ? 'لا توجد مدارس' : 'No schools found'}
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                data={filteredSchools}
+                keyExtractor={(item) => item.id}
+                renderItem={({ item }) => (
+                  <TouchableOpacity
                     style={[
-                      styles.schoolName,
-                      value === item.id && styles.schoolNameSelected,
-                      language === 'ar' && styles.rtl,
+                      styles.schoolItem,
+                      value === item.id && styles.schoolItemSelected,
                     ]}
+                    onPress={() => handleSelect(item)}
+                    activeOpacity={0.7}
                   >
-                    {language === 'ar' ? item.nameAr : item.name}
-                  </Text>
-                  {value === item.id && (
-                    <MaterialIcons name="check" size={20} color="#3185FC" />
-                  )}
-                </TouchableOpacity>
-              )}
-              style={styles.schoolsList}
-              showsVerticalScrollIndicator={false}
-            />
+                    <Text
+                      style={[
+                        styles.schoolName,
+                        value === item.id && styles.schoolNameSelected,
+                        language === 'ar' && styles.rtl,
+                      ]}
+                    >
+                      {language === 'ar' ? item.nameAr : item.name}
+                    </Text>
+                    {value === item.id && (
+                      <MaterialIcons name="check" size={20} color="#3185FC" />
+                    )}
+                  </TouchableOpacity>
+                )}
+                style={styles.schoolsList}
+                showsVerticalScrollIndicator={false}
+              />
+            )}
           </View>
         </View>
       </Modal>
@@ -285,6 +325,30 @@ const styles = StyleSheet.create({
   schoolNameSelected: {
     color: '#3185FC',
     fontWeight: '600',
+  },
+  loadingContainer: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#666666',
+  },
+  errorContainer: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyContainer: {
+    padding: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    fontSize: 16,
+    color: '#999999',
   },
 });
 

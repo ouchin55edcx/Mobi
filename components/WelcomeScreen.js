@@ -17,16 +17,14 @@ const translations = {
     tagline: 'Your mobile companion',
     register: 'Create Account',
     login: 'Login',
-    skip: 'Skip Now',
-    skipDriver: 'Skip to Driver',
+    demoMode: 'Demo Mode',
     language: 'Language',
   },
   ar: {
     tagline: 'رفيقك المحمول',
     register: 'إنشاء حساب',
     login: 'تسجيل الدخول',
-    skip: 'تخطي الآن',
-    skipDriver: 'تخطي إلى السائق',
+    demoMode: 'وضع التجربة',
     language: 'اللغة',
   },
 };
@@ -36,8 +34,7 @@ const WelcomeScreen = ({
   onLanguageChange,
   onLogin,
   onRegister,
-  onSkip,
-  onSkipToDriver,
+  onDemoMode,
 }) => {
   const [language, setLanguage] = useState(propLanguage || 'ar');
   const [showLanguageDropdown, setShowLanguageDropdown] = useState(false);
@@ -70,15 +67,9 @@ const WelcomeScreen = ({
     }
   };
 
-  const handleSkip = () => {
-    if (onSkip) {
-      onSkip();
-    }
-  };
-
-  const handleSkipToDriver = () => {
-    if (onSkipToDriver) {
-      onSkipToDriver();
+  const handleDemoMode = () => {
+    if (onDemoMode) {
+      onDemoMode();
     }
   };
 
@@ -180,25 +171,15 @@ const WelcomeScreen = ({
             <Text style={styles.registerButtonText}>{t.register}</Text>
           </TouchableOpacity>
 
-          <View style={styles.skipButtonsContainer}>
+          {onDemoMode && (
             <TouchableOpacity
-              style={styles.skipButton}
-              onPress={handleSkip}
-              activeOpacity={0.7}
+              style={styles.demoModeButton}
+              onPress={handleDemoMode}
+              activeOpacity={0.8}
             >
-              <Text style={styles.skipButtonText}>{t.skip}</Text>
+              <Text style={styles.demoModeButtonText}>{t.demoMode}</Text>
             </TouchableOpacity>
-
-            {onSkipToDriver && (
-              <TouchableOpacity
-                style={styles.skipDriverButton}
-                onPress={handleSkipToDriver}
-                activeOpacity={0.7}
-              >
-                <Text style={styles.skipDriverButtonText}>{t.skipDriver}</Text>
-              </TouchableOpacity>
-            )}
-          </View>
+          )}
         </View>
       </View>
     </SafeAreaView>
@@ -367,32 +348,22 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontFamily: UbuntuFonts.semiBold,
   },
-  skipButtonsContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 8,
+  demoModeButton: {
+    width: '100%',
+    paddingVertical: 14,
+    borderRadius: 12,
+    marginTop: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'rgba(255, 255, 255, 0.15)',
+    borderWidth: 1.5,
+    borderColor: 'rgba(255, 255, 255, 0.3)',
   },
-  skipButton: {
-    paddingVertical: 12,
-    flex: 1,
-  },
-  skipButtonText: {
-    color: 'rgba(255, 255, 255, 0.7)',
+  demoModeButtonText: {
+    color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '500',
-    fontFamily: UbuntuFonts.medium,
-    textAlign: 'center',
-  },
-  skipDriverButton: {
-    paddingVertical: 12,
-    flex: 1,
-  },
-  skipDriverButtonText: {
-    color: 'rgba(255, 255, 255, 0.7)',
-    fontSize: 16,
-    fontWeight: '500',
-    fontFamily: UbuntuFonts.medium,
-    textAlign: 'center',
+    fontWeight: '600',
+    fontFamily: UbuntuFonts.semiBold,
   },
 });
 

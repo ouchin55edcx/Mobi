@@ -11,6 +11,7 @@ const StudentTabNavigator = ({
   isDemo = false,
   language = 'en',
   onLogout,
+  onNavigateToTripDetails,
 }) => {
   const [activeTab, setActiveTab] = useState('home');
 
@@ -22,6 +23,7 @@ const StudentTabNavigator = ({
             studentId={studentId}
             isDemo={isDemo}
             language={language}
+            onNavigateToTripDetails={onNavigateToTripDetails}
           />
         );
       case 'history':

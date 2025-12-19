@@ -54,7 +54,7 @@ const translations = {
   },
 };
 
-const StudentHomeScreen = ({ studentId, isDemo = false, language = 'ar' }) => {
+const StudentHomeScreen = ({ studentId, isDemo = false, language = 'ar', onNavigateToTripDetails }) => {
   const homeLocation = isDemo 
     ? DEMO_STUDENT.home_location 
     : { latitude: 33.5731, longitude: -7.5898 };
@@ -188,7 +188,33 @@ const StudentHomeScreen = ({ studentId, isDemo = false, language = 'ar' }) => {
     const routeCoords = getRouteCoordinates();
     const markers = getMapMarkers();
 
-    const tripData = {
+    // Create a booking-like object for transformation
+    const bookingData = {
+      start_time: schoolEntryTime.toISOString(),
+      end_time: new Date(schoolEntryTime.getTime() + 45 * 60 * 1000).toISOString(),
+      homeLocation,
+      pickupLocation: markers.middle.location,
+      destinationLocation: schoolLocation,
+      routeCoordinates: routeCoords,
+      leaveHomeTime: new Date(schoolEntryTime.getTime() - 50 * 60 * 1000),
+      reachPickupTime: new Date(schoolEntryTime.getTime() - 10 * 60 * 1000),
+      arriveDestinationTime: schoolEntryTime,
+      driverName: language === 'ar' ? 'الكابتن أحمد' : 'Captain Ahmed',
+      driver: {
+        name: language === 'ar' ? 'الكابتن أحمد' : 'Captain Ahmed',
+        phone: null,
+        isOnline: true,
+      },
+    };
+
+    // Transform and navigate to trip details
+    if (onNavigateToTripDetails) {
+      const transformedTripData = transformBookingToTripData(bookingData);
+      onNavigateToTripDetails(transformedTripData);
+    }
+
+    // Also set confirmed trip data for backward compatibility
+    const confirmedTripDataObj = {
       homeLocation,
       pickupLocation: markers.middle.location,
       destinationLocation: schoolLocation,
@@ -203,17 +229,108 @@ const StudentHomeScreen = ({ studentId, isDemo = false, language = 'ar' }) => {
       vehicleInfo: language === 'ar' ? 'حافلة مدرسية - AB 1234' : 'School Bus - AB 1234',
     };
 
-    setConfirmedTripData(tripData);
+    setConfirmedTripData(confirmedTripDataObj);
     setTripStatus('active');
+  };
 
-    notificationTimeoutRef.current = setTimeout(() => {
-      setShowNotification(true);
-    }, 10000);
+  const transformBookingToTripData = (booking) => {
+    // Use booking data if available, otherwise use defaults
+    const bookingHomeLocation = booking.homeLocation || booking.home_location;
+    const bookingPickupLocation = booking.pickupLocation || booking.pickup_location;
+    const bookingDestinationLocation = booking.destinationLocation || booking.destination_location;
+    const bookingRouteCoordinates = booking.routeCoordinates || booking.route_coordinates;
+    
+    const finalHomeLocation = bookingHomeLocation || homeLocation;
+    const finalPickupLocation = bookingPickupLocation || getMapMarkers().middle.location;
+    const finalDestinationLocation = bookingDestinationLocation || schoolLocation;
+    const finalRouteCoordinates = bookingRouteCoordinates || getRouteCoordinates();
+    
+    // Calculate times from booking
+    const startTime = booking.start_time ? new Date(booking.start_time) : 
+                     (booking.arriveDestinationTime ? new Date(booking.arriveDestinationTime) : new Date());
+    const endTime = booking.end_time ? new Date(booking.end_time) : 
+                   (booking.endTime ? new Date(booking.endTime) : new Date(startTime.getTime() + 45 * 60 * 1000));
+    
+    // Use booking times if available, otherwise calculate
+    const leaveHomeTime = booking.leaveHomeTime ? new Date(booking.leaveHomeTime) : 
+                         new Date(startTime.getTime() - 45 * 60 * 1000);
+    const reachPickupTime = booking.reachPickupTime ? new Date(booking.reachPickupTime) : 
+                           new Date(startTime.getTime() - 30 * 60 * 1000);
+    const arriveDestinationTime = booking.arriveDestinationTime ? new Date(booking.arriveDestinationTime) : startTime;
+    
+    // Calculate user path to station (home to pickup)
+    const userPathCoordinates = booking.userPathCoordinates || [
+      finalHomeLocation,
+      {
+        latitude: (finalHomeLocation.latitude + finalPickupLocation.latitude) / 2,
+        longitude: (finalHomeLocation.longitude + finalPickupLocation.longitude) / 2,
+      },
+      finalPickupLocation,
+    ];
+    
+    // Calculate distance to station (simplified)
+    const distanceToStation = booking.distanceToStation || booking.distance_to_station || 2.5; // km
+    const estimatedArrivalMinutes = booking.estimatedArrivalMinutes || booking.estimated_arrival_minutes || 10;
+    
+    // Use booking stations if available, otherwise create default
+    const stations = booking.stations || [
+      {
+        id: 1,
+        name: language === 'ar' ? 'محطة الكوب' : 'Al-Koub Station',
+        time: new Date(leaveHomeTime.getTime() - 20 * 60 * 1000),
+        status: 'done',
+      },
+      {
+        id: 2,
+        name: language === 'ar' ? 'الجامعة' : 'University',
+        time: reachPickupTime,
+        status: 'now',
+      },
+      {
+        id: 3,
+        name: language === 'ar' ? 'المركز التجاري' : 'Commercial Center',
+        time: arriveDestinationTime,
+        status: 'soon',
+      },
+    ];
+    
+    // Get driver info from booking or use defaults
+    const driverName = booking.driverName || booking.driver?.name || (language === 'ar' ? 'الكابتن أحمد' : 'Captain Ahmed');
+    const driverPhone = booking.driverPhone || booking.driver?.phone || null;
+    const isDriverOnline = booking.isDriverOnline !== undefined ? booking.isDriverOnline : 
+                         (booking.driver?.isOnline !== undefined ? booking.driver.isOnline : true);
+    
+    return {
+      homeLocation: finalHomeLocation,
+      pickupLocation: finalPickupLocation,
+      destinationLocation: finalDestinationLocation,
+      routeCoordinates: finalRouteCoordinates,
+      userPathCoordinates,
+      leaveHomeTime,
+      reachPickupTime,
+      arriveDestinationTime,
+      estimatedArrivalMinutes,
+      distanceToStation,
+      driverName,
+      driverPhone,
+      isDriverOnline,
+      stations,
+      driver: booking.driver || {
+        name: driverName,
+        phone: driverPhone,
+      },
+    };
   };
 
   const handleBookingSuccess = (newBooking) => {
     setActiveBooking(newBooking);
     setShowBookingModal(false);
+    
+    // Transform booking data and navigate to trip details
+    if (onNavigateToTripDetails && newBooking) {
+      const tripData = transformBookingToTripData(newBooking);
+      onNavigateToTripDetails(tripData);
+    }
   };
 
   const handleViewLiveTrip = () => {

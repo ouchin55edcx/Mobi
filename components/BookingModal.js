@@ -179,7 +179,7 @@ const BookingModal = ({
                 resetForm();
                 onClose();
                 if (onBookingSuccess) {
-                  onBookingSuccess();
+                  onBookingSuccess(result.data);
                 }
               },
             },

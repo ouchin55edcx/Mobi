@@ -187,26 +187,6 @@ const MapLocationPicker = ({
         </View>
       </View>
 
-      {/* Coordinates Display */}
-      <View style={styles.coordinatesContainer}>
-        <View style={styles.coordinateItem}>
-          <Text style={styles.coordinateLabel}>
-            {language === 'ar' ? 'خط العرض' : 'Latitude'}
-          </Text>
-          <Text style={styles.coordinateValue}>
-            {location.latitude.toFixed(6)}
-          </Text>
-        </View>
-        <View style={styles.coordinateItem}>
-          <Text style={styles.coordinateLabel}>
-            {language === 'ar' ? 'خط الطول' : 'Longitude'}
-          </Text>
-          <Text style={styles.coordinateValue}>
-            {location.longitude.toFixed(6)}
-          </Text>
-        </View>
-      </View>
-
       {error && <Text style={styles.errorText}>{error}</Text>}
       <View
         style={[
@@ -308,28 +288,6 @@ const styles = StyleSheet.create({
     height: 12,
     borderRadius: 6,
     backgroundColor: '#FFFFFF',
-  },
-  coordinatesContainer: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 8,
-  },
-  coordinateItem: {
-    flex: 1,
-    backgroundColor: '#F9FAFB',
-    padding: 12,
-    borderRadius: 8,
-  },
-  coordinateLabel: {
-    fontSize: 11,
-    color: '#999999',
-    marginBottom: 4,
-  },
-  coordinateValue: {
-    fontSize: 14,
-    color: '#1A1A1A',
-    fontWeight: '600',
-    fontFamily: Platform.OS === 'ios' ? 'Courier' : 'monospace',
   },
   underline: {
     height: 2,

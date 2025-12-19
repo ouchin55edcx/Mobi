@@ -12,7 +12,7 @@ import { supabase } from '../lib/supabase';
  * @param {string} studentData.phone - Phone number
  * @param {string} studentData.email - Email address
  * @param {string} studentData.cin - CIN (National ID)
- * @param {string} studentData.school - School ID
+ * @param {string} studentData.school - School ID (UUID)
  * @param {Object} studentData.homeLocation - Location object with latitude and longitude
  * @returns {Promise<Object>} - Result object with data and error
  */
@@ -26,7 +26,7 @@ export const createStudent = async (studentData) => {
           phone: studentData.phone,
           email: studentData.email,
           cin: studentData.cin,
-          school: studentData.school,
+          school_id: studentData.school,
           home_location: {
             latitude: studentData.homeLocation.latitude,
             longitude: studentData.homeLocation.longitude,
@@ -57,13 +57,26 @@ export const getStudentById = async (studentId) => {
   try {
     const { data, error } = await supabase
       .from('students')
-      .select('*')
+      .select(`
+        *,
+        schools:school_id (
+          id,
+          name,
+          name_ar
+        )
+      `)
       .eq('id', studentId)
       .single();
 
     if (error) {
       console.error('Error fetching student:', error);
       return { data: null, error };
+    }
+
+    // Flatten the school data for backward compatibility
+    if (data && data.schools) {
+      data.school = data.schools.name;
+      data.school_ar = data.schools.name_ar;
     }
 
     return { data, error: null };
@@ -82,13 +95,26 @@ export const getStudentByEmail = async (email) => {
   try {
     const { data, error } = await supabase
       .from('students')
-      .select('*')
+      .select(`
+        *,
+        schools:school_id (
+          id,
+          name,
+          name_ar
+        )
+      `)
       .eq('email', email)
       .single();
 
     if (error) {
       console.error('Error fetching student by email:', error);
       return { data: null, error };
+    }
+
+    // Flatten the school data for backward compatibility
+    if (data && data.schools) {
+      data.school = data.schools.name;
+      data.school_ar = data.schools.name_ar;
     }
 
     return { data, error: null };
@@ -99,23 +125,79 @@ export const getStudentByEmail = async (email) => {
 };
 
 /**
+ * Get all students by school ID (One-to-Many relationship)
+ * @param {string} schoolId - School ID
+ * @returns {Promise<Object>} - Result object with data and error
+ */
+export const getStudentsBySchoolId = async (schoolId) => {
+  try {
+    const { data, error } = await supabase
+      .from('students')
+      .select(`
+        *,
+        schools:school_id (
+          id,
+          name,
+          name_ar,
+          latitude,
+          longitude,
+          address,
+          city
+        )
+      `)
+      .eq('school_id', schoolId)
+      .order('created_at', { ascending: false });
+
+    if (error) {
+      console.error('Error fetching students by school:', error);
+      return { data: null, error };
+    }
+
+    return { data, error: null };
+  } catch (error) {
+    console.error('Exception fetching students by school:', error);
+    return { data: null, error };
+  }
+};
+
+/**
  * Update student
  * @param {string} studentId - Student ID
- * @param {Object} updates - Fields to update
+ * @param {Object} updates - Fields to update (if updates.school is provided, it will be mapped to school_id)
  * @returns {Promise<Object>} - Result object with data and error
  */
 export const updateStudent = async (studentId, updates) => {
   try {
+    // Map school to school_id if provided
+    const updateData = { ...updates };
+    if (updateData.school) {
+      updateData.school_id = updateData.school;
+      delete updateData.school;
+    }
+
     const { data, error } = await supabase
       .from('students')
-      .update(updates)
+      .update(updateData)
       .eq('id', studentId)
-      .select()
+      .select(`
+        *,
+        schools:school_id (
+          id,
+          name,
+          name_ar
+        )
+      `)
       .single();
 
     if (error) {
       console.error('Error updating student:', error);
       return { data: null, error };
+    }
+
+    // Flatten the school data for backward compatibility
+    if (data && data.schools) {
+      data.school = data.schools.name;
+      data.school_ar = data.schools.name_ar;
     }
 
     return { data, error: null };
