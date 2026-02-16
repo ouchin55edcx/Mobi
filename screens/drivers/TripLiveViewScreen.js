@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -9,74 +9,81 @@ import {
   Linking,
   Animated,
   Vibration,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
-import { MaterialIcons } from '@expo/vector-icons';
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
-import { UbuntuFonts } from '../../src/utils/fonts';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
+import { MaterialIcons } from "@expo/vector-icons";
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
+import { UbuntuFonts } from "../../src/utils/fonts";
+import * as Location from "expo-location";
+import { updateDriverLiveLocation } from "../../src/services/groupingService";
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const translations = {
   en: {
-    live: 'LIVE',
-    nextStudent: 'Next Student',
-    distance: 'Distance',
-    atPickupPoint: 'At Pickup Point',
-    notAtPickupPoint: 'Not At Pickup Point',
-    call: 'Call',
-    sos: 'SOS',
-    back: 'Back',
-    km: 'km',
-    minutes: 'min',
-    seconds: 'sec',
+    live: "LIVE",
+    nextStudent: "Next Student",
+    distance: "Distance",
+    atPickupPoint: "At Pickup Point",
+    notAtPickupPoint: "Not At Pickup Point",
+    call: "Call",
+    sos: "SOS",
+    endTrip: "End Trip",
+    back: "Back",
+    km: "km",
+    minutes: "min",
+    seconds: "sec",
   },
   ar: {
-    live: 'مباشر',
-    nextStudent: 'الطالب التالي',
-    distance: 'المسافة',
-    atPickupPoint: 'في نقطة الاستلام',
-    notAtPickupPoint: 'غير موجود في نقطة الاستلام',
-    call: 'اتصال',
-    sos: 'طوارئ',
-    back: 'رجوع',
-    km: 'كم',
-    minutes: 'دقيقة',
-    seconds: 'ثانية',
+    live: "مباشر",
+    nextStudent: "الطالب التالي",
+    distance: "المسافة",
+    atPickupPoint: "في نقطة الاستلام",
+    notAtPickupPoint: "غير موجود في نقطة الاستلام",
+    call: "اتصال",
+    sos: "طوارئ",
+    endTrip: "إنهاء الرحلة",
+    back: "رجوع",
+    km: "كم",
+    minutes: "دقيقة",
+    seconds: "ثانية",
   },
 };
 
 // Calculate distance between two coordinates
 const calculateDistance = (lat1, lon1, lat2, lon2) => {
   const R = 6371; // Radius of the Earth in km
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLon = ((lon2 - lon1) * Math.PI) / 180;
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * Math.PI / 180) *
-    Math.cos(lat2 * Math.PI / 180) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 };
 
 const TripLiveViewScreen = ({
   tripData,
-  language = 'en',
+  driverId,
+  language = "en",
   onBack,
+  onCompleteTrip,
   isDemo = true,
 }) => {
   const t = translations[language];
-  const isRTL = language === 'ar';
+  const isRTL = language === "ar";
 
   // Initialize trip data
   const [trip, setTrip] = useState(() => {
     if (tripData) {
       const students = tripData.students || [];
       const destinationLocation = tripData.destinationLocation || {
-        latitude: 33.5800,
-        longitude: -7.5920,
+        latitude: 33.58,
+        longitude: -7.592,
       };
       return {
         ...tripData,
@@ -87,7 +94,7 @@ const TripLiveViewScreen = ({
     }
     return {
       students: [],
-      destinationLocation: { latitude: 33.5800, longitude: -7.5920 },
+      destinationLocation: { latitude: 33.58, longitude: -7.592 },
       startTime: new Date(),
     };
   });
@@ -96,10 +103,15 @@ const TripLiveViewScreen = ({
   const [tripTime, setTripTime] = useState(0); // in seconds (elapsed)
   const [remainingSeconds, setRemainingSeconds] = useState(20 * 60); // simple countdown for demo
   const [driverLocation, setDriverLocation] = useState(
-    trip.parkingLocation || trip.students?.[0]?.homeLocation || { latitude: 33.5750, longitude: -7.5900 }
+    trip.parkingLocation ||
+      trip.students?.[0]?.homeLocation || {
+        latitude: 33.575,
+        longitude: -7.59,
+      },
   );
   const [routeIndex, setRouteIndex] = useState(0);
   const [studentAtPickup, setStudentAtPickup] = useState(false);
+  const [endingTrip, setEndingTrip] = useState(false);
 
   const mapRef = useRef(null);
   const tripTimeIntervalRef = useRef(null);
@@ -117,7 +129,7 @@ const TripLiveViewScreen = ({
         driverLocation.latitude,
         driverLocation.longitude,
         nextStudent.homeLocation.latitude,
-        nextStudent.homeLocation.longitude
+        nextStudent.homeLocation.longitude,
       )
     : 0;
 
@@ -150,8 +162,8 @@ const TripLiveViewScreen = ({
   // Start trip timer and countdown
   useEffect(() => {
     tripTimeIntervalRef.current = setInterval(() => {
-      setTripTime(prev => prev + 1);
-      setRemainingSeconds(prev => (prev > 0 ? prev - 1 : 0));
+      setTripTime((prev) => prev + 1);
+      setRemainingSeconds((prev) => (prev > 0 ? prev - 1 : 0));
     }, 1000);
 
     return () => {
@@ -163,6 +175,7 @@ const TripLiveViewScreen = ({
 
   // Simulate driver moving along the route and progressing through pickups
   useEffect(() => {
+    if (!isDemo) return undefined;
     if (!routeCoordinates.length) return;
 
     // Clear any existing interval
@@ -187,10 +200,13 @@ const TripLiveViewScreen = ({
           nextPoint.latitude,
           nextPoint.longitude,
           nextStudent.homeLocation.latitude,
-          nextStudent.homeLocation.longitude
+          nextStudent.homeLocation.longitude,
         );
-        if (d < 0.05 && currentStudentIndex < (trip.students?.length || 0) - 1) {
-          setCurrentStudentIndex(prev => prev + 1);
+        if (
+          d < 0.05 &&
+          currentStudentIndex < (trip.students?.length || 0) - 1
+        ) {
+          setCurrentStudentIndex((prev) => prev + 1);
         }
       }
 
@@ -203,12 +219,15 @@ const TripLiveViewScreen = ({
             latitudeDelta: 0.02,
             longitudeDelta: 0.02,
           },
-          800
+          800,
         );
       }
 
       // Stop at end of route
-      if (index === routeCoordinates.length - 1 && driverMoveIntervalRef.current) {
+      if (
+        index === routeCoordinates.length - 1 &&
+        driverMoveIntervalRef.current
+      ) {
         clearInterval(driverMoveIntervalRef.current);
       }
     }, 5000); // move every 5 seconds
@@ -218,7 +237,53 @@ const TripLiveViewScreen = ({
         clearInterval(driverMoveIntervalRef.current);
       }
     };
-  }, [routeCoordinates, trip.students, currentStudentIndex]);
+  }, [routeCoordinates, trip.students, currentStudentIndex, isDemo]);
+
+  // Live GPS updates to Supabase for non-demo mode
+  useEffect(() => {
+    if (isDemo || !trip?.id || !driverId) {
+      return undefined;
+    }
+
+    let subscription = null;
+    let mounted = true;
+
+    const startTracking = async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted" || !mounted) {
+        return;
+      }
+
+      subscription = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.Balanced,
+          timeInterval: 5000,
+          distanceInterval: 10,
+        },
+        async (position) => {
+          const { latitude, longitude, speed, heading } = position.coords;
+          setDriverLocation({ latitude, longitude });
+          await updateDriverLiveLocation({
+            tripId: trip.id,
+            driverId,
+            latitude,
+            longitude,
+            speedMps: typeof speed === "number" ? speed : null,
+            heading: typeof heading === "number" ? heading : null,
+          });
+        },
+      );
+    };
+
+    startTracking();
+
+    return () => {
+      mounted = false;
+      if (subscription?.remove) {
+        subscription.remove();
+      }
+    };
+  }, [isDemo, trip?.id, driverId]);
 
   // Enhanced pulse animation for LIVE indicator with expanding circles
   const pulseAnimation2 = useRef(new Animated.Value(0)).current;
@@ -239,7 +304,7 @@ const TripLiveViewScreen = ({
             duration: 2000,
             useNativeDriver: true,
           }),
-        ])
+        ]),
       );
     };
 
@@ -275,7 +340,7 @@ const TripLiveViewScreen = ({
           duration: 800,
           useNativeDriver: true,
         }),
-      ])
+      ]),
     );
 
     const sosRotate = Animated.loop(
@@ -283,7 +348,7 @@ const TripLiveViewScreen = ({
         toValue: 1,
         duration: 3000,
         useNativeDriver: true,
-      })
+      }),
     );
 
     sosPulse.start();
@@ -320,7 +385,7 @@ const TripLiveViewScreen = ({
             duration: 100,
             useNativeDriver: true,
           }),
-        ])
+        ]),
       );
       shake.start();
 
@@ -330,7 +395,7 @@ const TripLiveViewScreen = ({
 
   const sosRotateInterpolate = sosRotateAnimation.interpolate({
     inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
+    outputRange: ["0deg", "360deg"],
   });
 
   // Format trip time
@@ -338,15 +403,15 @@ const TripLiveViewScreen = ({
     const hours = Math.floor(seconds / 3600);
     const minutes = Math.floor((seconds % 3600) / 60);
     const secs = seconds % 60;
-    
+
     if (hours > 0) {
-      return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+      return `${hours}:${String(minutes).padStart(2, "0")}:${String(secs).padStart(2, "0")}`;
     }
-    return `${minutes}:${String(secs).padStart(2, '0')}`;
+    return `${minutes}:${String(secs).padStart(2, "0")}`;
   };
 
   const triggerHapticFeedback = () => {
-    if (Platform.OS === 'ios') {
+    if (Platform.OS === "ios") {
       Vibration.vibrate(50);
     } else {
       Vibration.vibrate(50);
@@ -358,10 +423,20 @@ const TripLiveViewScreen = ({
     Linking.openURL(`tel:${phone}`);
   };
 
+  const handleEndTrip = async () => {
+    if (!onCompleteTrip || endingTrip) return;
+    setEndingTrip(true);
+    try {
+      await onCompleteTrip(trip);
+    } finally {
+      setEndingTrip(false);
+    }
+  };
+
   const handleSOS = () => {
     triggerHapticFeedback();
     // Handle SOS emergency
-    Linking.openURL('tel:190'); // Emergency number
+    Linking.openURL("tel:190"); // Emergency number
   };
 
   // Fit map to show all locations
@@ -377,11 +452,11 @@ const TripLiveViewScreen = ({
   return (
     <SafeAreaView style={styles.container} edges={[]}>
       <StatusBar style="light" />
-      
+
       {/* Full Screen Map */}
       <MapView
         ref={mapRef}
-        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+        provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
         style={styles.map}
         initialRegion={{
           latitude: driverLocation.latitude,
@@ -404,31 +479,32 @@ const TripLiveViewScreen = ({
               coordinate={student.homeLocation}
               title={student.name}
             >
-              <View style={[styles.pickupMarker, isNext && styles.nextPickupMarker]}>
-                <Text style={[styles.markerNumber, isNext && styles.nextMarkerNumber]}>
+              <View
+                style={[styles.pickupMarker, isNext && styles.nextPickupMarker]}
+              >
+                <Text
+                  style={[
+                    styles.markerNumber,
+                    isNext && styles.nextMarkerNumber,
+                  ]}
+                >
                   {index + 1}
                 </Text>
               </View>
             </Marker>
           );
         })}
-        
+
         {/* Destination marker */}
-        <Marker
-          coordinate={trip.destinationLocation}
-          pinColor="#10B981"
-        />
-        
+        <Marker coordinate={trip.destinationLocation} pinColor="#10B981" />
+
         {/* Driver location */}
-        <Marker
-          coordinate={driverLocation}
-          title="Driver"
-        >
+        <Marker coordinate={driverLocation} title="Driver">
           <View style={styles.driverMarker}>
             <MaterialIcons name="directions-bus" size={32} color="#FFFFFF" />
           </View>
         </Marker>
-        
+
         {/* Multi-segment route polyline with gradient colors */}
         {routeCoordinates.length > 1 && (
           <>
@@ -478,12 +554,26 @@ const TripLiveViewScreen = ({
         activeOpacity={0.7}
       >
         <View style={styles.backButtonContainer}>
-          <MaterialIcons 
-            name={isRTL ? "arrow-forward" : "arrow-back"} 
-            size={24} 
-            color="#1A1A1A" 
+          <MaterialIcons
+            name={isRTL ? "arrow-forward" : "arrow-back"}
+            size={24}
+            color="#1A1A1A"
           />
         </View>
+      </TouchableOpacity>
+
+      {/* End Trip Button */}
+      <TouchableOpacity
+        style={[
+          styles.endTripButton,
+          endingTrip && styles.endTripButtonDisabled,
+        ]}
+        onPress={handleEndTrip}
+        disabled={endingTrip}
+        activeOpacity={0.8}
+      >
+        <MaterialIcons name="check-circle" size={18} color="#FFFFFF" />
+        <Text style={styles.endTripButtonText}>{t.endTrip}</Text>
       </TouchableOpacity>
 
       {/* LIVE Indicator with Trip Time - Enhanced */}
@@ -499,12 +589,14 @@ const TripLiveViewScreen = ({
                   inputRange: [0, 0.5, 1],
                   outputRange: [0, 0.6, 0],
                 }),
-                transform: [{
-                  scale: pulseAnimation.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [1, 2.5],
-                  }),
-                }],
+                transform: [
+                  {
+                    scale: pulseAnimation.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [1, 2.5],
+                    }),
+                  },
+                ],
               },
             ]}
           />
@@ -517,12 +609,14 @@ const TripLiveViewScreen = ({
                   inputRange: [0, 0.5, 1],
                   outputRange: [0, 0.4, 0],
                 }),
-                transform: [{
-                  scale: pulseAnimation2.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [1, 2.5],
-                  }),
-                }],
+                transform: [
+                  {
+                    scale: pulseAnimation2.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [1, 2.5],
+                    }),
+                  },
+                ],
               },
             ]}
           />
@@ -535,21 +629,34 @@ const TripLiveViewScreen = ({
                   inputRange: [0, 0.5, 1],
                   outputRange: [0, 0.2, 0],
                 }),
-                transform: [{
-                  scale: pulseAnimation3.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [1, 2.5],
-                  }),
-                }],
+                transform: [
+                  {
+                    scale: pulseAnimation3.interpolate({
+                      inputRange: [0, 1],
+                      outputRange: [1, 2.5],
+                    }),
+                  },
+                ],
               },
             ]}
           />
 
           {/* Main badge with subtle pulse */}
-          <Animated.View style={[styles.liveBadge, { transform: [{ scale: pulseAnimation.interpolate({
-            inputRange: [0, 0.5, 1],
-            outputRange: [1, 1.05, 1],
-          }) }] }]}>
+          <Animated.View
+            style={[
+              styles.liveBadge,
+              {
+                transform: [
+                  {
+                    scale: pulseAnimation.interpolate({
+                      inputRange: [0, 0.5, 1],
+                      outputRange: [1, 1.05, 1],
+                    }),
+                  },
+                ],
+              },
+            ]}
+          >
             <View style={styles.liveDot} />
             <Text style={styles.liveText}>{t.live}</Text>
           </Animated.View>
@@ -567,26 +674,35 @@ const TripLiveViewScreen = ({
           </Text>
           <Text style={styles.distanceUnit}>{t.km}</Text>
           <Text style={styles.distanceLabel}>
-            TO STUDENT {currentStudentIndex + 1} • {Math.max(1, Math.round((distanceToNextStudent / 30) * 60))} MIN
+            TO STUDENT {currentStudentIndex + 1} •{" "}
+            {Math.max(1, Math.round((distanceToNextStudent / 30) * 60))} MIN
           </Text>
         </View>
       )}
 
       {/* Next Student Card - Compact with Blur/Glassmorphism */}
       {nextStudent && (
-        <View style={[styles.studentCardWrapper, isRTL && styles.studentCardWrapperRTL]}>
+        <View
+          style={[
+            styles.studentCardWrapper,
+            isRTL && styles.studentCardWrapperRTL,
+          ]}
+        >
           <View style={styles.studentBlurCard}>
             <View style={styles.studentCardHeader}>
               <View style={styles.studentInfoContainer}>
                 <Text style={[styles.studentNameLabel, isRTL && styles.rtl]}>
                   NEXT STUDENT
                 </Text>
-                <Text style={[styles.studentName, isRTL && styles.rtl]} numberOfLines={1}>
+                <Text
+                  style={[styles.studentName, isRTL && styles.rtl]}
+                  numberOfLines={1}
+                >
                   {nextStudent.name || `Student ${currentStudentIndex + 1}`}
                 </Text>
               </View>
             </View>
-            
+
             {nextStudent.phone && (
               <TouchableOpacity
                 style={styles.callButton}
@@ -604,7 +720,6 @@ const TripLiveViewScreen = ({
           </View>
         </View>
       )}
-
     </SafeAreaView>
   );
 };
@@ -612,15 +727,15 @@ const TripLiveViewScreen = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#000000',
+    backgroundColor: "#000000",
   },
   map: {
-    width: '100%',
-    height: '100%',
+    width: "100%",
+    height: "100%",
   },
   backButton: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 60 : 50,
+    position: "absolute",
+    top: Platform.OS === "ios" ? 60 : 50,
     left: 20,
     zIndex: 20,
   },
@@ -632,116 +747,137 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
-    backgroundColor: '#FFFFFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: '#000',
+    backgroundColor: "#FFFFFF",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4,
     shadowRadius: 16,
     elevation: 10,
     borderWidth: 1,
-    borderColor: 'rgba(0, 0, 0, 0.1)',
+    borderColor: "rgba(0, 0, 0, 0.1)",
+  },
+  endTripButton: {
+    position: "absolute",
+    top: Platform.OS === "ios" ? 62 : 52,
+    right: 20,
+    zIndex: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#10B981",
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    borderRadius: 20,
+  },
+  endTripButtonDisabled: {
+    opacity: 0.6,
+  },
+  endTripButtonText: {
+    color: "#FFFFFF",
+    fontWeight: "700",
+    fontSize: 13,
   },
   liveContainer: {
-    position: 'absolute',
-    top: Platform.OS === 'ios' ? 60 : 50,
+    position: "absolute",
+    top: Platform.OS === "ios" ? 60 : 50,
     left: 0,
     right: 0,
-    alignItems: 'center',
+    alignItems: "center",
     zIndex: 10,
     gap: 12,
   },
   liveBadgeContainer: {
-    position: 'relative',
-    alignItems: 'center',
-    justifyContent: 'center',
+    position: "relative",
+    alignItems: "center",
+    justifyContent: "center",
   },
   livePulseCircle: {
-    position: 'absolute',
+    position: "absolute",
     width: 80,
     height: 80,
     borderRadius: 40,
-    backgroundColor: '#EF4444',
+    backgroundColor: "#EF4444",
   },
   livePulseCircle1: {
-    backgroundColor: 'rgba(239, 68, 68, 0.8)',
+    backgroundColor: "rgba(239, 68, 68, 0.8)",
   },
   livePulseCircle2: {
-    backgroundColor: 'rgba(239, 68, 68, 0.6)',
+    backgroundColor: "rgba(239, 68, 68, 0.6)",
   },
   livePulseCircle3: {
-    backgroundColor: 'rgba(239, 68, 68, 0.4)',
+    backgroundColor: "rgba(239, 68, 68, 0.4)",
   },
   liveBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: '#EF4444',
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#EF4444",
     borderRadius: 24,
     paddingHorizontal: 20,
     paddingVertical: 10,
     gap: 10,
-    shadowColor: '#EF4444',
+    shadowColor: "#EF4444",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.6,
     shadowRadius: 12,
     elevation: 10,
     borderWidth: 3,
-    borderColor: '#FFFFFF',
+    borderColor: "#FFFFFF",
     zIndex: 10,
   },
   liveDot: {
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: '#FFFFFF',
-    shadowColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#FFFFFF",
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.8,
     shadowRadius: 4,
   },
   liveText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 15,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     fontFamily: UbuntuFonts.bold,
     letterSpacing: 1.5,
   },
   tripTimeContainer: {
-    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
     borderRadius: 25,
     paddingHorizontal: 32,
     paddingVertical: 12,
     borderWidth: 2,
-    borderColor: 'rgba(0, 0, 0, 0.1)',
-    shadowColor: '#000',
+    borderColor: "rgba(0, 0, 0, 0.1)",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.25,
     shadowRadius: 8,
     elevation: 6,
-    backdropFilter: 'blur(10px)',
+    backdropFilter: "blur(10px)",
   },
   tripTimeText: {
-    color: '#111827',
+    color: "#111827",
     fontSize: 36,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     fontFamily: UbuntuFonts.bold,
-    textShadowColor: 'rgba(255, 255, 255, 0.8)',
+    textShadowColor: "rgba(255, 255, 255, 0.8)",
     textShadowOffset: { width: 0, height: 1 },
     textShadowRadius: 3,
     letterSpacing: 1,
   },
   distanceCard: {
-    position: 'absolute',
+    position: "absolute",
     top: SCREEN_HEIGHT * 0.4,
     right: 20,
-    backgroundColor: 'rgba(255, 255, 255, 0.92)',
+    backgroundColor: "rgba(255, 255, 255, 0.92)",
     borderRadius: 20,
     padding: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     minWidth: 120,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
@@ -754,29 +890,29 @@ const styles = StyleSheet.create({
   },
   distanceValue: {
     fontSize: 48,
-    fontWeight: '700',
-    color: '#1F2937',
+    fontWeight: "700",
+    color: "#1F2937",
     fontFamily: UbuntuFonts.bold,
     lineHeight: 52,
   },
   distanceUnit: {
     fontSize: 18,
-    color: '#6B7280',
+    color: "#6B7280",
     fontFamily: UbuntuFonts.semiBold,
     marginTop: 2,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   distanceLabel: {
     fontSize: 10,
-    color: '#9CA3AF',
+    color: "#9CA3AF",
     fontFamily: UbuntuFonts.medium,
     marginTop: 10,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     letterSpacing: 0.8,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   studentCardWrapper: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 32,
     left: 24,
     right: 24,
@@ -786,14 +922,14 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     paddingVertical: 20,
     paddingHorizontal: 20,
-    backgroundColor: '#0EA5E9',
-    overflow: 'hidden',
-    shadowColor: '#0EA5E9',
+    backgroundColor: "#0EA5E9",
+    overflow: "hidden",
+    shadowColor: "#0EA5E9",
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4,
     shadowRadius: 16,
     elevation: 8,
-    backdropFilter: 'blur(20px)',
+    backdropFilter: "blur(20px)",
   },
   studentCardWrapperRTL: {
     // RTL handled by text alignment
@@ -806,29 +942,29 @@ const styles = StyleSheet.create({
   },
   studentNameLabel: {
     fontSize: 10,
-    color: 'rgba(255, 255, 255, 0.8)',
+    color: "rgba(255, 255, 255, 0.8)",
     fontFamily: UbuntuFonts.medium,
     marginBottom: 6,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     letterSpacing: 1.2,
-    fontWeight: '600',
+    fontWeight: "600",
   },
   studentName: {
     fontSize: 26,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontWeight: "700",
+    color: "#FFFFFF",
     fontFamily: UbuntuFonts.bold,
   },
   callButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#FFFFFF',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
     borderRadius: 16,
     height: 60,
     paddingHorizontal: 24,
     gap: 12,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
@@ -838,44 +974,44 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#10B981',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "#10B981",
+    justifyContent: "center",
+    alignItems: "center",
   },
   callButtonText: {
-    color: '#10B981',
+    color: "#10B981",
     fontSize: 18,
-    fontWeight: '700',
+    fontWeight: "700",
     fontFamily: UbuntuFonts.bold,
   },
   pickupMarker: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: '#3185FC',
+    backgroundColor: "#3185FC",
     borderWidth: 3,
-    borderColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
+    borderColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.4,
     shadowRadius: 6,
     elevation: 8,
   },
   nextPickupMarker: {
-    backgroundColor: '#10B981',
+    backgroundColor: "#10B981",
     width: 50,
     height: 50,
     borderRadius: 25,
     borderWidth: 4,
-    shadowColor: '#10B981',
+    shadowColor: "#10B981",
     shadowOpacity: 0.5,
   },
   markerNumber: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 15,
-    fontWeight: 'bold',
+    fontWeight: "bold",
     fontFamily: UbuntuFonts.bold,
   },
   nextMarkerNumber: {
@@ -885,19 +1021,19 @@ const styles = StyleSheet.create({
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: '#3185FC',
+    backgroundColor: "#3185FC",
     borderWidth: 4,
-    borderColor: '#FFFFFF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#3185FC',
+    borderColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#3185FC",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.5,
     shadowRadius: 10,
     elevation: 10,
   },
   rtl: {
-    textAlign: 'right',
+    textAlign: "right",
   },
 });
 

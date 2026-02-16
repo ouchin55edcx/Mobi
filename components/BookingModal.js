@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -10,34 +10,34 @@ import {
   ScrollView,
   ActivityIndicator,
   Alert,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
-import BookingTypePicker from './BookingTypePicker';
-import DateTimePicker from './DateTimePicker';
-import { createBooking } from '../src/services/bookingService';
-import { createDemoTripFromBooking } from '../src/data/demoData';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { MaterialIcons } from "@expo/vector-icons";
+import BookingTypePicker from "./BookingTypePicker";
+import DateTimePicker from "./DateTimePicker";
+import { createBooking } from "../src/services/bookingService";
+import { createDemoTripFromBooking } from "../src/data/demoData";
 
 const translations = {
   en: {
-    title: 'Book a Ride',
-    startTime: 'Start Time',
-    endTime: 'End Time',
-    book: 'Book Ride',
-    booking: 'Booking...',
-    cancel: 'Cancel',
-    success: 'Booking Created',
-    successMessage: 'Your ride has been booked successfully!',
+    title: "Book a Ride",
+    startTime: "Start Time",
+    endTime: "End Time",
+    book: "Book Ride",
+    booking: "Booking...",
+    cancel: "Cancel",
+    success: "Booking Created",
+    successMessage: "Your ride has been booked successfully!",
   },
   ar: {
-    title: 'احجز رحلة',
-    startTime: 'وقت البداية',
-    endTime: 'وقت النهاية',
-    book: 'احجز الرحلة',
-    booking: 'جاري الحجز...',
-    cancel: 'إلغاء',
-    success: 'تم إنشاء الحجز',
-    successMessage: 'تم حجز رحلتك بنجاح!',
+    title: "احجز رحلة",
+    startTime: "وقت البداية",
+    endTime: "وقت النهاية",
+    book: "احجز الرحلة",
+    booking: "جاري الحجز...",
+    cancel: "إلغاء",
+    success: "تم إنشاء الحجز",
+    successMessage: "تم حجز رحلتك بنجاح!",
   },
 };
 
@@ -45,12 +45,14 @@ const BookingModal = ({
   visible,
   onClose,
   studentId,
-  language = 'en',
+  language = "en",
   onBookingSuccess,
   isDemo = false,
+  schoolEntryTime = null,
+  schoolExitTime = null,
 }) => {
   const [formData, setFormData] = useState({
-    type: null,
+    type: "PICKUP",
     startTime: null,
     endTime: null,
   });
@@ -60,23 +62,37 @@ const BookingModal = ({
   const [loading, setLoading] = useState(false);
 
   const t = translations[language];
-  const isRTL = language === 'ar';
+  const isRTL = language === "ar";
+
+  useEffect(() => {
+    if (visible) {
+      setFormData((prev) => ({
+        ...prev,
+        type: prev.type || "PICKUP",
+        startTime: prev.startTime || schoolEntryTime || null,
+        endTime: prev.endTime || schoolExitTime || null,
+      }));
+    }
+  }, [visible, schoolEntryTime, schoolExitTime]);
 
   const handleTypeSelect = useCallback((type) => {
     setFormData((prev) => ({ ...prev, type }));
     setErrors((prev) => ({ ...prev, type: null }));
   }, []);
 
-  const handleStartTimeSelect = useCallback((time) => {
-    setFormData((prev) => ({ ...prev, startTime: time }));
-    setErrors((prev) => ({ ...prev, startTime: null }));
+  const handleStartTimeSelect = useCallback(
+    (time) => {
+      setFormData((prev) => ({ ...prev, startTime: time }));
+      setErrors((prev) => ({ ...prev, startTime: null }));
 
-    if (formData.endTime && time >= formData.endTime) {
-      const newEndTime = new Date(time);
-      newEndTime.setHours(newEndTime.getHours() + 1);
-      setFormData((prev) => ({ ...prev, endTime: newEndTime }));
-    }
-  }, [formData.endTime]);
+      if (formData.endTime && time >= formData.endTime) {
+        const newEndTime = new Date(time);
+        newEndTime.setHours(newEndTime.getHours() + 1);
+        setFormData((prev) => ({ ...prev, endTime: newEndTime }));
+      }
+    },
+    [formData.endTime],
+  );
 
   const handleEndTimeSelect = useCallback((time) => {
     setFormData((prev) => ({ ...prev, endTime: time }));
@@ -87,27 +103,34 @@ const BookingModal = ({
     const newErrors = {};
     let isValid = true;
 
-    if (!formData.type) {
-      newErrors.type = language === 'ar' ? 'يرجى اختيار نوع الحجز' : 'Please select booking type';
-      isValid = false;
-    }
-
     if (!formData.startTime) {
-      newErrors.startTime = language === 'ar' ? 'يرجى اختيار وقت البداية' : 'Please select start time';
+      newErrors.startTime =
+        language === "ar"
+          ? "يرجى اختيار وقت البداية"
+          : "Please select start time";
       isValid = false;
     } else {
       const now = new Date();
       if (formData.startTime < now) {
-        newErrors.startTime = language === 'ar' ? 'وقت البداية يجب أن يكون في المستقبل' : 'Start time must be in the future';
+        newErrors.startTime =
+          language === "ar"
+            ? "وقت البداية يجب أن يكون في المستقبل"
+            : "Start time must be in the future";
         isValid = false;
       }
     }
 
     if (!formData.endTime) {
-      newErrors.endTime = language === 'ar' ? 'يرجى اختيار وقت النهاية' : 'Please select end time';
+      newErrors.endTime =
+        language === "ar"
+          ? "يرجى اختيار وقت النهاية"
+          : "Please select end time";
       isValid = false;
     } else if (formData.startTime && formData.endTime <= formData.startTime) {
-      newErrors.endTime = language === 'ar' ? 'وقت النهاية يجب أن يكون بعد وقت البداية' : 'End time must be after start time';
+      newErrors.endTime =
+        language === "ar"
+          ? "وقت النهاية يجب أن يكون بعد وقت البداية"
+          : "End time must be after start time";
       isValid = false;
     }
 
@@ -141,10 +164,10 @@ const BookingModal = ({
         endTime: formData.endTime,
       };
       const demoTrip = createDemoTripFromBooking(demoBooking, studentId);
-      
+
       resetForm();
       onClose();
-      
+
       // Notify parent with demo trip data
       if (onBookingSuccess) {
         onBookingSuccess(demoTrip);
@@ -164,34 +187,35 @@ const BookingModal = ({
 
       if (result.error) {
         Alert.alert(
-          language === 'ar' ? 'خطأ' : 'Error',
-          result.error.message || (language === 'ar' ? 'فشل إنشاء الحجز' : 'Failed to create booking'),
-          [{ text: language === 'ar' ? 'حسناً' : 'OK' }]
+          language === "ar" ? "خطأ" : "Error",
+          result.error.message ||
+            (language === "ar"
+              ? "فشل إنشاء الحجز"
+              : "Failed to create booking"),
+          [{ text: language === "ar" ? "حسناً" : "OK" }],
         );
       } else {
-        Alert.alert(
-          t.success,
-          t.successMessage,
-          [
-            {
-              text: language === 'ar' ? 'حسناً' : 'OK',
-              onPress: () => {
-                resetForm();
-                onClose();
-                if (onBookingSuccess) {
-                  onBookingSuccess(result.data);
-                }
-              },
+        Alert.alert(t.success, t.successMessage, [
+          {
+            text: language === "ar" ? "حسناً" : "OK",
+            onPress: () => {
+              resetForm();
+              onClose();
+              if (onBookingSuccess) {
+                onBookingSuccess(result.data);
+              }
             },
-          ]
-        );
+          },
+        ]);
       }
     } catch (err) {
-      console.error('Error creating booking:', err);
+      console.error("Error creating booking:", err);
       Alert.alert(
-        language === 'ar' ? 'خطأ' : 'Error',
-        language === 'ar' ? 'حدث خطأ أثناء إنشاء الحجز' : 'An error occurred while creating booking',
-        [{ text: language === 'ar' ? 'حسناً' : 'OK' }]
+        language === "ar" ? "خطأ" : "Error",
+        language === "ar"
+          ? "حدث خطأ أثناء إنشاء الحجز"
+          : "An error occurred while creating booking",
+        [{ text: language === "ar" ? "حسناً" : "OK" }],
       );
     } finally {
       setLoading(false);
@@ -199,7 +223,11 @@ const BookingModal = ({
   };
 
   const resetForm = () => {
-    setFormData({ type: null, startTime: null, endTime: null });
+    setFormData({
+      type: "PICKUP",
+      startTime: schoolEntryTime || null,
+      endTime: schoolExitTime || null,
+    });
     setErrors({});
     setTouched({});
   };
@@ -216,9 +244,9 @@ const BookingModal = ({
       transparent={true}
       onRequestClose={handleClose}
     >
-      <SafeAreaView style={styles.modalContainer} edges={['bottom']}>
+      <SafeAreaView style={styles.modalContainer} edges={["bottom"]}>
         <KeyboardAvoidingView
-          behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+          behavior={Platform.OS === "ios" ? "padding" : undefined}
           style={styles.keyboardView}
         >
           {/* Header */}
@@ -229,7 +257,7 @@ const BookingModal = ({
               activeOpacity={0.7}
             >
               <MaterialIcons
-                name={isRTL ? 'arrow-forward' : 'arrow-back'}
+                name={isRTL ? "arrow-forward" : "arrow-back"}
                 size={24}
                 color="#1A1A1A"
               />
@@ -267,7 +295,7 @@ const BookingModal = ({
             {/* Time Selection Section */}
             <View style={styles.timeSection}>
               <Text style={[styles.sectionTitle, isRTL && styles.rtl]}>
-                {language === 'ar' ? 'اختر الوقت' : 'Select Time'}
+                {language === "ar" ? "اختر الوقت" : "Select Time"}
               </Text>
 
               <DateTimePicker
@@ -275,7 +303,11 @@ const BookingModal = ({
                 onSelect={handleStartTimeSelect}
                 label={t.startTime}
                 language={language}
-                error={touched.startTime && errors.startTime ? errors.startTime : null}
+                error={
+                  touched.startTime && errors.startTime
+                    ? errors.startTime
+                    : null
+                }
                 disabled={loading}
                 minimumDate={new Date()}
               />
@@ -285,7 +317,9 @@ const BookingModal = ({
                 onSelect={handleEndTimeSelect}
                 label={t.endTime}
                 language={language}
-                error={touched.endTime && errors.endTime ? errors.endTime : null}
+                error={
+                  touched.endTime && errors.endTime ? errors.endTime : null
+                }
                 disabled={loading}
                 minimumDate={getMinEndTime()}
               />
@@ -324,24 +358,24 @@ const BookingModal = ({
 const styles = StyleSheet.create({
   modalContainer: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
   },
   keyboardView: {
     flex: 1,
   },
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: 24,
-    paddingTop: Platform.OS === 'ios' ? 8 : 12,
+    paddingTop: Platform.OS === "ios" ? 8 : 12,
     paddingBottom: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: "#F3F4F6",
   },
   headerRTL: {
-    flexDirection: 'row-reverse',
+    flexDirection: "row-reverse",
   },
   closeButton: {
     padding: 8,
@@ -349,10 +383,10 @@ const styles = StyleSheet.create({
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: '700',
-    color: '#1A1A1A',
+    fontWeight: "700",
+    color: "#1A1A1A",
     flex: 1,
-    textAlign: 'center',
+    textAlign: "center",
   },
   cancelButton: {
     padding: 8,
@@ -360,7 +394,7 @@ const styles = StyleSheet.create({
   },
   scrollView: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
   },
   scrollContent: {
     paddingHorizontal: 24,
@@ -375,20 +409,20 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#1A1A1A',
+    fontWeight: "600",
+    color: "#1A1A1A",
     marginBottom: 16,
-    textTransform: 'uppercase',
+    textTransform: "uppercase",
     letterSpacing: 0.5,
   },
   buttonContainer: {
     paddingHorizontal: 24,
     paddingTop: 16,
     paddingBottom: 16,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
-    shadowColor: '#000',
+    borderTopColor: "#F3F4F6",
+    shadowColor: "#000",
     shadowOffset: {
       width: 0,
       height: -2,
@@ -398,14 +432,14 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   bookButton: {
-    backgroundColor: '#3185FC',
+    backgroundColor: "#3185FC",
     borderRadius: 16,
     paddingVertical: 18,
     paddingHorizontal: 24,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#3185FC',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#3185FC",
     shadowOffset: {
       width: 0,
       height: 4,
@@ -418,18 +452,17 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   bookButtonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 18,
-    fontWeight: '600',
+    fontWeight: "600",
     letterSpacing: 0.5,
   },
   bookButtonIcon: {
     marginLeft: 8,
   },
   rtl: {
-    textAlign: 'right',
+    textAlign: "right",
   },
 });
 
 export default BookingModal;
-

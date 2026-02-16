@@ -1,996 +1,846 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
+  ActivityIndicator,
+  Linking,
   Platform,
   ScrollView,
-  ActivityIndicator,
-  Dimensions,
-  Alert,
-  Linking,
-  Animated,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
-import { MaterialIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import * as Location from 'expo-location';
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
-import LiveTrackingScreen from './LiveTrackingScreen';
-import { validateAndReturnUUID } from '../../src/utils/validation';
-import { UbuntuFonts } from '../../src/utils/fonts';
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
+import { MaterialIcons } from "@expo/vector-icons";
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+import MapboxRoutePreview from "../../components/MapboxRoutePreview";
+import { getDirectionsRoute } from "../../src/services/mapboxService";
+import { UbuntuFonts } from "../../src/utils/fonts";
 
-// =================================================================
-// 1. MODERN COLOR PALETTE & TYPOGRAPHY (Consistent with previous task)
-// =================================================================
 const COLORS = {
-  primary: '#007AFF', // Vibrant Blue
-  secondary: '#34C759', // Success Green
-  warning: '#FF9500', // Warning Orange
-  danger: '#FF3B30', // Danger Red
-  background: '#F2F2F7', // Light Gray Background
-  card: '#FFFFFF', // White Card Background
-  textPrimary: '#1C1C1E', // Dark Text
-  textSecondary: '#6A6A6A', // Secondary Gray Text
-  border: '#E5E5EA', // Light Border
-  shadow: 'rgba(0, 0, 0, 0.1)',
+  primary: "#1E88E5",
+  primaryDark: "#1565C0",
+  accent: "#E3F2FD",
+  white: "#FFFFFF",
+  bg: "#F5F9FF",
+  text: "#0F172A",
+  subtext: "#64748B",
+  border: "#D6E9FF",
+  success: "#10B981",
+  warning: "#F59E0B",
+  danger: "#DC2626",
 };
 
-const TYPOGRAPHY = {
-  h1: { fontSize: 24, fontWeight: '700', color: COLORS.textPrimary },
-  h2: { fontSize: 18, fontWeight: '600', color: COLORS.textPrimary },
-  body: { fontSize: 15, fontWeight: '400', color: COLORS.textPrimary },
-  caption: { fontSize: 12, fontWeight: '500', color: COLORS.textSecondary },
-};
-
-// =================================================================
-// 2. TRANSLATIONS (Simplified/Kept as is)
-// =================================================================
-const translations = {
+const COPY = {
   en: {
-    title: 'Trip Details',
-    busPath: 'Bus route',
-    yourPathToStation: 'Your route',
-    estimatedArrival: 'ETA',
-    minutes: 'min',
-    km: 'km',
-    tripStations: 'Journey Timeline',
-    done: 'Done',
-    now: 'Now',
-    soon: 'Soon',
-    captain: 'Driver',
-    onlineNow: 'Online',
-    call: 'Call',
-    message: 'Message',
-    leaveHome: 'Leave Home',
-    reachPickup: 'Reach Pickup',
-    arriveDestination: 'Arrive at School',
-    liveTracking: 'Start Live Tracking',
-    distance: 'Distance',
-    pickupStation: 'Pickup Station',
-    destination: 'School',
-    walkToStation: 'Walk to station',
-    finalDestination: 'Final destination',
-    home: 'Home',
+    title: "Trip Details",
+    liveTrip: "Live Trip",
+    loading: "Loading trip details...",
+    invalid: "Trip data is incomplete. Please go back and try again.",
+    routeToSchool: "Route to school",
+    from: "From",
+    to: "To",
+    pickupTime: "Pickup Time",
+    eta: "ETA",
+    distance: "Distance",
+    busCapacity: "Bus",
+    schoolName: "School",
+    onTheWay: "On the way",
+    routeSync: "Syncing best route...",
+    grouping: "Assigning a group",
+    call: "Call",
+    message: "Message",
+    noPhone: "Phone unavailable",
   },
   ar: {
-    title: 'تفاصيل الرحلة',
-    busPath: 'مسار الحافلة',
-    yourPathToStation: 'مسارك',
-    estimatedArrival: 'الوقت',
-    minutes: 'دقيقة',
-    km: 'كم',
-    tripStations: 'الجدول الزمني',
-    done: 'تم',
-    now: 'الآن',
-    soon: 'قريباً',
-    captain: 'السائق',
-    onlineNow: 'متصل',
-    call: 'اتصال',
-    message: 'رسالة',
-    leaveHome: 'مغادرة',
-    reachPickup: 'الوصول',
-    arriveDestination: 'الوصول للمدرسة',
-    liveTracking: 'بدء التتبع المباشر',
-    distance: 'المسافة',
-    pickupStation: 'محطة الركوب',
-    destination: 'المدرسة',
-    walkToStation: 'مشي إلى المحطة',
-    finalDestination: 'الوجهة النهائية',
-    home: 'المنزل',
+    title: "تفاصيل الرحلة",
+    liveTrip: "رحلة مباشرة",
+    loading: "جاري تحميل تفاصيل الرحلة...",
+    invalid: "بيانات الرحلة غير مكتملة. ارجع وحاول مرة أخرى.",
+    routeToSchool: "المسار إلى المدرسة",
+    from: "من",
+    to: "إلى",
+    pickupTime: "وقت الالتقاط",
+    eta: "وقت الوصول",
+    distance: "المسافة",
+    busCapacity: "الحافلة",
+    schoolName: "المدرسة",
+    onTheWay: "في الطريق",
+    routeSync: "جاري مزامنة أفضل مسار...",
+    grouping: "جاري تعيين المجموعة",
+    call: "اتصال",
+    message: "رسالة",
+    noPhone: "رقم غير متوفر",
   },
 };
 
-// =================================================================
-// 3. HELPER FUNCTIONS (Simplified/Kept as is)
-// =================================================================
-const formatTime = (date) => {
-  if (!date) return '--:--';
-  const d = date instanceof Date ? date : new Date(date);
-  return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-};
-
-// =================================================================
-// 4. REDESIGNED COMPONENTS
-// =================================================================
-
-// Component for the minimal timeline
-const MinimalTimeline = ({ t, isRTL, leaveHomeTime, reachPickupTime, arriveDestinationTime, estimatedArrivalMinutes }) => {
-  const timelineData = [
-    {
-      time: formatTime(leaveHomeTime),
-      label: t.home,
-      subLabel: t.leaveHome,
-      icon: 'home',
-      color: COLORS.primary,
-      status: 'done', // Assuming this screen shows the plan, so the first step is done/planned
-    },
-    {
-      time: formatTime(reachPickupTime),
-      label: t.pickupStation,
-      subLabel: t.reachPickup,
-      icon: 'location-on',
-      color: COLORS.primary,
-      status: 'now', // Assuming this is the current focus
-      extra: {
-        label: t.walkToStation,
-        value: `${estimatedArrivalMinutes} ${t.minutes}`,
-      }
-    },
-    {
-      time: formatTime(arriveDestinationTime),
-      label: t.destination,
-      subLabel: t.finalDestination,
-      icon: 'school',
-      color: COLORS.secondary,
-      status: 'soon',
-    },
-  ];
-
-  const getStatusStyle = (status) => {
-    switch (status) {
-      case 'done':
-        return { dot: COLORS.secondary, text: COLORS.secondary, badgeBg: 'rgba(52, 199, 89, 0.1)' };
-      case 'now':
-        return { dot: COLORS.primary, text: COLORS.primary, badgeBg: 'rgba(0, 122, 255, 0.1)' };
-      case 'soon':
-      default:
-        return { dot: COLORS.textSecondary, text: COLORS.textSecondary, badgeBg: 'rgba(106, 106, 106, 0.1)' };
-    }
-  };
-
+const isValidCoordinate = (point) => {
+  if (!point) return false;
+  const lat = Number(point.latitude);
+  const lng = Number(point.longitude);
   return (
-    <View style={timelineStyles.container}>
-      <Text style={[TYPOGRAPHY.h2, { marginBottom: 15 }, isRTL && timelineStyles.rtlText]}>
-        {t.tripStations}
-      </Text>
-      <View style={timelineStyles.timelineWrapper}>
-        {timelineData.map((item, index) => {
-          const isLast = index === timelineData.length - 1;
-          const statusStyle = getStatusStyle(item.status);
-
-          return (
-            <View key={index} style={timelineStyles.item}>
-              {/* Left Column: Icon and Connector */}
-              <View style={timelineStyles.leftColumn}>
-                <View style={[timelineStyles.iconWrapper, { backgroundColor: statusStyle.dot }]}>
-                  <MaterialIcons name={item.icon} size={20} color={COLORS.card} />
-                </View>
-                {!isLast && (
-                  <View style={[
-                    timelineStyles.connector,
-                    { backgroundColor: statusStyle.dot }
-                  ]} />
-                )}
-              </View>
-
-              {/* Right Column: Details */}
-              <View style={[timelineStyles.rightColumn, isRTL && timelineStyles.rtlRightColumn]}>
-                <View style={timelineStyles.timeRow}>
-                  <Text style={[timelineStyles.time, isRTL && timelineStyles.rtlText]}>
-                    {item.time}
-                  </Text>
-                  <View style={[timelineStyles.statusBadge, { backgroundColor: statusStyle.badgeBg }]}>
-                    <Text style={[timelineStyles.statusText, { color: statusStyle.text }]}>
-                      {t[item.status]}
-                    </Text>
-                  </View>
-                </View>
-                <Text style={[timelineStyles.label, isRTL && timelineStyles.rtlText]}>
-                  {item.label}
-                </Text>
-                <Text style={[timelineStyles.subLabel, isRTL && timelineStyles.rtlText]}>
-                  {item.subLabel}
-                </Text>
-
-                {/* Extra Card for Walking Duration */}
-                {item.extra && (
-                  <View style={timelineStyles.extraCard}>
-                    <MaterialIcons name="directions-walk" size={16} color={COLORS.primary} />
-                    <Text style={[timelineStyles.extraText, isRTL && timelineStyles.rtlText]}>
-                      {item.extra.label}: <Text style={{ fontWeight: '700' }}>{item.extra.value}</Text>
-                    </Text>
-                  </View>
-                )}
-              </View>
-            </View>
-          );
-        })}
-      </View>
-    </View>
+    Number.isFinite(lat) &&
+    Number.isFinite(lng) &&
+    Math.abs(lat) <= 90 &&
+    Math.abs(lng) <= 180
   );
 };
 
-// Component for Driver/Action Card
-const DriverActionCard = ({ t, driverName, driverPhone, isDriverOnline, isRTL, handleCall, handleMessage }) => {
-  const pulseAnim = useRef(new Animated.Value(1)).current;
+const normalizeCoordinate = (point, fallback = null) => {
+  if (isValidCoordinate(point)) {
+    return {
+      latitude: Number(point.latitude),
+      longitude: Number(point.longitude),
+    };
+  }
+  return fallback;
+};
+
+const sanitizeLine = (line, start, end) => {
+  if (!Array.isArray(line)) return [start, end].filter(Boolean);
+  const points = line
+    .map((point) => normalizeCoordinate(point, null))
+    .filter(Boolean);
+  if (points.length >= 2) return points;
+  return [start, end].filter(Boolean);
+};
+
+const toRadians = (value) => (value * Math.PI) / 180;
+const haversineKm = (a, b) => {
+  if (!a || !b) return 0;
+  const R = 6371;
+  const dLat = toRadians(b.latitude - a.latitude);
+  const dLng = toRadians(b.longitude - a.longitude);
+  const lat1 = toRadians(a.latitude);
+  const lat2 = toRadians(b.latitude);
+  const h =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(h));
+};
+
+const routeDistanceKm = (coordinates) => {
+  if (!Array.isArray(coordinates) || coordinates.length < 2) return 0;
+  let total = 0;
+  for (let i = 0; i < coordinates.length - 1; i += 1) {
+    total += haversineKm(coordinates[i], coordinates[i + 1]);
+  }
+  return total;
+};
+
+const formatTime = (value) => {
+  if (!value) return "--:--";
+  const date = value instanceof Date ? value : new Date(value);
+  if (Number.isNaN(date.getTime())) return "--:--";
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+};
+
+const formatDistance = (distanceKm) => {
+  if (!Number.isFinite(distanceKm)) return "--";
+  return `${distanceKm.toFixed(distanceKm >= 10 ? 0 : 1)} km`;
+};
+
+const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
+  const text = COPY[language] || COPY.en;
+  const isRTL = language === "ar";
+  const handleBack = onBack || (() => {});
+
+  const [isHydrating, setIsHydrating] = useState(true);
+  const [isResolvingRoute, setIsResolvingRoute] = useState(false);
+  const mountedRef = useRef(true);
+
+  const safeTrip = useMemo(() => {
+    const fallbackHome = { latitude: 33.5731, longitude: -7.5898 };
+    const fallbackSchool = { latitude: 33.58, longitude: -7.592 };
+
+    const studentLocation = normalizeCoordinate(
+      tripData?.homeLocation,
+      fallbackHome,
+    );
+    const schoolLocation = normalizeCoordinate(
+      tripData?.destinationLocation,
+      fallbackSchool,
+    );
+    const pickupLocation = normalizeCoordinate(
+      tripData?.pickupLocation,
+      studentLocation,
+    );
+
+    const routeCoordinates = sanitizeLine(
+      tripData?.routeCoordinates,
+      pickupLocation,
+      schoolLocation,
+    );
+
+    const estimatedDistanceKm = Number.isFinite(tripData?.totalDistanceKm)
+      ? tripData.totalDistanceKm
+      : routeDistanceKm(routeCoordinates);
+
+    const etaMinutes = Number.isFinite(tripData?.estimatedArrivalMinutes)
+      ? tripData.estimatedArrivalMinutes
+      : Math.max(1, Math.round((estimatedDistanceKm / 24) * 60));
+
+    return {
+      studentLocation,
+      schoolLocation,
+      pickupLocation,
+      routeCoordinates,
+      pickupTime: tripData?.leaveHomeTime || tripData?.startTime || null,
+      schoolName:
+        tripData?.schoolName || tripData?.destinationName || text.schoolName,
+      etaMinutes,
+      distanceKm: estimatedDistanceKm,
+      busUsed: Number.isFinite(tripData?.membersCount)
+        ? tripData.membersCount
+        : Number.isFinite(tripData?.busUsed)
+          ? tripData.busUsed
+          : 1,
+      busTotal: Number.isFinite(tripData?.capacity)
+        ? tripData.capacity
+        : Number.isFinite(tripData?.busCapacity)
+          ? tripData.busCapacity
+          : 12,
+      driverName: tripData?.driverName || "Mobi Driver",
+      driverPhone: tripData?.driverPhone || null,
+      busNumber: tripData?.vehicleInfo || tripData?.busNumber || "BUS-01",
+      processingState: tripData?.processingState || null,
+    };
+  }, [tripData, text.schoolName]);
+
+  const [displayRoute, setDisplayRoute] = useState(safeTrip.routeCoordinates);
+  const [distanceKm, setDistanceKm] = useState(safeTrip.distanceKm);
+  const [etaMinutes, setEtaMinutes] = useState(safeTrip.etaMinutes);
+
+  const canRenderMap =
+    isValidCoordinate(safeTrip.pickupLocation) &&
+    isValidCoordinate(safeTrip.schoolLocation) &&
+    Array.isArray(displayRoute) &&
+    displayRoute.length >= 2;
 
   useEffect(() => {
-    if (isDriverOnline) {
-      Animated.loop(
-        Animated.sequence([
-          Animated.timing(pulseAnim, { toValue: 1.2, duration: 1000, useNativeDriver: true }),
-          Animated.timing(pulseAnim, { toValue: 1, duration: 1000, useNativeDriver: true }),
-        ])
-      ).start();
-    }
-  }, [isDriverOnline]);
+    mountedRef.current = true;
+    const timer = setTimeout(() => {
+      if (mountedRef.current) setIsHydrating(false);
+    }, 240);
 
-  const ActionButton = ({ icon, label, onPress }) => (
-    <TouchableOpacity style={driverActionStyles.actionBtn} onPress={onPress}>
-      <MaterialIcons name={icon} size={20} color={COLORS.primary} />
-      <Text style={[driverActionStyles.actionText, isRTL && driverActionStyles.rtlText]}>
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
-
-  return (
-    <View style={driverActionStyles.container}>
-      <Text style={[TYPOGRAPHY.h2, { marginBottom: 15 }, isRTL && driverActionStyles.rtlText]}>
-        {t.captain}
-      </Text>
-      
-      <View style={[driverActionStyles.driverRow, isRTL && driverActionStyles.driverRowRTL]}>
-        <View style={driverActionStyles.avatar}>
-          <MaterialIcons name="person" size={24} color={COLORS.card} />
-        </View>
-        <View style={driverActionStyles.info}>
-          <Text style={[TYPOGRAPHY.h2, driverActionStyles.name, isRTL && driverActionStyles.rtlText]}>
-            {driverName || 'Driver Name'}
-          </Text>
-          <View style={[driverActionStyles.statusRow, isRTL && driverActionStyles.statusRowRTL]}>
-            <Animated.View style={[
-              driverActionStyles.statusDot,
-              { backgroundColor: isDriverOnline ? COLORS.secondary : COLORS.textSecondary },
-              { transform: [{ scale: pulseAnim }] }
-            ]} />
-            <Text style={[driverActionStyles.statusText, { color: isDriverOnline ? COLORS.secondary : COLORS.textSecondary }, isRTL && driverActionStyles.rtlText]}>
-              {t.onlineNow}
-            </Text>
-          </View>
-        </View>
-      </View>
-
-      <View style={[driverActionStyles.actionsRow, isRTL && driverActionStyles.actionsRowRTL]}>
-        <ActionButton 
-          icon="call" 
-          label={t.call} 
-          onPress={handleCall} 
-        />
-        <ActionButton 
-          icon="message" 
-          label={t.message} 
-          onPress={handleMessage} 
-        />
-      </View>
-    </View>
-  );
-};
-
-// =================================================================
-// 5. MAIN COMPONENT (Refactored)
-// =================================================================
-const TripDetailsScreen = ({
-  tripData,
-  language = 'en',
-  onBack,
-}) => {
-  // State variables (kept as is for logic)
-  const mapRef = useRef(null);
-  const [mapReady, setMapReady] = useState(false);
-  const [userLocation, setUserLocation] = useState(null);
-  const [isLoadingLocation, setIsLoadingLocation] = useState(false);
-  const [hasPermission, setHasPermission] = useState(false);
-  const [showLiveTracking, setShowLiveTracking] = useState(false);
-  const [isDemoMode, setIsDemoMode] = useState(false);
-
-  // Animations (simplified to just entrance)
-  const headerSlide = useRef(new Animated.Value(0)).current;
-  const contentOpacity = useRef(new Animated.Value(0)).current;
-  const ctaButtonTranslate = useRef(new Animated.Value(100)).current;
-
-  const t = translations[language];
-  const isRTL = language === 'ar';
-
-  // Extract trip data (mocked for UI focus)
-  const homeLocation = tripData?.homeLocation || { latitude: 33.5731, longitude: -7.5898 };
-  const pickupLocation = tripData?.pickupLocation || { latitude: 33.5750, longitude: -7.5900 };
-  const destinationLocation = tripData?.destinationLocation || { latitude: 33.5800, longitude: -7.5920 };
-  const routeCoordinates = tripData?.routeCoordinates || [
-    homeLocation,
-    { latitude: 33.5760, longitude: -7.5905 },
-    pickupLocation,
-    { latitude: 33.5770, longitude: -7.5908 },
-    destinationLocation,
-  ];
-  const userPathCoordinates = tripData?.userPathCoordinates || [
-    homeLocation,
-    { latitude: (homeLocation.latitude + pickupLocation.latitude) / 2, longitude: (homeLocation.longitude + pickupLocation.longitude) / 2 },
-    pickupLocation,
-  ];
-  const leaveHomeTime = tripData?.leaveHomeTime || new Date(Date.now() + 30 * 60 * 1000);
-  const reachPickupTime = tripData?.reachPickupTime || new Date(Date.now() + 45 * 60 * 1000);
-  const arriveDestinationTime = tripData?.arriveDestinationTime || new Date(Date.now() + 60 * 60 * 1000);
-  const estimatedArrivalMinutes = tripData?.estimatedArrivalMinutes || 10;
-  const distanceToStation = tripData?.distanceToStation || 2.5;
-  const driverName = tripData?.driverName || 'Ahmed Mahmoud';
-  const driverPhone = tripData?.driverPhone || '+212600123456';
-  const isDriverOnline = tripData?.isDriverOnline !== undefined ? tripData.isDriverOnline : true;
-
-  // Entrance animations
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(contentOpacity, {
-        toValue: 1,
-        duration: 500,
-        delay: 100,
-        useNativeDriver: true,
-      }),
-      Animated.timing(ctaButtonTranslate, {
-        toValue: 0,
-        duration: 400,
-        delay: 200,
-        useNativeDriver: true,
-      }),
-    ]).start();
+    return () => {
+      mountedRef.current = false;
+      clearTimeout(timer);
+    };
   }, []);
 
-  // Map region calculation (kept as is)
-  const getRegion = () => {
-    const allLats = [homeLocation.latitude, pickupLocation.latitude, destinationLocation.latitude];
-    const allLngs = [homeLocation.longitude, pickupLocation.longitude, destinationLocation.longitude];
-    
-    const minLat = Math.min(...allLats);
-    const maxLat = Math.max(...allLats);
-    const minLng = Math.min(...allLngs);
-    const maxLng = Math.max(...allLngs);
+  useEffect(() => {
+    let active = true;
 
-    const latitude = (minLat + maxLat) / 2;
-    const longitude = (minLng + maxLng) / 2;
-    const latitudeDelta = (maxLat - minLat) * 1.5 || 0.01;
-    const longitudeDelta = (maxLng - minLng) * 1.5 || 0.01;
+    const fallbackLine = sanitizeLine(
+      safeTrip.routeCoordinates,
+      safeTrip.pickupLocation,
+      safeTrip.schoolLocation,
+    );
+    setDisplayRoute(fallbackLine);
+    setDistanceKm(safeTrip.distanceKm);
+    setEtaMinutes(safeTrip.etaMinutes);
 
-    return { latitude, longitude, latitudeDelta, longitudeDelta };
+    const resolveRoute = async () => {
+      if (
+        !isValidCoordinate(safeTrip.pickupLocation) ||
+        !isValidCoordinate(safeTrip.schoolLocation)
+      ) {
+        return;
+      }
+
+      setIsResolvingRoute(true);
+      try {
+        const route = await getDirectionsRoute({
+          origin: safeTrip.pickupLocation,
+          destination: safeTrip.schoolLocation,
+        });
+
+        if (!active) return;
+
+        const bestLine = sanitizeLine(
+          route?.coordinates,
+          safeTrip.pickupLocation,
+          safeTrip.schoolLocation,
+        );
+
+        setDisplayRoute(bestLine);
+
+        const resolvedDistanceKm =
+          route?.distanceMeters > 0
+            ? route.distanceMeters / 1000
+            : routeDistanceKm(bestLine);
+
+        const resolvedEtaMinutes =
+          route?.durationSeconds > 0
+            ? Math.max(1, Math.round(route.durationSeconds / 60))
+            : Math.max(1, Math.round((resolvedDistanceKm / 24) * 60));
+
+        setDistanceKm(resolvedDistanceKm);
+        setEtaMinutes(resolvedEtaMinutes);
+      } catch (_error) {
+        if (!active) return;
+        setDisplayRoute(fallbackLine);
+      } finally {
+        if (active) setIsResolvingRoute(false);
+      }
+    };
+
+    resolveRoute();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    safeTrip.pickupLocation,
+    safeTrip.schoolLocation,
+    safeTrip.routeCoordinates,
+    safeTrip.distanceKm,
+    safeTrip.etaMinutes,
+  ]);
+
+  const openCall = async () => {
+    if (!safeTrip.driverPhone) return;
+    const url = `tel:${safeTrip.driverPhone}`;
+    const canOpen = await Linking.canOpenURL(url);
+    if (canOpen) Linking.openURL(url);
   };
 
-  // Location logic (kept as is)
-  const requestLocationPermission = async () => { /* ... */ };
-  const getCurrentLocation = async () => { /* ... */ };
-
-  // Navigation logic
-  const rawTripId = tripData?.tripId || tripData?.bookingId || tripData?.id;
-  const tripId = validateAndReturnUUID(rawTripId);
-  const studentId = tripData?.studentId || 'demo-student-id';
-
-  const handleNavigateToLiveTracking = () => {
-    // Navigate to LiveTrackingScreen
-    // If no valid tripId, use demo mode
-    if (!tripId || rawTripId === null || rawTripId === undefined) {
-      setIsDemoMode(true);
-    } else {
-      setIsDemoMode(false);
-    }
-    setShowLiveTracking(true);
+  const openMessage = async () => {
+    if (!safeTrip.driverPhone) return;
+    const url = `sms:${safeTrip.driverPhone}`;
+    const canOpen = await Linking.canOpenURL(url);
+    if (canOpen) Linking.openURL(url);
   };
 
-  const handleCall = () => {
-    if (driverPhone) {
-      Linking.openURL(`tel:${driverPhone}`);
-    } else {
-      Alert.alert(t.title, t.language === 'ar' ? 'رقم الهاتف غير متاح' : 'Phone not available');
-    }
-  };
-
-  const handleMessage = () => {
-    if (driverPhone) {
-      Linking.openURL(`sms:${driverPhone}`);
-    } else {
-      Alert.alert(t.title, t.language === 'ar' ? 'رقم الهاتف غير متاح' : 'Phone not available');
-    }
-  };
-
-  if (showLiveTracking) {
+  if (isHydrating) {
     return (
-      <LiveTrackingScreen
-        tripId={isDemoMode ? null : tripId}
-        studentId={studentId}
-        language={language}
-        tripData={tripData}
-        onBack={() => {
-          setShowLiveTracking(false);
-          setIsDemoMode(false);
-        }}
-      />
+      <SafeAreaView style={styles.loaderScreen}>
+        <StatusBar style="dark" />
+        <View style={styles.skeletonMap} />
+        <View style={styles.skeletonCard} />
+        <ActivityIndicator size="large" color={COLORS.primary} />
+        <Text style={styles.loaderText}>{text.loading}</Text>
+      </SafeAreaView>
+    );
+  }
+
+  if (!canRenderMap) {
+    return (
+      <SafeAreaView style={styles.loaderScreen}>
+        <StatusBar style="dark" />
+        <MaterialIcons name="error-outline" size={36} color={COLORS.danger} />
+        <Text style={styles.errorText}>{text.invalid}</Text>
+        <TouchableOpacity style={styles.backBtn} onPress={handleBack}>
+          <Text style={styles.backBtnText}>Back</Text>
+        </TouchableOpacity>
+      </SafeAreaView>
     );
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <StatusBar style="dark" />
 
-      {/* MINIMALIST HEADER */}
-      <Animated.View 
-        style={[
-          styles.header,
-          { transform: [{ translateY: headerSlide }] }
-        ]}
-      >
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={onBack || (() => Alert.alert('Go Back'))}
-          activeOpacity={0.7}
+      <View style={styles.mapStage}>
+        <MapboxRoutePreview
+          style={styles.map}
+          homeLocation={safeTrip.pickupLocation}
+          destinationLocation={safeTrip.schoolLocation}
+          routeCoordinates={displayRoute}
+          interactive
+          showRoute
+          studentLabel={language === "ar" ? "نقطة الانطلاق" : "Pickup"}
+          schoolLabel={language === "ar" ? "المدرسة" : "School"}
+        />
+
+        <View style={styles.topOverlay}>
+          <TouchableOpacity style={styles.topBarBtn} onPress={handleBack}>
+            <MaterialIcons
+              name={isRTL ? "arrow-forward-ios" : "arrow-back-ios"}
+              size={16}
+              color={COLORS.text}
+            />
+          </TouchableOpacity>
+
+          <View style={styles.topTitleWrap}>
+            <Text
+              style={[styles.topBarTitle, isRTL && styles.rtl]}
+              numberOfLines={1}
+            >
+              {text.title}
+            </Text>
+            <Text
+              style={[styles.topBarSub, isRTL && styles.rtl]}
+              numberOfLines={1}
+            >
+              {text.liveTrip}
+            </Text>
+          </View>
+
+          <View style={styles.topStatusChip}>
+            <View style={styles.statusDot} />
+            <Text style={styles.topStatusText}>{text.onTheWay}</Text>
+          </View>
+        </View>
+
+        {isResolvingRoute && (
+          <View style={styles.mapSyncChip}>
+            <ActivityIndicator size="small" color={COLORS.primary} />
+            <Text style={styles.mapSyncText}>{text.routeSync}</Text>
+          </View>
+        )}
+      </View>
+
+      <View style={styles.bottomSheet}>
+        <View style={styles.sheetHandleArea}>
+          <View style={styles.sheetHandle} />
+        </View>
+
+        <ScrollView
+          contentContainerStyle={styles.sheetContent}
+          showsVerticalScrollIndicator={false}
         >
-          <MaterialIcons name={isRTL ? "arrow-forward-ios" : "arrow-back-ios"} size={20} color={COLORS.textPrimary} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, isRTL && styles.rtlText]}>{t.title}</Text>
-        <View style={styles.headerPlaceholder} />
-      </Animated.View>
+          <View style={styles.routeCard}>
+            <Text style={styles.routeCardTitle}>{text.routeToSchool}</Text>
 
-      {/* CONTENT SCROLL VIEW */}
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <Animated.View style={{ opacity: contentOpacity }}>
-          {/* MAP CARD */}
-          <View style={styles.mapCard}>
-            <View style={styles.mapContainer}>
-              <MapView
-                ref={mapRef}
-                style={styles.map}
-                provider={PROVIDER_GOOGLE}
-                initialRegion={getRegion()}
-                onLayout={() => setMapReady(true)}
-              >
-                {/* Bus Route */}
-                <Polyline
-                  coordinates={routeCoordinates}
-                  strokeColor={COLORS.primary}
-                  strokeWidth={4}
-                  lineDashPattern={[1]}
-                />
-                {/* User Path to Pickup */}
-                <Polyline
-                  coordinates={userPathCoordinates}
-                  strokeColor={COLORS.secondary}
-                  strokeWidth={4}
-                />
+            <View style={styles.routeLine}>
+              <View style={styles.routeDotStart} />
+              <View style={styles.routeLineDivider} />
+              <View style={styles.routeDotEnd} />
+            </View>
 
-                {/* Markers */}
-                <Marker coordinate={homeLocation} title={t.home}>
-                  <View style={[styles.markerPin, { backgroundColor: COLORS.secondary }]}>
-                    <MaterialIcons name="home" size={20} color={COLORS.card} />
-                  </View>
-                </Marker>
-                <Marker coordinate={pickupLocation} title={t.pickupStation}>
-                  <View style={[styles.markerPin, { backgroundColor: COLORS.primary }]}>
-                    <MaterialIcons name="location-on" size={20} color={COLORS.card} />
-                  </View>
-                </Marker>
-                <Marker coordinate={destinationLocation} title={t.destination}>
-                  <View style={[styles.markerPin, { backgroundColor: COLORS.textSecondary }]}>
-                    <MaterialIcons name="school" size={20} color={COLORS.card} />
-                  </View>
-                </Marker>
-                {userLocation && (
-                  <Marker coordinate={userLocation} title="You">
-                    <MaterialIcons name="person-pin-circle" size={30} color={COLORS.primary} />
-                  </Marker>
-                )}
-              </MapView>
-
-              {/* Legend */}
-              <View style={[styles.legendBox, isRTL && styles.legendBoxRTL]}>
-                <View style={[styles.legendRow, { marginBottom: 8 }, isRTL && styles.legendRowRTL]}>
-                  <View style={[styles.legendDot, { backgroundColor: COLORS.primary }]} />
-                  <Text style={[TYPOGRAPHY.caption, isRTL && styles.rtlText]}>{t.busPath}</Text>
-                </View>
-                <View style={[styles.legendRow, isRTL && styles.legendRowRTL]}>
-                  <View style={[styles.legendDot, { backgroundColor: COLORS.secondary }]} />
-                  <Text style={[TYPOGRAPHY.caption, isRTL && styles.rtlText]}>{t.yourPathToStation}</Text>
-                </View>
+            <View style={styles.routeRows}>
+              <View style={styles.routeRow}>
+                <Text style={styles.routeLabel}>{text.from}</Text>
+                <Text style={styles.routeValue} numberOfLines={1}>
+                  {formatTime(safeTrip.pickupTime)}
+                </Text>
               </View>
 
-              {/* My Location Button */}
+              <View style={styles.routeRow}>
+                <Text style={styles.routeLabel}>{text.to}</Text>
+                <Text style={styles.routeValue} numberOfLines={1}>
+                  {safeTrip.schoolName}
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          <View style={styles.quickStatsRow}>
+            <View style={styles.statPill}>
+              <MaterialIcons name="schedule" size={15} color={COLORS.primary} />
+              <Text style={styles.statLabel}>{text.eta}</Text>
+              <Text style={styles.statValue}>{etaMinutes} min</Text>
+            </View>
+
+            <View style={styles.statPill}>
+              <MaterialIcons name="route" size={15} color={COLORS.primary} />
+              <Text style={styles.statLabel}>{text.distance}</Text>
+              <Text style={styles.statValue}>{formatDistance(distanceKm)}</Text>
+            </View>
+
+            <View style={styles.statPill}>
+              <MaterialIcons
+                name="directions-bus"
+                size={15}
+                color={COLORS.primary}
+              />
+              <Text style={styles.statLabel}>{text.busCapacity}</Text>
+              <Text style={styles.statValue}>
+                {safeTrip.busUsed}/{safeTrip.busTotal}
+              </Text>
+            </View>
+          </View>
+
+          <View style={styles.driverCard}>
+            <View style={styles.driverLeft}>
+              <View style={styles.driverAvatar}>
+                <MaterialIcons name="person" size={20} color={COLORS.white} />
+              </View>
+
+              <View style={styles.driverMeta}>
+                <Text style={styles.driverName} numberOfLines={1}>
+                  {safeTrip.driverName}
+                </Text>
+                <Text style={styles.driverBus} numberOfLines={1}>
+                  {safeTrip.busNumber}
+                </Text>
+                {safeTrip.processingState === "grouping_in_progress" ? (
+                  <Text style={styles.groupingHint}>{text.grouping}</Text>
+                ) : null}
+              </View>
+            </View>
+
+            <View style={styles.actionRow}>
               <TouchableOpacity
-                style={styles.myLocationButton}
-                onPress={getCurrentLocation}
-                disabled={isLoadingLocation}
+                style={[
+                  styles.contactBtn,
+                  !safeTrip.driverPhone && styles.disabledBtn,
+                ]}
+                onPress={openCall}
+                disabled={!safeTrip.driverPhone}
               >
-                {isLoadingLocation ? (
-                  <ActivityIndicator size="small" color={COLORS.primary} />
-                ) : (
-                  <MaterialIcons name="my-location" size={24} color={COLORS.textPrimary} />
-                )}
+                <MaterialIcons
+                  name="call"
+                  size={18}
+                  color={safeTrip.driverPhone ? COLORS.primary : "#94A3B8"}
+                />
+                <Text
+                  style={[
+                    styles.contactText,
+                    !safeTrip.driverPhone && styles.disabledText,
+                  ]}
+                >
+                  {safeTrip.driverPhone ? text.call : text.noPhone}
+                </Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[
+                  styles.contactBtn,
+                  !safeTrip.driverPhone && styles.disabledBtn,
+                ]}
+                onPress={openMessage}
+                disabled={!safeTrip.driverPhone}
+              >
+                <MaterialIcons
+                  name="chat-bubble-outline"
+                  size={18}
+                  color={safeTrip.driverPhone ? COLORS.primary : "#94A3B8"}
+                />
+                <Text
+                  style={[
+                    styles.contactText,
+                    !safeTrip.driverPhone && styles.disabledText,
+                  ]}
+                >
+                  {safeTrip.driverPhone ? text.message : text.noPhone}
+                </Text>
               </TouchableOpacity>
             </View>
           </View>
-
-          {/* INFO CARDS ROW */}
-          <View style={[styles.infoRow, isRTL && styles.infoRowRTL]}>
-            {/* ETA Card */}
-            <View style={styles.infoCard}>
-              <MaterialIcons name="schedule" size={24} color={COLORS.primary} />
-              <View style={styles.infoCardContent}>
-                <Text style={[styles.infoCardLabel, isRTL && styles.rtlText]}>{t.estimatedArrival}</Text>
-                <Text style={[styles.infoCardValue, isRTL && styles.rtlText]}>
-                  {estimatedArrivalMinutes} <Text style={styles.infoCardUnit}>{t.minutes}</Text>
-                </Text>
-              </View>
-            </View>
-            {/* Distance Card */}
-            <View style={styles.infoCard}>
-              <MaterialIcons name="straighten" size={24} color={COLORS.secondary} />
-              <View style={styles.infoCardContent}>
-                <Text style={[styles.infoCardLabel, isRTL && styles.rtlText]}>{t.distance}</Text>
-                <Text style={[styles.infoCardValue, isRTL && styles.rtlText]}>
-                  {distanceToStation.toFixed(1)} <Text style={styles.infoCardUnit}>{t.km}</Text>
-                </Text>
-              </View>
-            </View>
-          </View>
-
-          {/* DRIVER INFO - COMPACT CARD */}
-          <DriverActionCard 
-            t={t}
-            driverName={driverName}
-            driverPhone={driverPhone}
-            isDriverOnline={isDriverOnline}
-            isRTL={isRTL}
-            handleCall={handleCall}
-            handleMessage={handleMessage}
-          />
-
-          {/* JOURNEY TIMELINE */}
-          <View style={styles.timelineSection}>
-            <MinimalTimeline 
-              t={t} 
-              isRTL={isRTL} 
-              leaveHomeTime={leaveHomeTime}
-              reachPickupTime={reachPickupTime}
-              arriveDestinationTime={arriveDestinationTime}
-              estimatedArrivalMinutes={estimatedArrivalMinutes}
-            />
-          </View>
-        </Animated.View>
-      </ScrollView>
-
-      {/* PRIMARY CTA - FIXED BOTTOM BUTTON */}
-      <Animated.View 
-        style={[
-          styles.ctaContainer,
-          { transform: [{ translateY: ctaButtonTranslate }] }
-        ]}
-      >
-        <TouchableOpacity
-          style={styles.ctaButton}
-          onPress={handleNavigateToLiveTracking}
-          activeOpacity={0.9}
-        >
-          <LinearGradient
-            colors={[COLORS.primary, '#0056B3']} // Darker shade for gradient
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 0 }}
-            style={[styles.ctaGradient, isRTL && styles.ctaGradientRTL]}
-          >
-            <Text style={[styles.ctaButtonText, isRTL && styles.rtlText]}>
-              {t.liveTracking}
-            </Text>
-            <MaterialIcons name={isRTL ? "arrow-back" : "arrow-forward"} size={24} color="#FFFFFF" />
-          </LinearGradient>
-        </TouchableOpacity>
-      </Animated.View>
+        </ScrollView>
+      </View>
     </SafeAreaView>
   );
 };
 
-// =================================================================
-// 6. STYLES (Redesigned)
-// =================================================================
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: COLORS.background,
+    backgroundColor: COLORS.bg,
   },
-  rtlText: {
-    textAlign: 'right',
-  },
-
-  // ========== HEADER ==========
-  header: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    backgroundColor: COLORS.card,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  backButton: {
-    padding: 8,
-  },
-  headerTitle: {
-    ...TYPOGRAPHY.h2,
-    fontWeight: '700',
-  },
-  headerPlaceholder: {
-    width: 36, // To balance the back button
-  },
-
-  // ========== SCROLL VIEW ==========
-  scrollView: {
+  loaderScreen: {
     flex: 1,
+    backgroundColor: COLORS.bg,
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 12,
+    paddingHorizontal: 24,
   },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 100, // Space for the fixed CTA button
+  skeletonMap: {
+    width: "100%",
+    height: 190,
+    borderRadius: 18,
+    backgroundColor: "#EAF3FF",
   },
-
-  // ========== MAP CARD ==========
-  mapCard: {
-    marginBottom: 20,
+  skeletonCard: {
+    width: "100%",
+    height: 160,
+    borderRadius: 18,
+    backgroundColor: "#EAF3FF",
   },
-  mapContainer: {
-    height: 250,
-    borderRadius: 16,
-    overflow: 'hidden',
-    backgroundColor: COLORS.border,
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
+  loaderText: {
+    color: COLORS.subtext,
+    fontFamily: UbuntuFonts.medium,
+    fontSize: 14,
+  },
+  errorText: {
+    color: COLORS.text,
+    textAlign: "center",
+    fontFamily: UbuntuFonts.medium,
+    fontSize: 14,
+  },
+  backBtn: {
+    backgroundColor: COLORS.primary,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+  },
+  backBtnText: {
+    color: COLORS.white,
+    fontFamily: UbuntuFonts.semiBold,
+    fontSize: 13,
+  },
+  rtl: {
+    textAlign: "right",
+  },
+  mapStage: {
+    width: "100%",
+    flex: 7,
   },
   map: {
     flex: 1,
   },
-
-  // Legend
-  legendBox: {
-    position: 'absolute',
+  topOverlay: {
+    position: "absolute",
     top: 12,
     left: 12,
-    backgroundColor: 'rgba(255, 255, 255, 0.9)',
-    borderRadius: 8,
-    padding: 10,
-  },
-  legendBoxRTL: {
-    left: 'auto',
     right: 12,
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.95)",
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
-  legendRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  legendRowRTL: {
-    flexDirection: 'row-reverse',
-  },
-  legendDot: {
-    width: 16,
-    height: 4,
-    borderRadius: 2,
-  },
-
-  // My Location Button
-  myLocationButton: {
-    position: 'absolute',
-    right: 12,
-    bottom: 12,
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: COLORS.card,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.3,
-    shadowRadius: 4,
-    elevation: 4,
-  },
-
-  // Markers
-  markerPin: {
+  topBarBtn: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: COLORS.card,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#EEF6FF",
   },
-
-  // ========== INFO CARDS ROW ==========
-  infoRow: {
-    flexDirection: 'row',
-    gap: 12,
-    marginBottom: 20,
-  },
-  infoRowRTL: {
-    flexDirection: 'row-reverse',
-  },
-  infoCard: {
-    flex: 1,
-    backgroundColor: COLORS.card,
-    borderRadius: 12,
-    padding: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  infoCardContent: {
+  topTitleWrap: {
     flex: 1,
   },
-  infoCardLabel: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.textSecondary,
-    marginBottom: 2,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
-  },
-  infoCardValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-  },
-  infoCardUnit: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: COLORS.textSecondary,
-  },
-
-  // ========== TIMELINE SECTION ==========
-  timelineSection: {
-    marginBottom: 20,
-    padding: 15,
-    backgroundColor: COLORS.card,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-
-  // ========== CTA BUTTON (Fixed Bottom) ==========
-  ctaContainer: {
-    position: 'absolute',
-    bottom: 0,
-    left: 0,
-    right: 0,
-    paddingHorizontal: 20,
-    paddingVertical: 15,
-    backgroundColor: COLORS.card,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-  },
-  ctaButton: {
-    borderRadius: 12,
-    overflow: 'hidden',
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 12,
-    elevation: 6,
-  },
-  ctaGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 16,
-    gap: 10,
-  },
-  ctaGradientRTL: {
-    flexDirection: 'row-reverse',
-  },
-  ctaButtonText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: COLORS.card,
-    letterSpacing: 0.5,
-  },
-});
-
-// =================================================================
-// 7. TIMELINE STYLES
-// =================================================================
-const timelineStyles = StyleSheet.create({
-  container: {
-    // No extra padding here, contained by timelineSection style
-  },
-  rtlText: {
-    textAlign: 'right',
-  },
-  timelineWrapper: {
-    paddingHorizontal: 5,
-  },
-  item: {
-    flexDirection: 'row',
-    marginBottom: 20,
-  },
-  leftColumn: {
-    alignItems: 'center',
-    width: 30, // Smaller width for minimal look
-  },
-  iconWrapper: {
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    justifyContent: 'center',
-    alignItems: 'center',
-    shadowColor: COLORS.shadow,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-  },
-  connector: {
-    width: 2,
-    flex: 1,
-    marginTop: 5,
-    marginBottom: -5,
-  },
-  rightColumn: {
-    flex: 1,
-    marginLeft: 15,
-    paddingBottom: 10,
-  },
-  rtlRightColumn: {
-    marginRight: 15,
-    marginLeft: 0,
-  },
-  timeRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  time: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.textPrimary,
-  },
-  statusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 10,
-  },
-  statusText: {
-    fontSize: 10,
-    fontWeight: '700',
-    textTransform: 'uppercase',
-  },
-  label: {
+  topBarTitle: {
+    color: COLORS.text,
+    fontFamily: UbuntuFonts.bold,
     fontSize: 15,
-    fontWeight: '600',
-    color: COLORS.textPrimary,
+    marginBottom: 1,
   },
-  subLabel: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.textSecondary,
+  topBarSub: {
+    color: COLORS.subtext,
+    fontFamily: UbuntuFonts.medium,
+    fontSize: 11,
   },
-  extraCard: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginTop: 10,
-    padding: 10,
-    backgroundColor: 'rgba(0, 122, 255, 0.05)',
-    borderRadius: 8,
-    borderLeftWidth: 3,
-    borderLeftColor: COLORS.primary,
-  },
-  extraText: {
-    ...TYPOGRAPHY.caption,
-    color: COLORS.textPrimary,
-  }
-});
-
-// =================================================================
-// 8. DRIVER ACTION STYLES
-// =================================================================
-const driverActionStyles = StyleSheet.create({
-  container: {
-    marginBottom: 20,
-    padding: 15,
-    backgroundColor: COLORS.card,
-    borderRadius: 12,
+  topStatusChip: {
+    backgroundColor: "#ECFDF5",
     borderWidth: 1,
-    borderColor: COLORS.border,
-  },
-  rtlText: {
-    textAlign: 'right',
-  },
-  driverRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 15,
-    marginBottom: 15,
-  },
-  driverRowRTL: {
-    flexDirection: 'row-reverse',
-  },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: COLORS.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  info: {
-    flex: 1,
-  },
-  name: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  statusRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginTop: 2,
-  },
-  statusRowRTL: {
-    flexDirection: 'row-reverse',
+    borderColor: "#BBF7D0",
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 5,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
   },
   statusDot: {
-    width: 8,
-    height: 8,
+    width: 7,
+    height: 7,
     borderRadius: 4,
+    backgroundColor: COLORS.success,
   },
-  statusText: {
+  topStatusText: {
+    color: "#047857",
+    fontFamily: UbuntuFonts.semiBold,
+    fontSize: 11,
+  },
+  mapSyncChip: {
+    position: "absolute",
+    top: 74,
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(255,255,255,0.96)",
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+  },
+  mapSyncText: {
+    color: COLORS.primaryDark,
+    fontFamily: UbuntuFonts.medium,
     fontSize: 12,
-    fontWeight: '600',
   },
-  actionsRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+  bottomSheet: {
+    flex: 3,
+    backgroundColor: COLORS.white,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderTopWidth: 1,
+    borderTopColor: COLORS.border,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: Platform.OS === "ios" ? 0.14 : 0,
+    shadowRadius: 12,
+    elevation: 14,
+  },
+  sheetHandleArea: {
+    alignItems: "center",
+    paddingTop: 8,
+    paddingBottom: 6,
+  },
+  sheetHandle: {
+    width: 52,
+    height: 5,
+    borderRadius: 4,
+    backgroundColor: "#C6DEFF",
+  },
+  sheetContent: {
+    paddingHorizontal: 16,
+    paddingBottom: 22,
+  },
+  routeCard: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    backgroundColor: "#F8FBFF",
+    borderRadius: 16,
+    padding: 12,
+    marginBottom: 12,
+  },
+  routeCardTitle: {
+    color: COLORS.text,
+    fontFamily: UbuntuFonts.semiBold,
+    fontSize: 14,
+    marginBottom: 10,
+  },
+  routeLine: {
+    position: "absolute",
+    left: 18,
+    top: 41,
+    bottom: 14,
+    alignItems: "center",
+  },
+  routeDotStart: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: COLORS.primary,
+  },
+  routeLineDivider: {
+    width: 2,
+    flex: 1,
+    marginVertical: 3,
+    backgroundColor: "#BFDBFE",
+  },
+  routeDotEnd: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: COLORS.success,
+  },
+  routeRows: {
+    marginLeft: 24,
+    gap: 12,
+  },
+  routeRow: {
+    gap: 2,
+  },
+  routeLabel: {
+    color: COLORS.subtext,
+    fontFamily: UbuntuFonts.medium,
+    fontSize: 11,
+  },
+  routeValue: {
+    color: COLORS.text,
+    fontFamily: UbuntuFonts.semiBold,
+    fontSize: 13,
+  },
+  quickStatsRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginBottom: 12,
+  },
+  statPill: {
+    flex: 1,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 14,
+    backgroundColor: COLORS.white,
+    paddingVertical: 10,
+    paddingHorizontal: 8,
+    alignItems: "center",
+    gap: 2,
+  },
+  statLabel: {
+    color: COLORS.subtext,
+    fontFamily: UbuntuFonts.medium,
+    fontSize: 11,
+  },
+  statValue: {
+    color: COLORS.primaryDark,
+    fontFamily: UbuntuFonts.bold,
+    fontSize: 13,
+  },
+  driverCard: {
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 14,
+    backgroundColor: COLORS.white,
+    padding: 12,
+  },
+  driverLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  driverAvatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: COLORS.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+  driverMeta: {
+    flex: 1,
+  },
+  driverName: {
+    color: COLORS.text,
+    fontFamily: UbuntuFonts.semiBold,
+    fontSize: 14,
+    marginBottom: 1,
+  },
+  driverBus: {
+    color: COLORS.subtext,
+    fontFamily: UbuntuFonts.medium,
+    fontSize: 12,
+  },
+  groupingHint: {
+    marginTop: 3,
+    color: COLORS.warning,
+    fontFamily: UbuntuFonts.medium,
+    fontSize: 11,
+  },
+  actionRow: {
+    flexDirection: "row",
     gap: 10,
   },
-  actionsRowRTL: {
-    flexDirection: 'row-reverse',
-  },
-  actionBtn: {
+  contactBtn: {
     flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 12,
-    backgroundColor: COLORS.background,
-    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: COLORS.border,
+    borderRadius: 12,
+    backgroundColor: "#F8FBFF",
+    paddingVertical: 11,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 7,
   },
-  actionText: {
-    fontSize: 14,
-    fontWeight: '600',
+  contactText: {
     color: COLORS.primary,
+    fontFamily: UbuntuFonts.semiBold,
+    fontSize: 13,
+  },
+  disabledBtn: {
+    backgroundColor: "#F8FAFC",
+    borderColor: "#E2E8F0",
+  },
+  disabledText: {
+    color: "#94A3B8",
   },
 });
 

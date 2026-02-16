@@ -1,797 +1,942 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Platform,
-  ScrollView,
-  TextInput,
+  ActivityIndicator,
+  Alert,
   Animated,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
-import { MaterialIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
-import { UbuntuFonts } from '../../src/utils/fonts';
-import DateTimePicker from '@react-native-community/datetimepicker';
-import BookingModal from '../../components/BookingModal';
-import ActiveTripScreen from './ActiveTripScreen';
-import TripNotification from '../../components/TripNotification';
-import LiveTrackingScreen from './LiveTrackingScreen';
-import { getActiveBooking } from '../../src/services/bookingService';
-import { getDemoActiveTrip, DEMO_STUDENT, DEMO_SCHOOL } from '../../src/data/demoData';
+  PanResponder,
+  Platform,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  useWindowDimensions,
+  View,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
+import { MaterialIcons } from "@expo/vector-icons";
+import * as Location from "expo-location";
+import DateTimePicker from "@react-native-community/datetimepicker";
+
+import MapboxRoutePreview from "../../components/MapboxRoutePreview";
+import { DEMO_SCHOOL, DEMO_STUDENT } from "../../src/data/demoData";
+import { UbuntuFonts } from "../../src/utils/fonts";
+import { getDirectionsRoute } from "../../src/services/mapboxService";
+import { getSchoolById } from "../../src/services/schoolService";
+import { getStudentById } from "../../src/services/studentService";
+import {
+  cancelStudentPendingTrip,
+  getStudentCurrentTrip,
+  requestStudentTripDetailsState,
+} from "../../src/services/groupingService";
+
+const BLUE = "#2563EB";
+const LIGHT_BLUE = "#EFF6FF";
+const SHEET_COLLAPSED_HEIGHT = 120;
 
 const translations = {
   en: {
-    title: 'Mobi',
-    tagline: 'Smart school transportation',
-    studentMap: 'Your Route',
-    availableLocations: 'Available',
-    pickupPoint: 'Pickup Point',
-    dropoffPoint: 'Dropoff Point',
-    schoolEntryTime: 'Departure',
-    schoolEntryHint: 'When do you leave?',
-    schoolExitTime: 'Return',
-    schoolExitHint: 'When do you return?',
-    confirmBooking: 'Book Trip',
-    location: 'Rabat, Morocco',
+    appName: "Mobi",
+    studentRoute: "Your School Route",
+    studentLabel: "Student",
+    schoolLabel: "School",
+    defaultStudentName: "Student",
+    defaultSchoolName: "School",
+    gpsDenied: "Location permission denied, using your home location",
+    eta: "ETA",
+    distance: "Distance",
+    startTime: "Start Time",
+    endTime: "End Time",
+    selectTime: "Select time",
+    viewDetails: "View Details",
+    routeLoading: "Building route...",
+    preparingTrip: "Preparing your trip details...",
+    groupingProcessing:
+      "Grouping is still processing. Please try again in a moment.",
+    distanceTooFar:
+      "You're outside the automatic grouping range. Showing route details anyway.",
+    pendingTrip: "Pending Trip",
+    viewPendingTrip: "View Pending Trip",
+    cancelTrip: "Cancel Trip",
+    no: "No",
+    error: "Error",
+    cancelTripConfirmTitle: "Cancel trip",
+    cancelTripConfirmMessage:
+      "Are you sure you want to cancel this pending trip?",
+    cancellingTrip: "Cancelling trip...",
+    cancelTripFailed: "Unable to cancel this trip now. Please try again.",
+    tripCancelled: "Trip cancelled successfully.",
+    loadingTrip: "Checking your trip...",
   },
   ar: {
-    title: 'موبي',
-    tagline: 'النقل المدرسي الذكي',
-    studentMap: 'مسارك',
-    availableLocations: 'متاح',
-    pickupPoint: 'نقطة الالتقاط',
-    dropoffPoint: 'نقطة النزول',
-    schoolEntryTime: 'المغادرة',
-    schoolEntryHint: 'متى تغادر؟',
-    schoolExitTime: 'العودة',
-    schoolExitHint: 'متى تعود؟',
-    confirmBooking: 'احجز الرحلة',
-    location: 'الرباط، المغرب',
+    appName: "موبي",
+    studentRoute: "مسارك إلى المدرسة",
+    studentLabel: "الطالب",
+    schoolLabel: "المدرسة",
+    defaultStudentName: "الطالب",
+    defaultSchoolName: "المدرسة",
+    gpsDenied: "تم رفض إذن الموقع، تم استخدام موقع المنزل",
+    eta: "الوقت",
+    distance: "المسافة",
+    startTime: "وقت البداية",
+    endTime: "وقت النهاية",
+    selectTime: "اختر الوقت",
+    viewDetails: "عرض التفاصيل",
+    routeLoading: "جاري إنشاء المسار...",
+    preparingTrip: "جاري تجهيز تفاصيل الرحلة...",
+    groupingProcessing: "ما زال التجميع قيد المعالجة. يرجى المحاولة بعد قليل.",
+    distanceTooFar:
+      "أنت خارج نطاق التجميع التلقائي. سنعرض تفاصيل المسار على أي حال.",
+    pendingTrip: "رحلة قيد الانتظار",
+    viewPendingTrip: "عرض الرحلة الحالية",
+    cancelTrip: "إلغاء الرحلة",
+    no: "لا",
+    error: "خطأ",
+    cancelTripConfirmTitle: "إلغاء الرحلة",
+    cancelTripConfirmMessage: "هل أنت متأكد أنك تريد إلغاء هذه الرحلة؟",
+    cancellingTrip: "جاري إلغاء الرحلة...",
+    cancelTripFailed: "تعذر إلغاء الرحلة الآن. يرجى المحاولة مرة أخرى.",
+    tripCancelled: "تم إلغاء الرحلة بنجاح.",
+    loadingTrip: "جاري التحقق من الرحلة...",
   },
 };
 
-const StudentHomeScreen = ({ studentId, isDemo = false, language = 'ar', onNavigateToTripDetails }) => {
-  const homeLocation = isDemo 
-    ? DEMO_STUDENT.home_location 
-    : { latitude: 33.5731, longitude: -7.5898 };
-  const schoolLocation = isDemo 
-    ? DEMO_SCHOOL.location 
-    : { latitude: 33.5800, longitude: -7.5920 };
+const getInitials = (fullName) => {
+  if (!fullName) return "S";
+  const parts = fullName.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return "S";
+  if (parts.length === 1) return parts[0][0].toUpperCase();
+  return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+};
 
-  const [activeBooking, setActiveBooking] = useState(null);
-  const [schoolEntryTime, setSchoolEntryTime] = useState(null);
-  const [schoolExitTime, setSchoolExitTime] = useState(null);
-  const [showBookingModal, setShowBookingModal] = useState(false);
-  const [availableLocations, setAvailableLocations] = useState(1);
-  const [showTimePicker, setShowTimePicker] = useState(false);
-  const [showExitTimePicker, setShowExitTimePicker] = useState(false);
-  const [confirmedTripData, setConfirmedTripData] = useState(null);
-  const [showNotification, setShowNotification] = useState(false);
-  const [showLiveTracking, setShowLiveTracking] = useState(false);
-  const [tripStatus, setTripStatus] = useState(null); // 'active', 'completed', 'cancelled'
-  const mapRef = useRef(null);
-  const notificationTimeoutRef = useRef(null);
+const formatTime = (dateValue) => {
+  if (!dateValue) return "--:--";
+  const date = dateValue instanceof Date ? dateValue : new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return "--:--";
+  const hours = String(date.getHours()).padStart(2, "0");
+  const minutes = String(date.getMinutes()).padStart(2, "0");
+  return `${hours}:${minutes}`;
+};
 
-  // Animations
-  const fadeIn = useRef(new Animated.Value(0)).current;
-  const slideUp = useRef(new Animated.Value(30)).current;
+const buildDateOnTomorrowFromTime = (timeValue) => {
+  const source = timeValue instanceof Date ? timeValue : new Date(timeValue);
+  const now = new Date();
+  const tomorrow = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate() + 1,
+    source.getHours(),
+    source.getMinutes(),
+    0,
+    0,
+  );
+  return tomorrow;
+};
 
-  const t = translations[language];
-  const isRTL = language === 'ar';
+const StudentHomeScreen = ({
+  studentId,
+  isDemo = false,
+  language = "en",
+  onNavigateToTripDetails,
+}) => {
+  const { height: screenHeight } = useWindowDimensions();
+  const t = translations[language] || translations.en;
 
-  // Load active booking
+  const [studentName, setStudentName] = useState(
+    isDemo ? DEMO_STUDENT.fullname : t.defaultStudentName,
+  );
+  const [schoolName, setSchoolName] = useState(
+    isDemo ? DEMO_SCHOOL.name : t.defaultSchoolName,
+  );
+  const [homeFallback, setHomeFallback] = useState(
+    isDemo ? DEMO_STUDENT.home_location : null,
+  );
+  const [schoolLocation, setSchoolLocation] = useState(
+    isDemo ? DEMO_SCHOOL.location : null,
+  );
+  const [studentLocation, setStudentLocation] = useState(
+    isDemo ? DEMO_STUDENT.home_location : null,
+  );
+
+  const [routeCoordinates, setRouteCoordinates] = useState([]);
+  const [distanceMeters, setDistanceMeters] = useState(0);
+  const [durationSeconds, setDurationSeconds] = useState(0);
+  const [isRouteLoading, setIsRouteLoading] = useState(true);
+  const [locationHint, setLocationHint] = useState("");
+  const [startTime, setStartTime] = useState(null);
+  const [endTime, setEndTime] = useState(null);
+  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
+  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
+  const [isPreparingTrip, setIsPreparingTrip] = useState(false);
+  const [groupingHint, setGroupingHint] = useState("");
+  const [pendingTripData, setPendingTripData] = useState(null);
+  const [isCheckingTrip, setIsCheckingTrip] = useState(false);
+  const [isCancellingTrip, setIsCancellingTrip] = useState(false);
+
+  const contentFade = useRef(new Animated.Value(0)).current;
+  const sheetTranslate = useRef(new Animated.Value(0)).current;
+  const sheetCurrentValue = useRef(0);
+
+  const sheetExpandedHeight = Math.max(290, Math.round(screenHeight * 0.35));
+  const maxSheetTranslate = Math.max(
+    0,
+    sheetExpandedHeight - SHEET_COLLAPSED_HEIGHT,
+  );
+
   useEffect(() => {
-    const loadActiveBooking = async () => {
+    const id = sheetTranslate.addListener(({ value }) => {
+      sheetCurrentValue.current = value;
+    });
+    return () => {
+      sheetTranslate.removeListener(id);
+    };
+  }, [sheetTranslate]);
+
+  useEffect(() => {
+    Animated.timing(contentFade, {
+      toValue: 1,
+      duration: 350,
+      useNativeDriver: true,
+    }).start();
+  }, [contentFade]);
+
+  useEffect(() => {
+    if (sheetCurrentValue.current > maxSheetTranslate) {
+      sheetTranslate.setValue(maxSheetTranslate);
+    }
+  }, [maxSheetTranslate, sheetTranslate]);
+
+  const snapSheet = useCallback(
+    (toValue) => {
+      Animated.spring(sheetTranslate, {
+        toValue,
+        friction: 9,
+        tension: 80,
+        useNativeDriver: true,
+      }).start();
+    },
+    [sheetTranslate],
+  );
+
+  const panResponder = useMemo(() => {
+    let startValue = 0;
+
+    return PanResponder.create({
+      onMoveShouldSetPanResponder: (_event, gestureState) => {
+        return Math.abs(gestureState.dy) > 8;
+      },
+      onPanResponderGrant: () => {
+        startValue = sheetCurrentValue.current;
+      },
+      onPanResponderMove: (_event, gestureState) => {
+        const nextValue = Math.max(
+          0,
+          Math.min(maxSheetTranslate, startValue + gestureState.dy),
+        );
+        sheetTranslate.setValue(nextValue);
+      },
+      onPanResponderRelease: (_event, gestureState) => {
+        const shouldCollapse =
+          gestureState.vy > 0.75 ||
+          sheetCurrentValue.current > maxSheetTranslate / 2;
+        snapSheet(shouldCollapse ? maxSheetTranslate : 0);
+      },
+      onPanResponderTerminate: () => {
+        const shouldCollapse =
+          sheetCurrentValue.current > maxSheetTranslate / 2;
+        snapSheet(shouldCollapse ? maxSheetTranslate : 0);
+      },
+    });
+  }, [maxSheetTranslate, sheetTranslate, snapSheet]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadStudentData = async () => {
       if (isDemo) {
-        const demoTrip = getDemoActiveTrip();
-        setActiveBooking(demoTrip);
-        if (demoTrip && demoTrip.status !== 'COMPLETED' && demoTrip.status !== 'CANCELLED') {
-          setTripStatus('active');
-        }
+        setLocationHint("");
         return;
       }
 
       try {
-        const { data, error } = await getActiveBooking(studentId);
-        if (!error && data) {
-          setActiveBooking(data);
-          if (data.status !== 'COMPLETED' && data.status !== 'CANCELLED') {
-            setTripStatus('active');
+        const { data } = await getStudentById(studentId);
+        if (cancelled) return;
+
+        const studentHome = data?.home_location || null;
+        const schoolFromStudent = data?.schools || null;
+
+        setStudentName(data?.fullname || t.defaultStudentName);
+
+        if (studentHome) {
+          setHomeFallback(studentHome);
+        }
+
+        if (schoolFromStudent?.name) {
+          setSchoolName(schoolFromStudent.name);
+        }
+
+        if (
+          Number.isFinite(schoolFromStudent?.latitude) &&
+          Number.isFinite(schoolFromStudent?.longitude)
+        ) {
+          setSchoolLocation({
+            latitude: schoolFromStudent.latitude,
+            longitude: schoolFromStudent.longitude,
+          });
+        } else if (data?.school_id) {
+          const schoolResult = await getSchoolById(data.school_id);
+          if (cancelled) return;
+
+          if (schoolResult?.data?.name) {
+            setSchoolName(schoolResult.data.name);
+          }
+
+          if (
+            Number.isFinite(schoolResult?.data?.latitude) &&
+            Number.isFinite(schoolResult?.data?.longitude)
+          ) {
+            setSchoolLocation({
+              latitude: schoolResult.data.latitude,
+              longitude: schoolResult.data.longitude,
+            });
           }
         }
-      } catch (err) {
-        console.error('Exception loading active booking:', err);
+      } catch (_error) {
+        // Keep defaults on any upstream issue.
       }
     };
 
-    loadActiveBooking();
+    loadStudentData();
 
     return () => {
-      if (notificationTimeoutRef.current) {
-        clearTimeout(notificationTimeoutRef.current);
+      cancelled = true;
+    };
+  }, [isDemo, studentId, t.defaultStudentName]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const resolveStudentLocation = async () => {
+      if (isDemo) {
+        setLocationHint("");
+        return;
+      }
+
+      try {
+        const permission = await Location.requestForegroundPermissionsAsync();
+        if (cancelled) return;
+
+        if (permission.status !== "granted") {
+          if (homeFallback) {
+            setStudentLocation(homeFallback);
+          }
+          setLocationHint(t.gpsDenied);
+          return;
+        }
+
+        const position = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced,
+        });
+
+        if (cancelled) return;
+
+        if (
+          Number.isFinite(position?.coords?.latitude) &&
+          Number.isFinite(position?.coords?.longitude)
+        ) {
+          setStudentLocation({
+            latitude: position.coords.latitude,
+            longitude: position.coords.longitude,
+          });
+          setLocationHint("");
+        } else if (homeFallback) {
+          setStudentLocation(homeFallback);
+        }
+      } catch (_error) {
+        if (homeFallback) {
+          setStudentLocation(homeFallback);
+        }
       }
     };
-  }, [studentId, isDemo]);
 
-  // Trigger animations on mount
-  useEffect(() => {
-    Animated.parallel([
-      Animated.timing(fadeIn, {
-        toValue: 1,
-        duration: 500,
-        useNativeDriver: true,
-      }),
-      Animated.spring(slideUp, {
-        toValue: 0,
-        tension: 40,
-        friction: 8,
-        useNativeDriver: true,
-      }),
-    ]).start();
-  }, []);
+    resolveStudentLocation();
 
-  const formatTime = (date) => {
-    if (!date) return '';
-    const hours = date.getHours().toString().padStart(2, '0');
-    const minutes = date.getMinutes().toString().padStart(2, '0');
-    return `${hours}:${minutes}`;
-  };
-
-  const getRouteCoordinates = () => {
-    const markers = getMapMarkers();
-    return [
-      markers.start.location,
-      markers.middle.location,
-      markers.end.location,
-    ];
-  };
-
-  const getMapMarkers = () => {
-    const midLat = (homeLocation.latitude + schoolLocation.latitude) / 2;
-    const midLng = (homeLocation.longitude + schoolLocation.longitude) / 2;
-    const pickupDropoffLocation = {
-      latitude: midLat + 0.001,
-      longitude: midLng + 0.001,
+    return () => {
+      cancelled = true;
     };
-
-    return {
-      start: { location: homeLocation, icon: 'home', label: language === 'ar' ? 'المنزل' : 'Home' },
-      middle: { location: pickupDropoffLocation, icon: 'directions-bus', label: t.pickupPoint },
-      end: { location: schoolLocation, icon: 'school', label: language === 'ar' ? 'المدرسة' : 'School' },
-    };
-  };
+  }, [homeFallback, isDemo, t.gpsDenied]);
 
   useEffect(() => {
-    if (mapRef.current) {
-      const routeCoords = getRouteCoordinates();
-      const allCoordinates = routeCoords.map(coord => ({
-        latitude: coord.latitude,
-        longitude: coord.longitude,
-      }));
+    let cancelled = false;
 
-      mapRef.current.fitToCoordinates(allCoordinates, {
-        edgePadding: { top: 50, right: 50, bottom: 50, left: 50 },
-        animated: true,
-      });
-    }
-  }, []);
+    const loadRoute = async () => {
+      if (!studentLocation || !schoolLocation) return;
 
-  const handleConfirmBooking = () => {
-    if (!schoolEntryTime) {
+      setIsRouteLoading(true);
+
+      try {
+        const route = await getDirectionsRoute({
+          origin: studentLocation,
+          destination: schoolLocation,
+        });
+
+        if (cancelled) return;
+
+        const coordinates =
+          Array.isArray(route?.coordinates) && route.coordinates.length > 1
+            ? route.coordinates
+            : [studentLocation, schoolLocation];
+
+        setRouteCoordinates(coordinates);
+        setDistanceMeters(route?.distanceMeters || 0);
+        setDurationSeconds(route?.durationSeconds || 0);
+      } catch (_error) {
+        if (cancelled) return;
+        setRouteCoordinates([studentLocation, schoolLocation]);
+        setDistanceMeters(0);
+        setDurationSeconds(0);
+      } finally {
+        if (!cancelled) {
+          setIsRouteLoading(false);
+        }
+      }
+    };
+
+    loadRoute();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [studentLocation, schoolLocation]);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadCurrentTrip = async () => {
+      if (isDemo || !studentId) return;
+      setIsCheckingTrip(true);
+
+      try {
+        const result = await getStudentCurrentTrip(studentId);
+        if (cancelled) return;
+        if (result?.error) return;
+
+        const trip = result?.data?.trip || null;
+        if (
+          trip &&
+          (trip.status === "trip_pending" || trip.status === "trip_started")
+        ) {
+          setPendingTripData({
+            trip,
+            booking: result?.data?.booking || null,
+          });
+        } else {
+          setPendingTripData(null);
+        }
+      } finally {
+        if (!cancelled) setIsCheckingTrip(false);
+      }
+    };
+
+    loadCurrentTrip();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isDemo, studentId]);
+
+  const handleViewDetails = async () => {
+    if (
+      !onNavigateToTripDetails ||
+      !studentLocation ||
+      !schoolLocation ||
+      !startTime ||
+      !endTime
+    ) {
       return;
     }
 
-    const routeCoords = getRouteCoordinates();
-    const markers = getMapMarkers();
+    const plannedStart = buildDateOnTomorrowFromTime(startTime);
+    let plannedEnd = buildDateOnTomorrowFromTime(endTime);
+    if (plannedEnd <= plannedStart) {
+      plannedEnd = new Date(plannedStart.getTime() + 45 * 60 * 1000);
+    }
 
-    // Create a booking-like object for transformation
-    const bookingData = {
-      start_time: schoolEntryTime.toISOString(),
-      end_time: new Date(schoolEntryTime.getTime() + 45 * 60 * 1000).toISOString(),
-      homeLocation,
-      pickupLocation: markers.middle.location,
+    const etaMs =
+      Math.max(5, Math.round((durationSeconds || 600) / 60)) * 60 * 1000;
+
+    const localTripPayload = {
+      homeLocation: studentLocation,
+      pickupLocation: studentLocation,
       destinationLocation: schoolLocation,
-      routeCoordinates: routeCoords,
-      leaveHomeTime: new Date(schoolEntryTime.getTime() - 50 * 60 * 1000),
-      reachPickupTime: new Date(schoolEntryTime.getTime() - 10 * 60 * 1000),
-      arriveDestinationTime: schoolEntryTime,
-      driverName: language === 'ar' ? 'الكابتن أحمد' : 'Captain Ahmed',
+      routeCoordinates:
+        routeCoordinates.length > 1
+          ? routeCoordinates
+          : [studentLocation, schoolLocation],
+      userPathCoordinates:
+        routeCoordinates.length > 1
+          ? routeCoordinates
+          : [studentLocation, schoolLocation],
+      leaveHomeTime: plannedStart,
+      reachPickupTime: new Date(plannedStart.getTime() + etaMs * 0.4),
+      arriveDestinationTime: plannedEnd,
+      estimatedArrivalMinutes: Math.max(
+        1,
+        Math.round((durationSeconds || 600) / 60),
+      ),
+      distanceToStation: Math.max(0.2, distanceMeters / 1000),
+      driverName: language === "ar" ? "سائق موبي" : "Mobi Driver",
+      driverPhone: null,
+      isDriverOnline: true,
+      stations: [],
       driver: {
-        name: language === 'ar' ? 'الكابتن أحمد' : 'Captain Ahmed',
+        name: language === "ar" ? "سائق موبي" : "Mobi Driver",
         phone: null,
-        isOnline: true,
       },
     };
 
-    // Transform and navigate to trip details
-    if (onNavigateToTripDetails) {
-      const transformedTripData = transformBookingToTripData(bookingData);
-      onNavigateToTripDetails(transformedTripData);
+    console.log("[StudentHome] ViewDetails pressed", {
+      studentId,
+      hasStartTime: !!startTime,
+      hasEndTime: !!endTime,
+      routePoints: routeCoordinates?.length || 0,
+      studentLocation,
+      schoolLocation,
+    });
+
+    if (isDemo || !studentId) {
+      onNavigateToTripDetails(localTripPayload);
+      return;
     }
 
-    // Also set confirmed trip data for backward compatibility
-    const confirmedTripDataObj = {
-      homeLocation,
-      pickupLocation: markers.middle.location,
-      destinationLocation: schoolLocation,
-      routeCoordinates: routeCoords,
-      leaveHomeTime: new Date(schoolEntryTime.getTime() - 50 * 60 * 1000),
-      reachPickupTime: new Date(schoolEntryTime.getTime() - 10 * 60 * 1000),
-      arriveDestinationTime: schoolEntryTime,
-      totalDurationMinutes: 20,
-      totalDistanceKm: 20,
-      direction: 'homeToSchool',
-      driverName: language === 'ar' ? 'أحمد محمود' : 'Ahmed Mahmoud',
-      vehicleInfo: language === 'ar' ? 'حافلة مدرسية - AB 1234' : 'School Bus - AB 1234',
-    };
+    setIsPreparingTrip(true);
+    setGroupingHint("");
 
-    setConfirmedTripData(confirmedTripDataObj);
-    setTripStatus('active');
-  };
+    try {
+      const tripState = await requestStudentTripDetailsState({
+        studentId,
+        startTime: plannedStart,
+        endTime: plannedEnd,
+        type: "PICKUP",
+      });
 
-  const transformBookingToTripData = (booking) => {
-    // Use booking data if available, otherwise use defaults
-    const bookingHomeLocation = booking.homeLocation || booking.home_location;
-    const bookingPickupLocation = booking.pickupLocation || booking.pickup_location;
-    const bookingDestinationLocation = booking.destinationLocation || booking.destination_location;
-    const bookingRouteCoordinates = booking.routeCoordinates || booking.route_coordinates;
-    
-    const finalHomeLocation = bookingHomeLocation || homeLocation;
-    const finalPickupLocation = bookingPickupLocation || getMapMarkers().middle.location;
-    const finalDestinationLocation = bookingDestinationLocation || schoolLocation;
-    const finalRouteCoordinates = bookingRouteCoordinates || getRouteCoordinates();
-    
-    // Calculate times from booking
-    const startTime = booking.start_time ? new Date(booking.start_time) : 
-                     (booking.arriveDestinationTime ? new Date(booking.arriveDestinationTime) : new Date());
-    const endTime = booking.end_time ? new Date(booking.end_time) : 
-                   (booking.endTime ? new Date(booking.endTime) : new Date(startTime.getTime() + 45 * 60 * 1000));
-    
-    // Use booking times if available, otherwise calculate
-    const leaveHomeTime = booking.leaveHomeTime ? new Date(booking.leaveHomeTime) : 
-                         new Date(startTime.getTime() - 45 * 60 * 1000);
-    const reachPickupTime = booking.reachPickupTime ? new Date(booking.reachPickupTime) : 
-                           new Date(startTime.getTime() - 30 * 60 * 1000);
-    const arriveDestinationTime = booking.arriveDestinationTime ? new Date(booking.arriveDestinationTime) : startTime;
-    
-    // Calculate user path to station (home to pickup)
-    const userPathCoordinates = booking.userPathCoordinates || [
-      finalHomeLocation,
-      {
-        latitude: (finalHomeLocation.latitude + finalPickupLocation.latitude) / 2,
-        longitude: (finalHomeLocation.longitude + finalPickupLocation.longitude) / 2,
-      },
-      finalPickupLocation,
-    ];
-    
-    // Calculate distance to station (simplified)
-    const distanceToStation = booking.distanceToStation || booking.distance_to_station || 2.5; // km
-    const estimatedArrivalMinutes = booking.estimatedArrivalMinutes || booking.estimated_arrival_minutes || 10;
-    
-    // Use booking stations if available, otherwise create default
-    const stations = booking.stations || [
-      {
-        id: 1,
-        name: language === 'ar' ? 'محطة الكوب' : 'Al-Koub Station',
-        time: new Date(leaveHomeTime.getTime() - 20 * 60 * 1000),
-        status: 'done',
-      },
-      {
-        id: 2,
-        name: language === 'ar' ? 'الجامعة' : 'University',
-        time: reachPickupTime,
-        status: 'now',
-      },
-      {
-        id: 3,
-        name: language === 'ar' ? 'المركز التجاري' : 'Commercial Center',
-        time: arriveDestinationTime,
-        status: 'soon',
-      },
-    ];
-    
-    // Get driver info from booking or use defaults
-    const driverName = booking.driverName || booking.driver?.name || (language === 'ar' ? 'الكابتن أحمد' : 'Captain Ahmed');
-    const driverPhone = booking.driverPhone || booking.driver?.phone || null;
-    const isDriverOnline = booking.isDriverOnline !== undefined ? booking.isDriverOnline : 
-                         (booking.driver?.isOnline !== undefined ? booking.driver.isOnline : true);
-    
-    return {
-      homeLocation: finalHomeLocation,
-      pickupLocation: finalPickupLocation,
-      destinationLocation: finalDestinationLocation,
-      routeCoordinates: finalRouteCoordinates,
-      userPathCoordinates,
-      leaveHomeTime,
-      reachPickupTime,
-      arriveDestinationTime,
-      estimatedArrivalMinutes,
-      distanceToStation,
-      driverName,
-      driverPhone,
-      isDriverOnline,
-      stations,
-      driver: booking.driver || {
-        name: driverName,
-        phone: driverPhone,
-      },
-    };
-  };
+      console.log(
+        "[StudentHome] requestStudentTripDetailsState result",
+        tripState,
+      );
 
-  const handleBookingSuccess = (newBooking) => {
-    setActiveBooking(newBooking);
-    setShowBookingModal(false);
-    
-    // Transform booking data and navigate to trip details
-    if (onNavigateToTripDetails && newBooking) {
-      const tripData = transformBookingToTripData(newBooking);
-      onNavigateToTripDetails(tripData);
+      if (tripState.state === "error") {
+        setGroupingHint(tripState.error?.message || t.groupingProcessing);
+        return;
+      }
+
+      if (tripState.state === "processing") {
+        if (tripState?.reason === "distance_exceeds_15km") {
+          setGroupingHint(t.distanceTooFar);
+          onNavigateToTripDetails({
+            ...localTripPayload,
+            processingState: "distance_exceeds_15km",
+          });
+          return;
+        }
+
+        setGroupingHint(t.groupingProcessing);
+        onNavigateToTripDetails({
+          ...localTripPayload,
+          processingState: "grouping_in_progress",
+        });
+        return;
+      }
+
+      const backendTrip = tripState?.data?.trip || {};
+      const backendBooking = tripState?.data?.booking || null;
+
+      onNavigateToTripDetails({
+        ...localTripPayload,
+        id: backendTrip.id || backendBooking?.id || null,
+        tripId: backendTrip.tripId || backendTrip.id || null,
+        bookingId: backendBooking?.id || null,
+        routeCoordinates:
+          Array.isArray(backendTrip.routeCoordinates) &&
+          backendTrip.routeCoordinates.length > 1
+            ? backendTrip.routeCoordinates
+            : localTripPayload.routeCoordinates,
+        destinationLocation:
+          backendTrip.destinationLocation ||
+          localTripPayload.destinationLocation,
+        pickupLocation:
+          backendTrip.pickupLocation || localTripPayload.pickupLocation,
+      });
+    } finally {
+      setIsPreparingTrip(false);
     }
   };
 
-  const handleViewLiveTrip = () => {
-    setShowNotification(false);
-    // Use confirmedTripData if available, otherwise create from activeBooking
-    const tripDataForTracking = confirmedTripData || (activeBooking ? {
-      homeLocation,
-      pickupLocation: activeBooking.pickup_location || getMapMarkers().middle.location,
-      destinationLocation: schoolLocation,
-      routeCoordinates: getRouteCoordinates(),
-      leaveHomeTime: activeBooking.start_time ? new Date(activeBooking.start_time) : new Date(),
-      reachPickupTime: activeBooking.pickup_time ? new Date(activeBooking.pickup_time) : new Date(),
-      arriveDestinationTime: activeBooking.end_time ? new Date(activeBooking.end_time) : new Date(),
-      driverName: activeBooking.driver?.name || (language === 'ar' ? 'أحمد محمود' : 'Ahmed Mahmoud'),
-      vehicleInfo: activeBooking.vehicle?.plate_number || '',
-    } : null);
-    
-    if (tripDataForTracking) {
-      setConfirmedTripData(tripDataForTracking);
+  const avatarText = getInitials(studentName);
+  const mapReady = studentLocation && schoolLocation;
+  const canViewDetails =
+    mapReady &&
+    !!onNavigateToTripDetails &&
+    !!startTime &&
+    !!endTime &&
+    !isPreparingTrip;
+  const hasPendingTrip =
+    !!pendingTripData?.trip &&
+    (pendingTripData.trip.status === "trip_pending" ||
+      pendingTripData.trip.status === "trip_started");
+
+  const handleOpenPendingTrip = () => {
+    if (!hasPendingTrip || !onNavigateToTripDetails || isCancellingTrip) return;
+    const trip = pendingTripData.trip;
+    const booking = pendingTripData.booking;
+
+    const destinationLocation = trip.destinationLocation || schoolLocation;
+    const pickupLocation =
+      trip.pickupLocation || homeFallback || studentLocation;
+    const route =
+      Array.isArray(trip.routeCoordinates) && trip.routeCoordinates.length > 1
+        ? trip.routeCoordinates
+        : [pickupLocation, destinationLocation].filter(Boolean);
+
+    onNavigateToTripDetails({
+      id: trip.id || null,
+      tripId: trip.tripId || trip.id || null,
+      bookingId: booking?.id || null,
+      studentId,
+      homeLocation: pickupLocation,
+      pickupLocation,
+      destinationLocation,
+      routeCoordinates: route,
+      userPathCoordinates: route,
+      leaveHomeTime: booking?.start_time || trip.startTime || null,
+      reachPickupTime: booking?.start_time || trip.startTime || null,
+      arriveDestinationTime: booking?.end_time || trip.endTime || null,
+      estimatedArrivalMinutes:
+        trip.totalDurationMinutes ||
+        Math.max(1, Math.round((durationSeconds || 600) / 60)),
+      distanceToStation:
+        trip.totalDistanceKm || Math.max(0.2, distanceMeters / 1000),
+      driverName:
+        trip.driver?.name || (language === "ar" ? "سائق موبي" : "Mobi Driver"),
+      driverPhone: trip.driver?.phone || null,
+      capacity: trip.capacity || null,
+      membersCount: trip.membersCount || null,
+      schoolName,
+      processingState:
+        trip.status === "trip_pending" ? "grouping_in_progress" : null,
+    });
+  };
+
+  const performCancelPendingTrip = async () => {
+    if (!hasPendingTrip || isCancellingTrip) return;
+
+    const pendingTrip = pendingTripData?.trip || null;
+    const pendingBooking = pendingTripData?.booking || null;
+
+    setIsCancellingTrip(true);
+    try {
+      const result = await cancelStudentPendingTrip({
+        studentId,
+        tripId: pendingTrip?.id || null,
+        bookingId: pendingBooking?.id || null,
+      });
+
+      if (result?.error) {
+        Alert.alert(t.error, result.error.message || t.cancelTripFailed);
+        return;
+      }
+
+      setPendingTripData(null);
+      setGroupingHint("");
+      Alert.alert(t.cancelTrip, t.tripCancelled);
+    } finally {
+      setIsCancellingTrip(false);
     }
-    setShowLiveTracking(true);
   };
 
-  const handleDismissNotification = () => {
-    setShowNotification(false);
-  };
-
-  // Show Live Tracking Screen
-  if (showLiveTracking && confirmedTripData) {
-    return (
-      <LiveTrackingScreen
-        tripId={null}
-        studentId={studentId}
-        language={language}
-        tripData={confirmedTripData}
-        onBack={() => setShowLiveTracking(false)}
-      />
+  const handleCancelPendingTrip = () => {
+    if (!hasPendingTrip || isCancellingTrip) return;
+    Alert.alert(
+      t.cancelTripConfirmTitle,
+      t.cancelTripConfirmMessage,
+      [
+        { text: t.no, style: "cancel" },
+        {
+          text: t.cancelTrip,
+          style: "destructive",
+          onPress: performCancelPendingTrip,
+        },
+      ],
+      { cancelable: true },
     );
-  }
-
-  // Check if there's an active trip (either from confirmed booking or existing active booking)
-  // Check if there's an active trip (either from confirmed booking or existing active booking)
-  const hasActiveTrip = (confirmedTripData && tripStatus === 'active') || 
-                        (activeBooking && activeBooking.status !== 'COMPLETED' && activeBooking.status !== 'CANCELLED');
-
-  // Get current trip data (prefer confirmedTripData, fallback to activeBooking)
-  const getCurrentTripData = () => {
-    if (confirmedTripData) return confirmedTripData;
-    if (activeBooking) {
-      // Convert activeBooking to tripData format
-      return {
-        leaveHomeTime: activeBooking.start_time ? new Date(activeBooking.start_time) : null,
-        reachPickupTime: activeBooking.pickup_time ? new Date(activeBooking.pickup_time) : null,
-        arriveDestinationTime: activeBooking.end_time ? new Date(activeBooking.end_time) : null,
-        driverName: activeBooking.driver?.name || (language === 'ar' ? 'أحمد محمود' : 'Ahmed Mahmoud'),
-        vehicleInfo: activeBooking.vehicle?.plate_number || '',
-      };
-    }
-    return null;
   };
-
-  const currentTripData = getCurrentTripData();
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.container} edges={["left", "right"]}>
       <StatusBar style="dark" />
-      
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* HEADER - Minimal Clean */}
-        <Animated.View style={[styles.header, { opacity: fadeIn }]}>
-          <View style={[styles.headerContent, isRTL && styles.headerContentRTL]}>
-            <View style={styles.logoCircle}>
-              <MaterialIcons name="directions-bus" size={24} color="#FFF" />
-            </View>
-            <View style={styles.headerText}>
-              <Text style={[styles.title, isRTL && styles.rtl]}>{t.title}</Text>
-              <Text style={[styles.tagline, isRTL && styles.rtl]}>{t.tagline}</Text>
-            </View>
-          </View>
-        </Animated.View>
 
-        {/* MAP CARD - Clean Modern */}
-        <Animated.View 
-          style={[
-            styles.mapCard,
-            { opacity: fadeIn, transform: [{ translateY: slideUp }] }
-          ]}
-        >
-          {/* Card Header */}
-          <View style={[styles.cardHeader, isRTL && styles.cardHeaderRTL]}>
-            <View style={styles.cardTitleBox}>
-              <View style={styles.iconBox}>
-                <MaterialIcons name="map" size={16} color="#3B82F6" />
+      {isCheckingTrip && (
+        <View style={styles.pendingLoaderWrap}>
+          <ActivityIndicator size="small" color={BLUE} />
+          <Text style={styles.pendingLoaderText}>{t.loadingTrip}</Text>
+        </View>
+      )}
+
+      {hasPendingTrip ? (
+        <View style={styles.pendingOnlyContainer}>
+          <View style={styles.pendingCard}>
+            <View style={styles.pendingHeaderRow}>
+              <View style={styles.pendingBadge}>
+                <View style={styles.pendingDot} />
+                <Text style={styles.pendingBadgeText}>{t.pendingTrip}</Text>
               </View>
-              <Text style={[styles.cardTitle, isRTL && styles.rtl]}>
-                {t.studentMap}
+              <MaterialIcons name="schedule" size={18} color={BLUE} />
+            </View>
+
+            <Text style={styles.pendingSchoolName} numberOfLines={1}>
+              {schoolName || t.defaultSchoolName}
+            </Text>
+
+            <View style={styles.pendingInfoRow}>
+              <Text style={styles.pendingInfoLabel}>{t.startTime}</Text>
+              <Text style={styles.pendingInfoValue}>
+                {formatTime(
+                  pendingTripData?.booking?.start_time ||
+                    pendingTripData?.trip?.startTime,
+                )}
               </Text>
             </View>
-            <View style={styles.badge}>
-              <View style={styles.badgeDot} />
-              <Text style={styles.badgeText}>{availableLocations}</Text>
-            </View>
-          </View>
 
-          {/* Map */}
-          <View style={styles.mapWrapper}>
-            <MapView
-              ref={mapRef}
-              provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
-              style={styles.map}
-              initialRegion={{
-                latitude: homeLocation.latitude,
-                longitude: homeLocation.longitude,
-                latitudeDelta: 0.02,
-                longitudeDelta: 0.02,
-              }}
-              scrollEnabled={false}
-              zoomEnabled={false}
-              pitchEnabled={false}
-              rotateEnabled={false}
-            >
-              <Polyline
-                coordinates={getRouteCoordinates()}
-                strokeColor="#3B82F6"
-                strokeWidth={3}
-                lineCap="round"
-              />
-
-              {(() => {
-                const markers = getMapMarkers();
-                return (
-                  <>
-                    <Marker coordinate={markers.start.location}>
-                      <View style={[styles.marker, styles.homeMarker]}>
-                        <MaterialIcons name={markers.start.icon} size={18} color="#FFF" />
-                      </View>
-                    </Marker>
-
-                    <Marker coordinate={markers.middle.location}>
-                      <View style={styles.busMarkerWrapper}>
-                        <View style={styles.busMarkerPulse} />
-                        <View style={[styles.marker, styles.busMarker]}>
-                          <MaterialIcons name={markers.middle.icon} size={18} color="#FFF" />
-                        </View>
-                      </View>
-                    </Marker>
-
-                    <Marker coordinate={markers.end.location}>
-                      <View style={[styles.marker, styles.schoolMarker]}>
-                        <MaterialIcons name={markers.end.icon} size={18} color="#FFF" />
-                      </View>
-                    </Marker>
-                  </>
-                );
-              })()}
-            </MapView>
-          </View>
-
-          {/* Location Info */}
-          <View style={[styles.locationInfo, isRTL && styles.locationInfoRTL]}>
-            <MaterialIcons name="location-on" size={14} color="#10B981" />
-            <Text style={[styles.locationText, isRTL && styles.rtl]}>
-              {t.location}
-            </Text>
-          </View>
-        </Animated.View>
-
-        {/* ACTIVE TRIP DETAILS */}
-        {hasActiveTrip && (
-          <Animated.View 
-            style={[
-              styles.tripCard,
-              { opacity: fadeIn, transform: [{ translateY: slideUp }] }
-            ]}
-          >
-            <View style={[styles.tripHeader, isRTL && styles.tripHeaderRTL]}>
-              <View style={styles.tripIconBox}>
-                <MaterialIcons name="check-circle" size={20} color="#10B981" />
-              </View>
-              <View style={styles.tripHeaderText}>
-                <Text style={[styles.tripTitle, isRTL && styles.rtl]}>
-                  {language === 'ar' ? 'رحلتك المحجوزة' : 'Your Booked Trip'}
-                </Text>
-                <Text style={[styles.tripSubtitle, isRTL && styles.rtl]}>
-                  {language === 'ar' ? 'جاهز للانطلاق' : 'Ready to go'}
-                </Text>
-              </View>
-              <View style={styles.tripStatusBadge}>
-                <View style={styles.tripStatusDot} />
-                <Text style={styles.tripStatusText}>
-                  {language === 'ar' ? 'نشط' : 'Active'}
-                </Text>
-              </View>
+            <View style={styles.pendingInfoRow}>
+              <Text style={styles.pendingInfoLabel}>{t.endTime}</Text>
+              <Text style={styles.pendingInfoValue}>
+                {formatTime(
+                  pendingTripData?.booking?.end_time ||
+                    pendingTripData?.trip?.endTime,
+                )}
+              </Text>
             </View>
 
-            {/* Trip Info */}
-            <View style={styles.tripDetails}>
-              <View style={[styles.tripDetailRow, isRTL && styles.tripDetailRowRTL]}>
-                <MaterialIcons name="schedule" size={18} color="#3B82F6" />
-                <Text style={[styles.tripDetailLabel, isRTL && styles.rtl]}>
-                  {language === 'ar' ? 'وقت المغادرة' : 'Departure Time'}
-                </Text>
-                <Text style={[styles.tripDetailValue, isRTL && styles.rtl]}>
-                  {currentTripData?.leaveHomeTime ? formatTime(currentTripData.leaveHomeTime) : '--:--'}
-                </Text>
-              </View>
-
-              <View style={[styles.tripDetailRow, isRTL && styles.tripDetailRowRTL]}>
-                <MaterialIcons name="location-on" size={18} color="#F59E0B" />
-                <Text style={[styles.tripDetailLabel, isRTL && styles.rtl]}>
-                  {language === 'ar' ? 'نقطة الالتقاط' : 'Pickup Point'}
-                </Text>
-                <Text style={[styles.tripDetailValue, isRTL && styles.rtl]}>
-                  {currentTripData?.reachPickupTime ? formatTime(currentTripData.reachPickupTime) : '--:--'}
-                </Text>
-              </View>
-
-              <View style={[styles.tripDetailRow, isRTL && styles.tripDetailRowRTL]}>
-                <MaterialIcons name="school" size={18} color="#10B981" />
-                <Text style={[styles.tripDetailLabel, isRTL && styles.rtl]}>
-                  {language === 'ar' ? 'الوصول إلى المدرسة' : 'Arrive at School'}
-                </Text>
-                <Text style={[styles.tripDetailValue, isRTL && styles.rtl]}>
-                  {currentTripData?.arriveDestinationTime ? formatTime(currentTripData.arriveDestinationTime) : '--:--'}
-                </Text>
-              </View>
-            </View>
-
-            {/* Driver Info */}
-            <View style={styles.tripDriverSection}>
-              <View style={[styles.tripDriverRow, isRTL && styles.tripDriverRowRTL]}>
-                <View style={styles.driverAvatarSmall}>
-                  <MaterialIcons name="person" size={20} color="#FFF" />
-                </View>
-                <View style={styles.tripDriverInfo}>
-                  <Text style={[styles.tripDriverName, isRTL && styles.rtl]}>
-                    {currentTripData?.driverName || (language === 'ar' ? 'السائق' : 'Driver')}
-                  </Text>
-                  <Text style={[styles.tripVehicleInfo, isRTL && styles.rtl]}>
-                    {currentTripData?.vehicleInfo || (language === 'ar' ? 'المركبة' : 'Vehicle')}
-                  </Text>
-                </View>
-              </View>
-            </View>
-
-            {/* Actions */}
-            <View style={[styles.tripActions, isRTL && styles.tripActionsRTL]}>
+            <View style={styles.pendingActionsRow}>
               <TouchableOpacity
-                style={styles.trackButton}
-                onPress={handleViewLiveTrip}
-                activeOpacity={0.8}
+                style={[styles.pendingActionBtn, styles.pendingViewActionBtn]}
+                activeOpacity={0.85}
+                onPress={handleOpenPendingTrip}
+                disabled={isCancellingTrip}
               >
-                <LinearGradient
-                  colors={['#3B82F6', '#2563EB']}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.trackGradient}
-                >
-                  <MaterialIcons name="my-location" size={18} color="#FFF" />
-                  <Text style={[styles.trackButtonText, isRTL && styles.rtl]}>
-                    {language === 'ar' ? 'تتبع الرحلة' : 'Track Trip'}
-                  </Text>
-                </LinearGradient>
+                <Text style={styles.pendingActionText}>
+                  {t.viewPendingTrip}
+                </Text>
+                <MaterialIcons name="chevron-right" size={20} color="#FFFFFF" />
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={styles.cancelButton}
-                onPress={() => {
-                  setTripStatus('cancelled');
-                  setConfirmedTripData(null);
-                }}
-                activeOpacity={0.8}
+                style={[
+                  styles.pendingActionBtn,
+                  styles.pendingCancelActionBtn,
+                  isCancellingTrip && styles.pendingCancelActionBtnDisabled,
+                ]}
+                activeOpacity={0.85}
+                onPress={handleCancelPendingTrip}
+                disabled={isCancellingTrip}
               >
-                <MaterialIcons name="close" size={18} color="#EF4444" />
-                <Text style={[styles.cancelButtonText, isRTL && styles.rtl]}>
-                  {language === 'ar' ? 'إلغاء' : 'Cancel'}
+                {isCancellingTrip ? (
+                  <>
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <Text style={styles.pendingActionText}>
+                      {t.cancellingTrip}
+                    </Text>
+                  </>
+                ) : (
+                  <>
+                    <MaterialIcons name="close" size={18} color="#FFFFFF" />
+                    <Text style={styles.pendingActionText}>{t.cancelTrip}</Text>
+                  </>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      ) : (
+        <Animated.View style={[styles.mapStage, { opacity: contentFade }]}>
+          <View style={styles.mapContainer}>
+            {mapReady ? (
+              <MapboxRoutePreview
+                style={styles.map}
+                homeLocation={studentLocation}
+                destinationLocation={schoolLocation}
+                routeCoordinates={routeCoordinates}
+                interactive
+                showRoute
+                zoom={13}
+                studentLabel={t.studentLabel}
+                schoolLabel={t.schoolLabel}
+              />
+            ) : (
+              <View style={styles.mapLoadingFallback}>
+                <ActivityIndicator color={BLUE} />
+              </View>
+            )}
+
+            {isRouteLoading && (
+              <View style={styles.routeLoadingChip}>
+                <ActivityIndicator size="small" color={BLUE} />
+                <Text style={styles.routeLoadingText}>{t.routeLoading}</Text>
+              </View>
+            )}
+          </View>
+
+          <Animated.View
+            style={[
+              styles.bottomSheet,
+              {
+                height: sheetExpandedHeight,
+                transform: [{ translateY: sheetTranslate }],
+              },
+            ]}
+          >
+            <View style={styles.sheetHandleArea} {...panResponder.panHandlers}>
+              <View style={styles.sheetHandle} />
+              <Text style={styles.sheetTitle}>{t.studentRoute}</Text>
+            </View>
+
+            <View style={styles.sheetContent}>
+              <View style={styles.studentRow}>
+                <View style={styles.avatar}>
+                  <Text style={styles.avatarText}>{avatarText}</Text>
+                </View>
+                <View style={styles.studentInfo}>
+                  <Text style={styles.studentName} numberOfLines={1}>
+                    {studentName || t.defaultStudentName}
+                  </Text>
+                  <Text style={styles.schoolName} numberOfLines={1}>
+                    {schoolName || t.defaultSchoolName}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.timeRow}>
+                <TouchableOpacity
+                  style={styles.timeCard}
+                  activeOpacity={0.75}
+                  onPress={() => setShowStartTimePicker(true)}
+                >
+                  <View style={styles.timeCardHeader}>
+                    <MaterialIcons
+                      name="play-circle-outline"
+                      size={16}
+                      color={BLUE}
+                    />
+                    <Text style={styles.timeCardLabel}>{t.startTime}</Text>
+                  </View>
+                  <Text style={styles.timeCardValue}>
+                    {startTime ? formatTime(startTime) : t.selectTime}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  style={styles.timeCard}
+                  activeOpacity={0.75}
+                  onPress={() => setShowEndTimePicker(true)}
+                >
+                  <View style={styles.timeCardHeader}>
+                    <MaterialIcons name="stop-circle" size={16} color={BLUE} />
+                    <Text style={styles.timeCardLabel}>{t.endTime}</Text>
+                  </View>
+                  <Text style={styles.timeCardValue}>
+                    {endTime ? formatTime(endTime) : t.selectTime}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {showStartTimePicker && (
+                <DateTimePicker
+                  value={startTime || new Date()}
+                  mode="time"
+                  is24Hour
+                  display="default"
+                  onChange={(event, selectedTime) => {
+                    setShowStartTimePicker(false);
+                    if (
+                      selectedTime &&
+                      (event?.type === "set" || event?.type === undefined)
+                    ) {
+                      setStartTime(selectedTime);
+                    }
+                  }}
+                />
+              )}
+
+              {showEndTimePicker && (
+                <DateTimePicker
+                  value={
+                    endTime || (startTime ? new Date(startTime) : new Date())
+                  }
+                  mode="time"
+                  is24Hour
+                  display="default"
+                  onChange={(event, selectedTime) => {
+                    setShowEndTimePicker(false);
+                    if (
+                      selectedTime &&
+                      (event?.type === "set" || event?.type === undefined)
+                    ) {
+                      setEndTime(selectedTime);
+                    }
+                  }}
+                />
+              )}
+
+              {!!locationHint && (
+                <Text style={styles.locationHint} numberOfLines={2}>
+                  {locationHint}
                 </Text>
+              )}
+
+              {!!groupingHint && (
+                <Text style={styles.locationHint} numberOfLines={2}>
+                  {groupingHint}
+                </Text>
+              )}
+
+              <TouchableOpacity
+                style={styles.ctaButton}
+                onPress={handleViewDetails}
+                activeOpacity={0.85}
+                disabled={!canViewDetails}
+              >
+                {isPreparingTrip ? (
+                  <>
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                    <Text style={styles.ctaButtonText}>{t.preparingTrip}</Text>
+                  </>
+                ) : (
+                  <>
+                    <Text style={styles.ctaButtonText}>{t.viewDetails}</Text>
+                    <MaterialIcons
+                      name="chevron-right"
+                      size={20}
+                      color="#FFFFFF"
+                    />
+                  </>
+                )}
               </TouchableOpacity>
             </View>
           </Animated.View>
-        )}
-
-        {/* TIME INPUTS - Clean Minimal (Hidden when trip is active) */}
-        {!hasActiveTrip && (
-          <Animated.View 
-            style={[
-              styles.timesSection,
-              { opacity: fadeIn, transform: [{ translateY: slideUp }] }
-            ]}
-          >
-          {/* Departure Time */}
-          <View style={styles.timeCard}>
-            <View style={[styles.timeHeader, isRTL && styles.timeHeaderRTL]}>
-              <View style={[styles.timeIconBox, { backgroundColor: 'rgba(59, 130, 246, 0.1)' }]}>
-                <MaterialIcons name="login" size={16} color="#3B82F6" />
-              </View>
-              <View style={styles.timeInfo}>
-                <Text style={[styles.timeLabel, isRTL && styles.rtl]}>
-                  {t.schoolEntryTime}
-                </Text>
-                <Text style={[styles.timeHint, isRTL && styles.rtl]}>
-                  {t.schoolEntryHint}
-                </Text>
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={[
-                styles.timeField,
-                schoolEntryTime && styles.timeFieldActive
-              ]}
-              onPress={() => setShowTimePicker(true)}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons 
-                name="schedule" 
-                size={18} 
-                color={schoolEntryTime ? '#3B82F6' : '#D1D5DB'}
-              />
-              <Text style={[
-                styles.timeValue,
-                !schoolEntryTime && styles.timePlaceholder,
-                isRTL && styles.rtl
-              ]}>
-                {schoolEntryTime ? formatTime(schoolEntryTime) : '08:00'}
-              </Text>
-            </TouchableOpacity>
-
-            {showTimePicker && (
-              <DateTimePicker
-                value={schoolEntryTime || new Date()}
-                mode="time"
-                is24Hour={true}
-                display="default"
-                onChange={(event, selectedTime) => {
-                  setShowTimePicker(false);
-                  if (selectedTime) {
-                    setSchoolEntryTime(selectedTime);
-                  }
-                }}
-              />
-            )}
-          </View>
-
-          {/* Return Time */}
-          <View style={styles.timeCard}>
-            <View style={[styles.timeHeader, isRTL && styles.timeHeaderRTL]}>
-              <View style={[styles.timeIconBox, { backgroundColor: 'rgba(16, 185, 129, 0.1)' }]}>
-                <MaterialIcons name="logout" size={16} color="#10B981" />
-              </View>
-              <View style={styles.timeInfo}>
-                <Text style={[styles.timeLabel, isRTL && styles.rtl]}>
-                  {t.schoolExitTime}
-                </Text>
-                <Text style={[styles.timeHint, isRTL && styles.rtl]}>
-                  {t.schoolExitHint}
-                </Text>
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={[
-                styles.timeField,
-                schoolExitTime && styles.timeFieldActive
-              ]}
-              onPress={() => setShowExitTimePicker(true)}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons 
-                name="schedule" 
-                size={18} 
-                color={schoolExitTime ? '#10B981' : '#D1D5DB'}
-              />
-              <Text style={[
-                styles.timeValue,
-                !schoolExitTime && styles.timePlaceholder,
-                isRTL && styles.rtl
-              ]}>
-                {schoolExitTime ? formatTime(schoolExitTime) : '16:00'}
-              </Text>
-            </TouchableOpacity>
-
-            {showExitTimePicker && (
-              <DateTimePicker
-                value={schoolExitTime || new Date()}
-                mode="time"
-                is24Hour={true}
-                display="default"
-                onChange={(event, selectedTime) => {
-                  setShowExitTimePicker(false);
-                  if (selectedTime) {
-                    setSchoolExitTime(selectedTime);
-                  }
-                }}
-              />
-            )}
-          </View>
         </Animated.View>
-        )}
+      )}
 
-        {/* CONFIRM BUTTON - Clean CTA (Hidden when trip is active) */}
-        {!hasActiveTrip && (
-          <Animated.View style={{ opacity: fadeIn, transform: [{ translateY: slideUp }] }}>
-            <TouchableOpacity
-              style={[
-                styles.bookButton,
-                !schoolEntryTime && styles.bookButtonDisabled
-              ]}
-              onPress={handleConfirmBooking}
-              disabled={!schoolEntryTime}
-              activeOpacity={0.8}
-            >
-            <LinearGradient
-              colors={schoolEntryTime ? ['#3B82F6', '#2563EB'] : ['#E5E7EB', '#D1D5DB']}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 0 }}
-              style={styles.bookGradient}
-            >
-              <MaterialIcons 
-                name="check-circle" 
-                size={20} 
-                color={schoolEntryTime ? "#FFF" : "#9CA3AF"} 
-              />
-              <Text style={[
-                styles.bookText,
-                !schoolEntryTime && styles.bookTextDisabled,
-                isRTL && styles.rtl
-              ]}>
-                {t.confirmBooking}
-              </Text>
-            </LinearGradient>
-          </TouchableOpacity>
-        </Animated.View>
-        )}
-      </ScrollView>
-
-      {/* Booking Modal */}
-      <BookingModal
-        visible={showBookingModal}
-        onClose={() => setShowBookingModal(false)}
-        studentId={studentId}
-        language={language}
-        onBookingSuccess={handleBookingSuccess}
-        isDemo={isDemo}
-        schoolEntryTime={schoolEntryTime}
-        schoolExitTime={schoolExitTime}
-      />
-
-      {/* Trip Started Notification */}
-      <TripNotification
-        visible={showNotification}
-        driverName={currentTripData?.driverName || (language === 'ar' ? 'أحمد محمود' : 'Ahmed Mahmoud')}
-        vehicleInfo={currentTripData?.vehicleInfo || ''}
-        onViewTrip={handleViewLiveTrip}
-        onDismiss={handleDismissNotification}
-        language={language}
-      />
+      {isPreparingTrip && !hasPendingTrip && (
+        <View style={styles.fullscreenLoader}>
+          <ActivityIndicator size="large" color={BLUE} />
+          <Text style={styles.fullscreenLoaderText}>{t.preparingTrip}</Text>
+        </View>
+      )}
     </SafeAreaView>
   );
 };
@@ -799,468 +944,284 @@ const StudentHomeScreen = ({ studentId, isDemo = false, language = 'ar', onNavig
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F8FAFC',
+    backgroundColor: "#FFFFFF",
   },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    padding: 20,
-    paddingBottom: 40,
-  },
-
-  // Header
-  header: {
-    marginBottom: 24,
-  },
-  headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  headerContentRTL: {
-    flexDirection: 'row-reverse',
-  },
-  logoCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#3B82F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#3B82F6',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  headerText: {
-    flex: 1,
-  },
-  title: {
-    fontSize: 22,
-    fontWeight: '700',
-    color: '#1E293B',
-    fontFamily: UbuntuFonts.bold,
-    letterSpacing: -0.5,
-  },
-  tagline: {
-    fontSize: 13,
-    color: '#64748B',
-    marginTop: 2,
-    fontFamily: UbuntuFonts.regular,
-  },
-
-  // Map Card
-  mapCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  cardHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  cardHeaderRTL: {
-    flexDirection: 'row-reverse',
-  },
-  cardTitleBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  pendingLoaderWrap: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
+    paddingVertical: 10,
   },
-  iconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    backgroundColor: 'rgba(59, 130, 246, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  cardTitle: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#1E293B',
-    fontFamily: UbuntuFonts.semiBold,
-  },
-  badge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    borderRadius: 8,
-  },
-  badgeDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: '#10B981',
-  },
-  badgeText: {
+  pendingLoaderText: {
+    color: "#475569",
+    fontFamily: UbuntuFonts.medium,
     fontSize: 12,
-    fontWeight: '600',
-    color: '#059669',
-    fontFamily: UbuntuFonts.semiBold,
   },
-  mapWrapper: {
-    height: 180,
-    borderRadius: 12,
-    overflow: 'hidden',
-    backgroundColor: '#F1F5F9',
+  pendingOnlyContainer: {
+    flex: 1,
+    padding: 16,
+    justifyContent: "center",
+  },
+  pendingCard: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 18,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#DBEAFE",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: Platform.OS === "ios" ? 0.08 : 0,
+    shadowRadius: 10,
+    elevation: 5,
+  },
+  pendingHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 10,
+  },
+  pendingBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#EFF6FF",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  pendingDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+    backgroundColor: "#10B981",
+  },
+  pendingBadgeText: {
+    color: "#1E3A8A",
+    fontFamily: UbuntuFonts.semiBold,
+    fontSize: 12,
+  },
+  pendingSchoolName: {
+    color: "#0F172A",
+    fontFamily: UbuntuFonts.bold,
+    fontSize: 18,
     marginBottom: 12,
+  },
+  pendingInfoRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: "#EEF2FF",
+  },
+  pendingInfoLabel: {
+    color: "#64748B",
+    fontFamily: UbuntuFonts.medium,
+    fontSize: 13,
+  },
+  pendingInfoValue: {
+    color: "#0F172A",
+    fontFamily: UbuntuFonts.semiBold,
+    fontSize: 13,
+  },
+  pendingActionBtn: {
+    backgroundColor: BLUE,
+    borderRadius: 12,
+    paddingVertical: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+  },
+  pendingActionText: {
+    color: "#FFFFFF",
+    fontFamily: UbuntuFonts.semiBold,
+    fontSize: 14,
+  },
+  pendingActionsRow: {
+    marginTop: 16,
+    gap: 10,
+  },
+  pendingViewActionBtn: {
+    backgroundColor: BLUE,
+  },
+  pendingCancelActionBtn: {
+    backgroundColor: "#DC2626",
+  },
+  pendingCancelActionBtnDisabled: {
+    opacity: 0.7,
+  },
+  mapStage: {
+    flex: 1,
+    position: "relative",
+  },
+  mapContainer: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "#DCEAFE",
   },
   map: {
     flex: 1,
   },
-  locationInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 8,
+  mapLoadingFallback: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  locationInfoRTL: {
-    flexDirection: 'row-reverse',
+  routeLoadingChip: {
+    position: "absolute",
+    top: 14,
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(255,255,255,0.92)",
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 16,
   },
-  locationText: {
+  routeLoadingText: {
     fontSize: 12,
-    color: '#059669',
-    fontWeight: '500',
+    color: "#1E3A8A",
     fontFamily: UbuntuFonts.medium,
   },
-
-  // Markers
-  marker: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderWidth: 2,
-    borderColor: '#FFF',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 3,
-    elevation: 4,
+  bottomSheet: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    borderTopWidth: 1,
+    borderTopColor: "#DBEAFE",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: Platform.OS === "ios" ? 0.14 : 0,
+    shadowRadius: 12,
+    elevation: 12,
   },
-  homeMarker: {
-    backgroundColor: '#6366F1',
+  sheetHandleArea: {
+    alignItems: "center",
+    paddingTop: 10,
+    paddingBottom: 10,
   },
-  busMarkerWrapper: {
-    alignItems: 'center',
-    justifyContent: 'center',
+  sheetHandle: {
+    width: 46,
+    height: 5,
+    borderRadius: 4,
+    backgroundColor: "#BFDBFE",
+    marginBottom: 8,
   },
-  busMarkerPulse: {
-    position: 'absolute',
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: 'rgba(59, 130, 246, 0.2)',
+  sheetTitle: {
+    color: "#1E40AF",
+    fontFamily: UbuntuFonts.semiBold,
+    fontSize: 14,
   },
-  busMarker: {
-    backgroundColor: '#3B82F6',
+  sheetContent: {
+    flex: 1,
+    paddingHorizontal: 18,
+    paddingBottom: 14,
   },
-  schoolMarker: {
-    backgroundColor: '#F59E0B',
+  studentRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 14,
   },
-
-  // Time Section
-  timesSection: {
-    gap: 16,
-    marginBottom: 24,
+  avatar: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: LIGHT_BLUE,
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+  },
+  avatarText: {
+    color: BLUE,
+    fontFamily: UbuntuFonts.bold,
+    fontSize: 16,
+  },
+  studentInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  studentName: {
+    color: "#0F172A",
+    fontFamily: UbuntuFonts.semiBold,
+    fontSize: 15,
+    marginBottom: 2,
+  },
+  schoolName: {
+    color: "#475569",
+    fontFamily: UbuntuFonts.medium,
+    fontSize: 13,
+  },
+  timeRow: {
+    flexDirection: "column",
+    gap: 8,
+    marginBottom: 12,
   },
   timeCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 12,
-    padding: 14,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    backgroundColor: "#F8FBFF",
+    borderRadius: 14,
+    borderWidth: 1,
+    borderColor: "#DBEAFE",
+    paddingVertical: 10,
+    paddingHorizontal: 10,
   },
-  timeHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 10,
+  timeCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginBottom: 4,
+  },
+  timeCardLabel: {
+    color: "#64748B",
+    fontFamily: UbuntuFonts.medium,
+    fontSize: 12,
+  },
+  timeCardValue: {
+    color: "#1E3A8A",
+    fontFamily: UbuntuFonts.semiBold,
+    fontSize: 14,
+  },
+  locationHint: {
+    color: "#475569",
+    fontFamily: UbuntuFonts.regular,
+    fontSize: 12,
     marginBottom: 10,
   },
-  timeHeaderRTL: {
-    flexDirection: 'row-reverse',
+  ctaButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    backgroundColor: BLUE,
+    borderRadius: 14,
+    paddingVertical: 12,
+    opacity: 1,
   },
-  timeIconBox: {
-    width: 32,
-    height: 32,
-    borderRadius: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  timeInfo: {
-    flex: 1,
-  },
-  timeLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1E293B',
+  ctaButtonText: {
+    color: "#FFFFFF",
     fontFamily: UbuntuFonts.semiBold,
-    marginBottom: 2,
+    fontSize: 15,
   },
-  timeHint: {
-    fontSize: 11,
-    color: '#94A3B8',
-    fontFamily: UbuntuFonts.regular,
-  },
-  timeField: {
-    flexDirection: 'row',
-    alignItems: 'center',
+  fullscreenLoader: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: "rgba(255,255,255,0.82)",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 100,
     gap: 10,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    backgroundColor: '#F8FAFC',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
   },
-  timeFieldActive: {
-    borderColor: '#3B82F6',
-    backgroundColor: 'rgba(59, 130, 246, 0.05)',
-  },
-  timeValue: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#1E293B',
+  fullscreenLoaderText: {
+    color: "#1E3A8A",
     fontFamily: UbuntuFonts.semiBold,
-  },
-  timePlaceholder: {
-    color: '#CBD5E1',
-    fontWeight: '400',
-  },
-
-  // Book Button
-  bookButton: {
-    borderRadius: 12,
-    overflow: 'hidden',
-    shadowColor: '#3B82F6',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  bookButtonDisabled: {
-    shadowOpacity: 0,
-    elevation: 0,
-  },
-  bookGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 15,
-    gap: 8,
-  },
-  bookText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#FFF',
-    fontFamily: UbuntuFonts.semiBold,
-  },
-  bookTextDisabled: {
-    color: '#9CA3AF',
-  },
-
-  // Trip Details Card
-  tripCard: {
-    backgroundColor: '#FFF',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 4,
-    borderWidth: 1,
-    borderColor: '#E2E8F0',
-  },
-  tripHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 20,
-    gap: 12,
-  },
-  tripHeaderRTL: {
-    flexDirection: 'row-reverse',
-  },
-  tripIconBox: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tripHeaderText: {
-    flex: 1,
-  },
-  tripTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1E293B',
-    fontFamily: UbuntuFonts.bold,
-    marginBottom: 2,
-  },
-  tripSubtitle: {
-    fontSize: 13,
-    color: '#64748B',
-    fontFamily: UbuntuFonts.regular,
-  },
-  tripStatusBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    backgroundColor: 'rgba(16, 185, 129, 0.1)',
-    borderRadius: 12,
-  },
-  tripStatusDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: '#10B981',
-  },
-  tripStatusText: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#059669',
-    fontFamily: UbuntuFonts.semiBold,
-  },
-  tripDetails: {
-    gap: 14,
-    marginBottom: 20,
-    paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  tripDetailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  tripDetailRowRTL: {
-    flexDirection: 'row-reverse',
-  },
-  tripDetailLabel: {
-    flex: 1,
     fontSize: 14,
-    color: '#64748B',
-    fontFamily: UbuntuFonts.medium,
-  },
-  tripDetailValue: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#1E293B',
-    fontFamily: UbuntuFonts.semiBold,
-  },
-  tripDriverSection: {
-    marginBottom: 20,
-    paddingBottom: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: '#E2E8F0',
-  },
-  tripDriverRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-  },
-  tripDriverRowRTL: {
-    flexDirection: 'row-reverse',
-  },
-  driverAvatarSmall: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: '#3B82F6',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  tripDriverInfo: {
-    flex: 1,
-  },
-  tripDriverName: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#1E293B',
-    fontFamily: UbuntuFonts.semiBold,
-    marginBottom: 2,
-  },
-  tripVehicleInfo: {
-    fontSize: 13,
-    color: '#64748B',
-    fontFamily: UbuntuFonts.regular,
-  },
-  tripActions: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  tripActionsRTL: {
-    flexDirection: 'row-reverse',
-  },
-  trackButton: {
-    flex: 1,
-    borderRadius: 12,
-    overflow: 'hidden',
-    shadowColor: '#3B82F6',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 4,
-  },
-  trackGradient: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    gap: 8,
-  },
-  trackButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#FFF',
-    fontFamily: UbuntuFonts.semiBold,
-  },
-  cancelButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 14,
-    gap: 8,
-    backgroundColor: '#FEF2F2',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#FEE2E2',
-  },
-  cancelButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: '#EF4444',
-    fontFamily: UbuntuFonts.semiBold,
-  },
-
-  // RTL
-  rtl: {
-    textAlign: 'right',
   },
 });
 

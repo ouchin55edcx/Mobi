@@ -1,9 +1,21 @@
 import { supabase } from '../lib/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /**
  * Driver Service
  * Handles all Supabase operations for drivers
  */
+
+/**
+ * Generate a simple UUID for offline mode
+ */
+const generateUUID = () => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
 
 /**
  * Create a new driver
@@ -31,14 +43,41 @@ export const createDriver = async (driverData) => {
       .single();
 
     if (error) {
-      console.error('Error creating driver:', error);
-      return { data: null, error };
+      console.warn('Supabase not available, creating driver locally');
+
+      const localDriver = {
+        id: generateUUID(),
+        fullname: driverData.fullname,
+        phone: driverData.phone,
+        email: driverData.email,
+        cin: driverData.cin.toUpperCase(),
+        status: 'PENDING',
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+
+      await AsyncStorage.setItem(`driver_${localDriver.id}`, JSON.stringify(localDriver));
+      await AsyncStorage.setItem(`driver_email_${driverData.email}`, localDriver.id);
+
+      return { data: localDriver, error: null };
     }
 
     return { data, error: null };
   } catch (error) {
-    console.error('Exception creating driver:', error);
-    return { data: null, error };
+    console.warn('Exception creating driver, saving locally:', error);
+    const localDriver = {
+      id: generateUUID(),
+      fullname: driverData.fullname,
+      phone: driverData.phone,
+      email: driverData.email,
+      cin: driverData.cin.toUpperCase(),
+      status: 'PENDING',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    await AsyncStorage.setItem(`driver_${localDriver.id}`, JSON.stringify(localDriver));
+    await AsyncStorage.setItem(`driver_email_${driverData.email}`, localDriver.id);
+    return { data: localDriver, error: null };
   }
 };
 
@@ -56,13 +95,16 @@ export const getDriverById = async (driverId) => {
       .single();
 
     if (error) {
-      console.error('Error fetching driver:', error);
+      console.warn('Supabase not available, fetching driver locally');
+      const d = await AsyncStorage.getItem(`driver_${driverId}`);
+      if (d) return { data: JSON.parse(d), error: null };
       return { data: null, error };
     }
 
     return { data, error: null };
   } catch (error) {
-    console.error('Exception fetching driver:', error);
+    const d = await AsyncStorage.getItem(`driver_${driverId}`);
+    if (d) return { data: JSON.parse(d), error: null };
     return { data: null, error };
   }
 };
@@ -83,14 +125,54 @@ export const updateDriverStatus = async (driverId, status) => {
       .single();
 
     if (error) {
-      console.error('Error updating driver status:', error);
+      const d = await AsyncStorage.getItem(`driver_${driverId}`);
+      if (d) {
+        const driver = JSON.parse(d);
+        const updatedDriver = { ...driver, status, updated_at: new Date().toISOString() };
+        await AsyncStorage.setItem(`driver_${driverId}`, JSON.stringify(updatedDriver));
+        return { data: updatedDriver, error: null };
+      }
       return { data: null, error };
     }
 
     return { data, error: null };
   } catch (error) {
-    console.error('Exception updating driver status:', error);
     return { data: null, error };
   }
 };
+
+/**
+ * Get driver by email
+ * @param {string} email - Driver email
+ * @returns {Promise<Object>} - Result object with data and error
+ */
+export const getDriverByEmail = async (email) => {
+  try {
+    const { data, error } = await supabase
+      .from('drivers')
+      .select('*')
+      .eq('email', email)
+      .single();
+
+    if (error) {
+      console.warn('Supabase not available, fetching driver locally by email');
+      const id = await AsyncStorage.getItem(`driver_email_${email}`);
+      if (id) {
+        const d = await AsyncStorage.getItem(`driver_${id}`);
+        if (d) return { data: JSON.parse(d), error: null };
+      }
+      return { data: null, error };
+    }
+
+    return { data, error: null };
+  } catch (error) {
+    const id = await AsyncStorage.getItem(`driver_email_${email}`);
+    if (id) {
+      const d = await AsyncStorage.getItem(`driver_${id}`);
+      if (d) return { data: JSON.parse(d), error: null };
+    }
+    return { data: null, error };
+  }
+};
+
 

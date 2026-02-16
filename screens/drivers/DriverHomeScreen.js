@@ -1,5 +1,5 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { Animated, Linking } from 'react-native';
+import React, { useState, useCallback, useEffect, useRef } from "react";
+import { Animated, Linking } from "react-native";
 import {
   View,
   Text,
@@ -7,45 +7,49 @@ import {
   TouchableOpacity,
   Platform,
   Dimensions,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
-import { MaterialIcons } from '@expo/vector-icons';
-import { LinearGradient } from 'expo-linear-gradient';
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
-import DriverNotificationsModal from '../../components/DriverNotificationsModal';
-import { UbuntuFonts } from '../../src/utils/fonts';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
+import { MaterialIcons } from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
+import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
+import DriverNotificationsModal from "../../components/DriverNotificationsModal";
+import { UbuntuFonts } from "../../src/utils/fonts";
 import mockDriverScenario, {
   mockTrip,
   mockAvailability,
   mockNotifications,
   mockDriver,
-} from '../../src/mock/mockDriverData';
+} from "../../src/mock/mockDriverData";
+import {
+  getDriverAssignedTrips,
+  buildAndPersistTripRoute,
+} from "../../src/services/groupingService";
 
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get('window');
+const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
 const translations = {
   en: {
-    availableTrips: 'Available Trips',
-    students: 'students',
-    student: 'student',
-    startNow: 'Start Now',
-    skipToProfile: 'Go to Profile',
-    back: 'Back',
+    availableTrips: "Available Trips",
+    students: "students",
+    student: "student",
+    startNow: "Start Now",
+    skipToProfile: "Go to Profile",
+    back: "Back",
   },
   ar: {
-    availableTrips: 'الرحلات المتاحة',
-    students: 'طلاب',
-    student: 'طالب',
-    startNow: 'إبدأ الان',
-    skipToProfile: 'الذهاب إلى الملف الشخصي',
-    back: 'رجوع',
+    availableTrips: "الرحلات المتاحة",
+    students: "طلاب",
+    student: "طالب",
+    startNow: "إبدأ الان",
+    skipToProfile: "الذهاب إلى الملف الشخصي",
+    back: "رجوع",
   },
 };
 
 const DriverHomeScreen = ({
   driverId,
-  language = 'en',
+  language = "en",
   isDemo = false,
   onTripPress,
   onBack,
@@ -57,7 +61,7 @@ const DriverHomeScreen = ({
   const [loading, setLoading] = useState(false);
   const [notifications] = useState(mockNotifications);
   const [unreadCount] = useState(
-    mockNotifications.filter((n) => !n.read).length || 0
+    mockNotifications.filter((n) => !n.read).length || 0,
   );
 
   // Animations
@@ -68,16 +72,44 @@ const DriverHomeScreen = ({
 
   const checkmarkRotateInterpolate = checkmarkRotation.interpolate({
     inputRange: [0, 1],
-    outputRange: ['0deg', '360deg'],
+    outputRange: ["0deg", "360deg"],
   });
 
   const t = translations[language];
-  const isRTL = language === 'ar';
+  const isRTL = language === "ar";
 
   useEffect(() => {
-    const dataTrip = trip || mockTrip;
-    setAssignedTrip(dataTrip);
-    setLoading(false);
+    const loadAssignedTrip = async () => {
+      if (trip) {
+        setAssignedTrip(trip);
+        setLoading(false);
+        return;
+      }
+
+      if (isDemo) {
+        setAssignedTrip(mockTrip);
+        setLoading(false);
+        return;
+      }
+
+      setLoading(true);
+      const { data } = await getDriverAssignedTrips(driverId);
+      const firstTrip = data?.[0] || null;
+
+      if (
+        firstTrip?.id &&
+        (!firstTrip.routeCoordinates || firstTrip.routeCoordinates.length === 0)
+      ) {
+        const routed = await buildAndPersistTripRoute({ tripId: firstTrip.id });
+        setAssignedTrip(routed.data || firstTrip);
+      } else {
+        setAssignedTrip(firstTrip);
+      }
+
+      setLoading(false);
+    };
+
+    loadAssignedTrip();
 
     // Trigger card entrance animation
     Animated.parallel([
@@ -92,7 +124,7 @@ const DriverHomeScreen = ({
         useNativeDriver: true,
       }),
     ]).start();
-  }, [trip, cardSlideUp, cardOpacity]);
+  }, [trip, isDemo, driverId, cardSlideUp, cardOpacity]);
 
   const handleStartTrip = useCallback(() => {
     Animated.parallel([
@@ -135,19 +167,20 @@ const DriverHomeScreen = ({
     return null;
   }
 
-  const studentCount = assignedTrip.students?.length || assignedTrip.studentCount || 0;
-  const pickupCity = assignedTrip.pickupLocation?.city || 'Pickup';
-  const destination = assignedTrip.destination || 'School';
-  const startTime = assignedTrip.timeSlot?.split(' - ')[0] || '07:15';
-  const endTime = assignedTrip.timeSlot?.split(' - ')[1] || '08:15';
+  const studentCount =
+    assignedTrip.students?.length || assignedTrip.studentCount || 0;
+  const pickupCity = assignedTrip.pickupLocation?.city || "Pickup";
+  const destination = assignedTrip.destination || "School";
+  const startTime = assignedTrip.timeSlot?.split(" - ")[0] || "07:15";
+  const endTime = assignedTrip.timeSlot?.split(" - ")[1] || "08:15";
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <StatusBar style="light" />
 
       {/* ========== FIXED HEADER AT TOP ========== */}
       <LinearGradient
-        colors={['#326cde', '#2557c4']}
+        colors={["#326cde", "#2557c4"]}
         start={{ x: 0, y: 0 }}
         end={{ x: 1, y: 1 }}
         style={styles.fixedHeader}
@@ -162,7 +195,7 @@ const DriverHomeScreen = ({
                 activeOpacity={0.7}
               >
                 <MaterialIcons
-                  name={isRTL ? 'arrow-forward' : 'arrow-back'}
+                  name={isRTL ? "arrow-forward" : "arrow-back"}
                   size={24}
                   color="#FFFFFF"
                 />
@@ -173,7 +206,7 @@ const DriverHomeScreen = ({
                 {t.availableTrips}
               </Text>
               <Text style={[styles.headerSubtitle, isRTL && styles.rtl]}>
-                {language === 'ar' ? 'اليوم' : 'Today'}
+                {language === "ar" ? "اليوم" : "Today"}
               </Text>
             </View>
           </View>
@@ -185,11 +218,15 @@ const DriverHomeScreen = ({
             activeOpacity={0.8}
           >
             <View style={styles.notificationIconContainer}>
-              <MaterialIcons name="notifications-active" size={24} color="#FFFFFF" />
+              <MaterialIcons
+                name="notifications-active"
+                size={24}
+                color="#FFFFFF"
+              />
               {unreadCount > 0 && (
                 <View style={styles.notificationBadge}>
                   <Text style={styles.notificationBadgeText}>
-                    {unreadCount > 9 ? '9+' : unreadCount}
+                    {unreadCount > 9 ? "9+" : unreadCount}
                   </Text>
                 </View>
               )}
@@ -198,11 +235,16 @@ const DriverHomeScreen = ({
         </View>
 
         {/* Status Indicator Pill */}
-        <View style={[styles.statusPillContainer, isRTL && styles.statusPillContainerRTL]}>
+        <View
+          style={[
+            styles.statusPillContainer,
+            isRTL && styles.statusPillContainerRTL,
+          ]}
+        >
           <View style={styles.statusPill}>
             <View style={styles.statusDot} />
             <Text style={[styles.statusText, isRTL && styles.rtl]}>
-              {language === 'ar' ? 'متاح' : 'Available'}
+              {language === "ar" ? "متاح" : "Available"}
             </Text>
           </View>
         </View>
@@ -210,7 +252,7 @@ const DriverHomeScreen = ({
 
       {/* ========== MAP VIEW ========== */}
       <MapView
-        provider={Platform.OS === 'android' ? PROVIDER_GOOGLE : undefined}
+        provider={Platform.OS === "android" ? PROVIDER_GOOGLE : undefined}
         style={styles.map}
         initialRegion={{
           latitude:
@@ -271,7 +313,10 @@ const DriverHomeScreen = ({
           {/* Pickup Location */}
           <View style={styles.pickupLocationBox}>
             <MaterialIcons name="location-on" size={14} color="#3B82F6" />
-            <Text style={[styles.locationText, isRTL && styles.rtl]} numberOfLines={1}>
+            <Text
+              style={[styles.locationText, isRTL && styles.rtl]}
+              numberOfLines={1}
+            >
               {pickupCity}
             </Text>
           </View>
@@ -282,31 +327,39 @@ const DriverHomeScreen = ({
           {/* Destination */}
           <View style={styles.destinationLocationBox}>
             <MaterialIcons name="school" size={14} color="#10B981" />
-            <Text style={[styles.locationText, isRTL && styles.rtl]} numberOfLines={1}>
+            <Text
+              style={[styles.locationText, isRTL && styles.rtl]}
+              numberOfLines={1}
+            >
               {destination}
             </Text>
           </View>
 
           {/* End Time */}
-          <Text style={[styles.timeText, isRTL && styles.rtl]}>
-            {endTime}
-          </Text>
+          <Text style={[styles.timeText, isRTL && styles.rtl]}>{endTime}</Text>
         </View>
 
         {/* Student Count - Below Route */}
-        <View style={[styles.studentCountContainer, isRTL && styles.studentCountContainerRTL]}>
+        <View
+          style={[
+            styles.studentCountContainer,
+            isRTL && styles.studentCountContainerRTL,
+          ]}
+        >
           <View style={styles.avatarStack}>
-            {Array.from({ length: Math.min(studentCount, 3) }).map((_, index) => (
-              <View
-                key={index}
-                style={[
-                  styles.avatar,
-                  { marginLeft: index > 0 ? -10 : 0, zIndex: 10 - index },
-                ]}
-              >
-                <MaterialIcons name="person" size={12} color="#FFFFFF" />
-              </View>
-            ))}
+            {Array.from({ length: Math.min(studentCount, 3) }).map(
+              (_, index) => (
+                <View
+                  key={index}
+                  style={[
+                    styles.avatar,
+                    { marginLeft: index > 0 ? -10 : 0, zIndex: 10 - index },
+                  ]}
+                >
+                  <MaterialIcons name="person" size={12} color="#FFFFFF" />
+                </View>
+              ),
+            )}
             {studentCount > 3 && (
               <View style={[styles.avatar, styles.avatarMore, { zIndex: 7 }]}>
                 <Text style={styles.avatarMoreText}>+{studentCount - 3}</Text>
@@ -321,7 +374,9 @@ const DriverHomeScreen = ({
       </Animated.View>
 
       {/* ========== BUTTONS CONTAINER ========== */}
-      <View style={[styles.buttonsContainer, isRTL && styles.buttonsContainerRTL]}>
+      <View
+        style={[styles.buttonsContainer, isRTL && styles.buttonsContainerRTL]}
+      >
         {/* Start Now Button - Primary CTA */}
         <TouchableOpacity
           style={styles.primaryButton}
@@ -359,7 +414,7 @@ const DriverHomeScreen = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: "#F3F4F6",
   },
 
   // ========== FIXED HEADER AT TOP ==========
@@ -369,7 +424,7 @@ const styles = StyleSheet.create({
     paddingBottom: 20,
     borderBottomLeftRadius: 24,
     borderBottomRightRadius: 24,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.25,
     shadowRadius: 12,
@@ -378,41 +433,41 @@ const styles = StyleSheet.create({
     marginTop: -44,
   },
   headerContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     marginBottom: 14,
   },
   headerLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     flex: 1,
     gap: 14,
   },
   headerLeftRTL: {
-    flexDirection: 'row-reverse',
+    flexDirection: "row-reverse",
   },
   backBtn: {
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   headerTitleContainer: {
     flex: 1,
   },
   headerTitle: {
     fontSize: 22,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontWeight: "700",
+    color: "#FFFFFF",
     fontFamily: UbuntuFonts.bold,
     letterSpacing: -0.5,
   },
   headerSubtitle: {
     fontSize: 13,
-    color: 'rgba(255, 255, 255, 0.75)',
+    color: "rgba(255, 255, 255, 0.75)",
     marginTop: 3,
     fontFamily: UbuntuFonts.regular,
   },
@@ -420,98 +475,98 @@ const styles = StyleSheet.create({
     width: 46,
     height: 46,
     borderRadius: 23,
-    backgroundColor: 'rgba(255, 255, 255, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   notificationIconContainer: {
-    position: 'relative',
+    position: "relative",
   },
   notificationBadge: {
-    position: 'absolute',
+    position: "absolute",
     top: -6,
     right: -6,
-    backgroundColor: '#EF4444',
+    backgroundColor: "#EF4444",
     minWidth: 20,
     height: 20,
     borderRadius: 10,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     paddingHorizontal: 5,
     borderWidth: 2,
-    borderColor: '#1F2937',
+    borderColor: "#1F2937",
   },
   notificationBadgeText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 10,
-    fontWeight: '700',
+    fontWeight: "700",
     fontFamily: UbuntuFonts.bold,
   },
   statusPillContainer: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
+    flexDirection: "row",
+    justifyContent: "flex-end",
   },
   statusPillContainerRTL: {
-    justifyContent: 'flex-start',
+    justifyContent: "flex-start",
   },
   statusPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 7,
     paddingHorizontal: 14,
     paddingVertical: 7,
-    backgroundColor: 'rgba(16, 185, 129, 0.25)',
+    backgroundColor: "rgba(16, 185, 129, 0.25)",
     borderRadius: 20,
     borderWidth: 1,
-    borderColor: 'rgba(16, 185, 129, 0.5)',
+    borderColor: "rgba(16, 185, 129, 0.5)",
   },
   statusDot: {
     width: 8,
     height: 8,
     borderRadius: 4,
-    backgroundColor: '#10B981',
-    shadowColor: '#10B981',
+    backgroundColor: "#10B981",
+    shadowColor: "#10B981",
     shadowOffset: { width: 0, height: 0 },
     shadowOpacity: 0.8,
     shadowRadius: 4,
   },
   statusText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 13,
-    fontWeight: '700',
+    fontWeight: "700",
     fontFamily: UbuntuFonts.bold,
   },
 
   // ========== MAP STYLES ==========
   map: {
     flex: 1,
-    width: '100%',
+    width: "100%",
   },
 
   // ========== TRIP INFO CARD - TRANSPARENT ==========
   tripInfoCard: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 130,
     left: 16,
     right: 16,
-    backgroundColor: 'rgba(255, 255, 255, 0.85)',
-    backdropFilter: 'blur(20px)',
+    backgroundColor: "rgba(255, 255, 255, 0.85)",
+    backdropFilter: "blur(20px)",
     borderRadius: 16,
     padding: 16,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.15,
     shadowRadius: 16,
     elevation: 6,
     zIndex: 50,
     borderWidth: 1,
-    borderColor: 'rgba(255, 255, 255, 0.6)',
+    borderColor: "rgba(255, 255, 255, 0.6)",
   },
 
   // ========== ROUTE LINE CONTAINER ==========
   routeLineContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 8,
     marginBottom: 14,
   },
@@ -519,90 +574,90 @@ const styles = StyleSheet.create({
   // Time Text (no background box)
   timeText: {
     fontSize: 13,
-    fontWeight: '700',
-    color: '#1F2937',
+    fontWeight: "700",
+    color: "#1F2937",
     fontFamily: UbuntuFonts.bold,
   },
 
   // Pickup Location Box
   pickupLocationBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    backgroundColor: 'rgba(59, 130, 246, 0.08)',
+    backgroundColor: "rgba(59, 130, 246, 0.08)",
     borderRadius: 6,
     flex: 1,
   },
-  
+
   // Destination Location Box
   destinationLocationBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 4,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    backgroundColor: 'rgba(16, 185, 129, 0.08)',
+    backgroundColor: "rgba(16, 185, 129, 0.08)",
     borderRadius: 6,
     flex: 1,
   },
-  
+
   locationText: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#1F2937',
+    fontWeight: "600",
+    color: "#1F2937",
     fontFamily: UbuntuFonts.semiBold,
     flex: 1,
   },
 
   // Student Count Container
   studentCountContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 12,
     paddingTop: 12,
     marginTop: 12,
     borderTopWidth: 1,
-    borderTopColor: 'rgba(229, 231, 235, 0.5)',
+    borderTopColor: "rgba(229, 231, 235, 0.5)",
   },
   studentCountContainerRTL: {
-    flexDirection: 'row-reverse',
+    flexDirection: "row-reverse",
   },
 
   avatarStack: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
   avatar: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#6366F1',
-    justifyContent: 'center',
-    alignItems: 'center',
+    backgroundColor: "#6366F1",
+    justifyContent: "center",
+    alignItems: "center",
     borderWidth: 2.5,
-    borderColor: '#FFFFFF',
+    borderColor: "#FFFFFF",
   },
   avatarMore: {
-    backgroundColor: '#F59E0B',
+    backgroundColor: "#F59E0B",
   },
   avatarMoreText: {
     fontSize: 11,
-    fontWeight: '700',
-    color: '#FFFFFF',
+    fontWeight: "700",
+    color: "#FFFFFF",
     fontFamily: UbuntuFonts.bold,
   },
   studentCountText: {
     fontSize: 14,
-    fontWeight: '700',
-    color: '#1F2937',
+    fontWeight: "700",
+    color: "#1F2937",
     fontFamily: UbuntuFonts.bold,
   },
 
   // ========== BUTTONS CONTAINER ==========
   buttonsContainer: {
-    position: 'absolute',
+    position: "absolute",
     bottom: 30,
     left: 16,
     right: 16,
@@ -617,23 +672,23 @@ const styles = StyleSheet.create({
   secondaryButton: {
     height: 50,
     borderRadius: 14,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderWidth: 1.5,
-    borderColor: '#E5E7EB',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "#E5E7EB",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 8,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 4,
     elevation: 3,
   },
   secondaryButtonText: {
-    color: '#4B5563',
+    color: "#4B5563",
     fontSize: 15,
-    fontWeight: '600',
+    fontWeight: "600",
     fontFamily: UbuntuFonts.semiBold,
   },
 
@@ -641,29 +696,28 @@ const styles = StyleSheet.create({
   primaryButton: {
     height: 56,
     borderRadius: 14,
-    backgroundColor: '#10B981',
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    backgroundColor: "#10B981",
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     gap: 10,
-    shadowColor: '#10B981',
+    shadowColor: "#10B981",
     shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.4,
     shadowRadius: 16,
     elevation: 8,
   },
   primaryButtonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 17,
-    fontWeight: '700',
+    fontWeight: "700",
     fontFamily: UbuntuFonts.bold,
   },
 
   // ========== RTL SUPPORT ==========
   rtl: {
-    textAlign: 'right',
+    textAlign: "right",
   },
 });
 
 export default DriverHomeScreen;
-

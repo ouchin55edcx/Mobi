@@ -6,12 +6,69 @@ import { supabase } from '../lib/supabase';
  */
 
 /**
+ * Static fallback schools data (used when Supabase is not available)
+ */
+const STATIC_SCHOOLS = [
+  {
+    id: '1',
+    name: 'University of Casablanca',
+    name_ar: 'جامعة الدار البيضاء',
+    latitude: 33.5731,
+    longitude: -7.5898,
+    address: 'Boulevard Mohamed V',
+    city: 'Casablanca',
+    is_active: true,
+  },
+  {
+    id: '2',
+    name: 'Mohammed V University',
+    name_ar: 'جامعة محمد الخامس',
+    latitude: 33.9716,
+    longitude: -6.8498,
+    address: 'Avenue des Nations Unies',
+    city: 'Rabat',
+    is_active: true,
+  },
+  {
+    id: '3',
+    name: 'Ibn Tofail University',
+    name_ar: 'جامعة ابن طفيل',
+    latitude: 34.0209,
+    longitude: -6.8416,
+    address: 'Route de Kenitra',
+    city: 'Kenitra',
+    is_active: true,
+  },
+  {
+    id: '4',
+    name: 'Cadi Ayyad University',
+    name_ar: 'جامعة القاضي عياض',
+    latitude: 31.6295,
+    longitude: -7.9811,
+    address: 'Boulevard Abdelkrim Khattabi',
+    city: 'Marrakech',
+    is_active: true,
+  },
+  {
+    id: '5',
+    name: 'Hassan II University',
+    name_ar: 'جامعة الحسن الثاني',
+    latitude: 33.5731,
+    longitude: -7.5898,
+    address: "Route d'El Jadida",
+    city: 'Casablanca',
+    is_active: true,
+  },
+];
+
+/**
  * Get all schools
  * @param {boolean} activeOnly - If true, only return active schools (default: true)
  * @returns {Promise<Object>} - Result object with data and error
  */
 export const getAllSchools = async (activeOnly = true) => {
   try {
+    // Try Supabase first
     let query = supabase
       .from('schools')
       .select('*');
@@ -23,14 +80,22 @@ export const getAllSchools = async (activeOnly = true) => {
     const { data, error } = await query.order('name', { ascending: true });
 
     if (error) {
-      console.error('Error fetching schools:', error);
-      return { data: null, error };
+      console.warn('Supabase not available, using static schools data');
+      // Fallback to static data
+      const filteredData = activeOnly
+        ? STATIC_SCHOOLS.filter(school => school.is_active)
+        : STATIC_SCHOOLS;
+      return { data: filteredData, error: null };
     }
 
     return { data, error: null };
   } catch (error) {
-    console.error('Exception fetching schools:', error);
-    return { data: null, error };
+    console.warn('Exception fetching schools, using static data:', error);
+    // Fallback to static data
+    const filteredData = activeOnly
+      ? STATIC_SCHOOLS.filter(school => school.is_active)
+      : STATIC_SCHOOLS;
+    return { data: filteredData, error: null };
   }
 };
 
@@ -48,14 +113,22 @@ export const getSchoolById = async (schoolId) => {
       .single();
 
     if (error) {
-      console.error('Error fetching school:', error);
-      return { data: null, error };
+      console.warn('Supabase not available, using static schools data');
+      // Fallback to static data
+      const school = STATIC_SCHOOLS.find(s => s.id === schoolId);
+      return school
+        ? { data: school, error: null }
+        : { data: null, error: { message: 'School not found' } };
     }
 
     return { data, error: null };
   } catch (error) {
-    console.error('Exception fetching school:', error);
-    return { data: null, error };
+    console.warn('Exception fetching school, using static data:', error);
+    // Fallback to static data
+    const school = STATIC_SCHOOLS.find(s => s.id === schoolId);
+    return school
+      ? { data: school, error: null }
+      : { data: null, error: { message: 'School not found' } };
   }
 };
 
@@ -84,14 +157,22 @@ export const getSchoolWithStudents = async (schoolId) => {
       .single();
 
     if (error) {
-      console.error('Error fetching school with students:', error);
-      return { data: null, error };
+      console.warn('Supabase not available, using static school data for details');
+      const school = STATIC_SCHOOLS.find(s => s.id === schoolId);
+      if (school) {
+        return { data: { ...school, students: [] }, error: null };
+      }
+      return { data: null, error: null };
     }
 
     return { data, error: null };
   } catch (error) {
-    console.error('Exception fetching school with students:', error);
-    return { data: null, error };
+    const school = STATIC_SCHOOLS.find(s => s.id === schoolId);
+    if (school) {
+      return { data: { ...school, students: [] }, error: null };
+    }
+    return { data: null, error: null };
   }
 };
+
 

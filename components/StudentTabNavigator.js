@@ -1,32 +1,33 @@
-import React, { useState } from 'react';
-import { View, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import StudentHomeScreen from '../screens/students/StudentHomeScreen';
-import HistoryScreen from '../screens/students/HistoryScreen';
-import ProfileScreen from '../screens/students/ProfileScreen';
-import BottomTabNavigator from './BottomTabNavigator';
+import React, { useState } from "react";
+import { View, StyleSheet } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import StudentHomeScreen from "../screens/students/StudentHomeScreen";
+import HistoryScreen from "../screens/students/HistoryScreen";
+import ProfileScreen from "../screens/students/ProfileScreen";
+import BottomTabNavigator from "./BottomTabNavigator";
 
 const StudentTabNavigator = ({
   studentId,
   isDemo = false,
-  language = 'en',
+  language = "en",
   onLogout,
   onNavigateToTripDetails,
 }) => {
-  const [activeTab, setActiveTab] = useState('home');
+  const [activeTab, setActiveTab] = useState("home");
 
   const renderScreen = () => {
     switch (activeTab) {
-      case 'home':
+      case "home":
         return (
           <StudentHomeScreen
             studentId={studentId}
             isDemo={isDemo}
             language={language}
             onNavigateToTripDetails={onNavigateToTripDetails}
+            onNavigateToProfile={() => setActiveTab("profile")}
           />
         );
-      case 'history':
+      case "history":
         return (
           <HistoryScreen
             studentId={studentId}
@@ -34,7 +35,7 @@ const StudentTabNavigator = ({
             language={language}
           />
         );
-      case 'profile':
+      case "profile":
         return (
           <ProfileScreen
             studentId={studentId}
@@ -43,7 +44,7 @@ const StudentTabNavigator = ({
             onLogout={onLogout}
           />
         );
-      case 'explore':
+      case "explore":
         // For now, show history screen as explore
         return (
           <HistoryScreen
@@ -58,6 +59,7 @@ const StudentTabNavigator = ({
             studentId={studentId}
             isDemo={isDemo}
             language={language}
+            onNavigateToProfile={() => setActiveTab("profile")}
           />
         );
     }
@@ -65,7 +67,10 @@ const StudentTabNavigator = ({
 
   return (
     <View style={styles.container}>
-      <SafeAreaView style={styles.screenContainer} edges={['top', 'left', 'right']}>
+      <SafeAreaView
+        style={styles.screenContainer}
+        edges={["top", "left", "right"]}
+      >
         {renderScreen()}
       </SafeAreaView>
       <BottomTabNavigator
@@ -80,7 +85,7 @@ const StudentTabNavigator = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
   },
   screenContainer: {
     flex: 1,
@@ -88,4 +93,3 @@ const styles = StyleSheet.create({
 });
 
 export default StudentTabNavigator;
-

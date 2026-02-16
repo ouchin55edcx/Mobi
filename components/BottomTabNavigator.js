@@ -1,34 +1,34 @@
-import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialIcons } from '@expo/vector-icons';
+import React from "react";
+import { View, TouchableOpacity, StyleSheet, Platform } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { MaterialIcons } from "@expo/vector-icons";
 
-const BottomTabNavigator = ({ activeTab, onTabChange, language = 'en' }) => {
+const BottomTabNavigator = ({ activeTab, onTabChange, language = "en" }) => {
   const tabs = [
     {
-      id: 'home',
-      label: language === 'ar' ? 'الرئيسية' : 'Home',
-      icon: 'home',
-      activeIcon: 'home',
+      id: "history",
+      label: language === "ar" ? "السجل" : "History",
+      icon: "history",
+      activeIcon: "history",
     },
     {
-      id: 'history',
-      label: language === 'ar' ? 'الرحلات' : 'Trips',
-      icon: 'directions-car',
-      activeIcon: 'directions-car',
+      id: "home",
+      label: "Mobi",
+      icon: "directions-bus",
+      activeIcon: "directions-bus",
     },
     {
-      id: 'profile',
-      label: language === 'ar' ? 'الملف الشخصي' : 'Profile',
-      icon: 'person',
-      activeIcon: 'person',
+      id: "profile",
+      label: language === "ar" ? "الملف الشخصي" : "Profile",
+      icon: "person",
+      activeIcon: "person",
     },
   ];
 
   return (
-    <SafeAreaView edges={['bottom']} style={styles.container}>
-      <View style={styles.tabBar}>
-        {tabs.map((tab, index) => {
+    <SafeAreaView edges={["bottom"]} style={styles.container}>
+      <View style={styles.tabShell}>
+        {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
           return (
             <TouchableOpacity
@@ -36,21 +36,19 @@ const BottomTabNavigator = ({ activeTab, onTabChange, language = 'en' }) => {
               style={styles.tab}
               onPress={() => onTabChange(tab.id)}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={tab.label}
             >
-              <MaterialIcons
-                name={isActive ? tab.activeIcon : tab.icon}
-                size={28}
-                color={isActive ? '#1463ff' : '#8AB4FF'}
-              />
-              <Text
-                style={[
-                  styles.tabLabel,
-                  isActive && styles.activeTabLabel,
-                  language === 'ar' && styles.rtl,
-                ]}
+              <View
+                style={[styles.iconWrap, isActive && styles.iconWrapActive]}
               >
-                {tab.label}
-              </Text>
+                <MaterialIcons
+                  name={isActive ? tab.activeIcon : tab.icon}
+                  size={22}
+                  color={isActive ? "#1F2937" : "#9CA3AF"}
+                />
+              </View>
+              {isActive ? <View style={styles.activeIndicator} /> : null}
             </TouchableOpacity>
           );
         })}
@@ -61,47 +59,57 @@ const BottomTabNavigator = ({ activeTab, onTabChange, language = 'en' }) => {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: '#FFFFFF',
-    borderTopWidth: 1,
-    borderTopColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: -3,
-    },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 10,
+    backgroundColor: "transparent",
+    paddingHorizontal: 14,
+    paddingTop: 8,
+    paddingBottom: Platform.OS === "ios" ? 4 : 10,
   },
-  tabBar: {
-    flexDirection: 'row',
-    height: 68,
-    paddingHorizontal: 20,
-    paddingTop: 12,
-    paddingBottom: Platform.OS === 'ios' ? 4 : 12,
-    alignItems: 'center',
+  tabShell: {
+    flexDirection: "row",
+    height: 76,
+    backgroundColor: "rgba(37, 99, 235, 0.10)",
+    borderRadius: 26,
+    borderWidth: 1,
+    borderColor: "rgba(37, 99, 235, 0.28)",
+    paddingHorizontal: 14,
+    alignItems: "center",
+    justifyContent: "space-between",
+    shadowColor: "#94A3B8",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.18,
+    shadowRadius: 12,
+    elevation: 6,
   },
   tab: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
-    position: 'relative',
-    paddingVertical: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    height: "100%",
   },
-  tabLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#8AB4FF',
-    marginTop: 5,
+  iconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "transparent",
   },
-  activeTabLabel: {
-    color: '#1463ff',
-    fontWeight: '700',
+  iconWrapActive: {
+    backgroundColor: "rgba(255,255,255,0.95)",
+    shadowColor: "#93C5FD",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.4,
+    shadowRadius: 6,
+    elevation: 3,
   },
-  rtl: {
-    textAlign: 'center',
+  activeIndicator: {
+    position: "absolute",
+    bottom: 9,
+    width: 26,
+    height: 4,
+    borderRadius: 999,
+    backgroundColor: "#2563EB",
   },
 });
 
 export default BottomTabNavigator;
-

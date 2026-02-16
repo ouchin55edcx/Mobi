@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -9,87 +9,92 @@ import {
   ActivityIndicator,
   RefreshControl,
   Platform,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
-import { MaterialIcons } from '@expo/vector-icons';
-import Header from '../../components/Header';
-import BarChart from '../../components/BarChart';
-import { getTripHistory, getMonthlyStatistics, getMonthlyStatisticsChart } from '../../src/services/tripHistoryService';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
+import { MaterialIcons } from "@expo/vector-icons";
+import BarChart from "../../components/BarChart";
+import {
+  getTripHistory,
+  getMonthlyStatistics,
+  getMonthlyStatisticsChart,
+} from "../../src/services/tripHistoryService";
 
 const translations = {
   en: {
-    title: 'History',
-    subtitle: 'Your trip history and statistics',
-    tripHistory: 'Trip History',
-    monthlyStats: 'Monthly Statistics',
-    noTrips: 'No trips yet',
-    noTripsDesc: 'Your completed trips will appear here',
-    loading: 'Loading...',
-    error: 'Error',
-    errorMessage: 'Failed to load history',
-    ok: 'OK',
-    date: 'Date',
-    type: 'Type',
-    school: 'School',
-    duration: 'Duration',
-    distance: 'Distance',
-    status: 'Status',
-    pickup: 'Pickup',
-    dropoff: 'Dropoff',
-    totalTrips: 'Total Trips',
-    totalDistance: 'Total Distance',
-    totalTime: 'Total Time',
-    km: 'km',
-    min: 'min',
-    hours: 'hours',
-    completed: 'Completed',
-    cancelled: 'Cancelled',
-    pending: 'Pending',
-    pullToRefresh: 'Pull to refresh',
-    tripsPerMonth: 'Trips per Month',
-    distancePerMonth: 'Distance per Month',
-    timePerMonth: 'Time per Month',
-    trips: 'trips',
+    title: "History",
+    subtitle: "Your trip history and statistics",
+    tripHistory: "Trip History",
+    monthlyStats: "Monthly Statistics",
+    noTrips: "No trips yet",
+    noTripsDesc: "Your completed trips will appear here",
+    loading: "Loading...",
+    error: "Error",
+    errorMessage: "Failed to load history",
+    ok: "OK",
+    date: "Date",
+    type: "Type",
+    school: "School",
+    duration: "Duration",
+    distance: "Distance",
+    status: "Status",
+    pickup: "Pickup",
+    dropoff: "Dropoff",
+    totalTrips: "Total Trips",
+    totalDistance: "Total Distance",
+    totalTime: "Total Time",
+    km: "km",
+    min: "min",
+    hours: "hours",
+    completed: "Completed",
+    cancelled: "Cancelled",
+    pending: "Pending",
+    inProgress: "In Progress",
+    pullToRefresh: "Pull to refresh",
+    tripsPerMonth: "Trips per Month",
+    distancePerMonth: "Distance per Month",
+    timePerMonth: "Time per Month",
+    trips: "trips",
   },
   ar: {
-    title: 'السجل',
-    subtitle: 'سجل رحلاتك وإحصائياتك',
-    tripHistory: 'سجل الرحلات',
-    monthlyStats: 'الإحصائيات الشهرية',
-    noTrips: 'لا توجد رحلات بعد',
-    noTripsDesc: 'ستظهر رحلاتك المكتملة هنا',
-    loading: 'جاري التحميل...',
-    error: 'خطأ',
-    errorMessage: 'فشل تحميل السجل',
-    ok: 'حسناً',
-    date: 'التاريخ',
-    type: 'النوع',
-    school: 'المدرسة',
-    duration: 'المدة',
-    distance: 'المسافة',
-    status: 'الحالة',
-    pickup: 'استلام',
-    dropoff: 'توصيل',
-    totalTrips: 'إجمالي الرحلات',
-    totalDistance: 'إجمالي المسافة',
-    totalTime: 'إجمالي الوقت',
-    km: 'كم',
-    min: 'دقيقة',
-    hours: 'ساعة',
-    completed: 'مكتمل',
-    cancelled: 'ملغي',
-    pending: 'قيد الانتظار',
-    pullToRefresh: 'اسحب للتحديث',
-    tripsPerMonth: 'الرحلات شهرياً',
-    distancePerMonth: 'المسافة شهرياً',
-    timePerMonth: 'الوقت شهرياً',
-    trips: 'رحلة',
+    title: "السجل",
+    subtitle: "سجل رحلاتك وإحصائياتك",
+    tripHistory: "سجل الرحلات",
+    monthlyStats: "الإحصائيات الشهرية",
+    noTrips: "لا توجد رحلات بعد",
+    noTripsDesc: "ستظهر رحلاتك المكتملة هنا",
+    loading: "جاري التحميل...",
+    error: "خطأ",
+    errorMessage: "فشل تحميل السجل",
+    ok: "حسناً",
+    date: "التاريخ",
+    type: "النوع",
+    school: "المدرسة",
+    duration: "المدة",
+    distance: "المسافة",
+    status: "الحالة",
+    pickup: "استلام",
+    dropoff: "توصيل",
+    totalTrips: "إجمالي الرحلات",
+    totalDistance: "إجمالي المسافة",
+    totalTime: "إجمالي الوقت",
+    km: "كم",
+    min: "دقيقة",
+    hours: "ساعة",
+    completed: "مكتمل",
+    cancelled: "ملغي",
+    pending: "قيد الانتظار",
+    inProgress: "قيد التنفيذ",
+    pullToRefresh: "اسحب للتحديث",
+    tripsPerMonth: "الرحلات شهرياً",
+    distancePerMonth: "المسافة شهرياً",
+    timePerMonth: "الوقت شهرياً",
+    trips: "رحلة",
   },
 };
 
-const HistoryScreen = ({ studentId, isDemo = false, language = 'en' }) => {
-  const [activeTab, setActiveTab] = useState('history');
+const HistoryScreen = ({ studentId, isDemo = false, language = "en" }) => {
+  const [activeTab, setActiveTab] = useState("history");
   const [trips, setTrips] = useState([]);
   const [statistics, setStatistics] = useState(null);
   const [monthlyChartData, setMonthlyChartData] = useState([]);
@@ -101,7 +106,7 @@ const HistoryScreen = ({ studentId, isDemo = false, language = 'en' }) => {
 
   useEffect(() => {
     if (studentId && !isDemo) {
-      if (activeTab === 'history') {
+      if (activeTab === "history") {
         loadTripHistory();
       } else {
         loadStatistics();
@@ -122,17 +127,19 @@ const HistoryScreen = ({ studentId, isDemo = false, language = 'en' }) => {
     try {
       setLoading(true);
       setError(null);
-      const { data, error: fetchError } = await getTripHistory(studentId, { limit: 50 });
+      const { data, error: fetchError } = await getTripHistory(studentId, {
+        limit: 50,
+      });
 
       if (fetchError) {
-        console.error('Error loading trip history:', fetchError);
+        console.error("Error loading trip history:", fetchError);
         setError(fetchError.message);
         setTrips([]);
       } else {
         setTrips(data || []);
       }
     } catch (err) {
-      console.error('Exception loading trip history:', err);
+      console.error("Exception loading trip history:", err);
       setError(err.message);
       setTrips([]);
     } finally {
@@ -147,17 +154,18 @@ const HistoryScreen = ({ studentId, isDemo = false, language = 'en' }) => {
     try {
       setLoading(true);
       setError(null);
-      const { statistics: stats, error: fetchError } = await getMonthlyStatistics(studentId);
+      const { statistics: stats, error: fetchError } =
+        await getMonthlyStatistics(studentId);
 
       if (fetchError) {
-        console.error('Error loading statistics:', fetchError);
+        console.error("Error loading statistics:", fetchError);
         setError(fetchError.message);
         setStatistics(null);
       } else {
         setStatistics(stats);
       }
     } catch (err) {
-      console.error('Exception loading statistics:', err);
+      console.error("Exception loading statistics:", err);
       setError(err.message);
       setStatistics(null);
     } finally {
@@ -168,23 +176,26 @@ const HistoryScreen = ({ studentId, isDemo = false, language = 'en' }) => {
 
   const loadMonthlyChartData = async () => {
     try {
-      const { data, error: fetchError } = await getMonthlyStatisticsChart(studentId, 6);
+      const { data, error: fetchError } = await getMonthlyStatisticsChart(
+        studentId,
+        6,
+      );
 
       if (fetchError) {
-        console.error('Error loading monthly chart data:', fetchError);
+        console.error("Error loading monthly chart data:", fetchError);
         setMonthlyChartData([]);
       } else {
         setMonthlyChartData(data || []);
       }
     } catch (err) {
-      console.error('Exception loading monthly chart data:', err);
+      console.error("Exception loading monthly chart data:", err);
       setMonthlyChartData([]);
     }
   };
 
   const handleRefresh = () => {
     setRefreshing(true);
-    if (activeTab === 'history') {
+    if (activeTab === "history") {
       loadTripHistory();
     } else {
       loadStatistics();
@@ -193,49 +204,52 @@ const HistoryScreen = ({ studentId, isDemo = false, language = 'en' }) => {
   };
 
   const formatDate = (dateString) => {
-    if (!dateString) return '--';
+    if (!dateString) return "--";
     const date = new Date(dateString);
-    return date.toLocaleDateString(language === 'ar' ? 'ar-SA' : 'en-US', {
-      year: 'numeric',
-      month: 'short',
-      day: 'numeric',
+    return date.toLocaleDateString(language === "ar" ? "ar-SA" : "en-US", {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
     });
   };
 
   const formatTime = (dateString) => {
-    if (!dateString) return '--:--';
+    if (!dateString) return "--:--";
     const date = new Date(dateString);
-    return date.toLocaleTimeString(language === 'ar' ? 'ar-SA' : 'en-US', {
-      hour: '2-digit',
-      minute: '2-digit',
+    return date.toLocaleTimeString(language === "ar" ? "ar-SA" : "en-US", {
+      hour: "2-digit",
+      minute: "2-digit",
     });
   };
 
   const formatDuration = (minutes) => {
-    if (!minutes) return '--';
+    if (!minutes) return "--";
     if (minutes < 60) {
       return `${Math.round(minutes)} ${t.min}`;
     }
     const hours = Math.floor(minutes / 60);
     const mins = Math.round(minutes % 60);
-    return `${hours}${t.hours} ${mins > 0 ? `${mins}${t.min}` : ''}`;
+    return `${hours}${t.hours} ${mins > 0 ? `${mins}${t.min}` : ""}`;
   };
 
   const formatDistance = (km) => {
-    if (!km) return '--';
+    if (!km) return "--";
     return `${km.toFixed(1)} ${t.km}`;
   };
 
   const getStatusLabel = (status) => {
     switch (status) {
-      case 'COMPLETED':
+      case "COMPLETED":
         return t.completed;
-      case 'CANCELLED':
+      case "CANCELLED":
         return t.cancelled;
-      case 'PENDING':
-      case 'GENERATED':
-      case 'CONFIRMED':
+      case "PENDING":
+      case "GENERATED":
+      case "CONFIRMED":
         return t.pending;
+      case "IN_PROGRESS":
+      case "ACTIVE":
+        return t.inProgress;
       default:
         return status;
     }
@@ -243,29 +257,36 @@ const HistoryScreen = ({ studentId, isDemo = false, language = 'en' }) => {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case 'COMPLETED':
-        return '#10B981';
-      case 'CANCELLED':
-        return '#EF4444';
+      case "COMPLETED":
+        return "#10B981";
+      case "CANCELLED":
+        return "#EF4444";
+      case "IN_PROGRESS":
+      case "ACTIVE":
+        return "#2563EB";
       default:
-        return '#F59E0B';
+        return "#F59E0B";
     }
   };
 
   const generateMockTrips = () => {
     return [
       {
-        id: '1',
-        type: 'PICKUP',
-        status: 'COMPLETED',
-        created_at: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toISOString(),
+        id: "1",
+        type: "PICKUP",
+        status: "COMPLETED",
+        created_at: new Date(
+          Date.now() - 2 * 24 * 60 * 60 * 1000,
+        ).toISOString(),
         total_route: { total_distance: 5200, total_duration: 2700 },
       },
       {
-        id: '2',
-        type: 'DROPOFF',
-        status: 'COMPLETED',
-        created_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
+        id: "2",
+        type: "DROPOFF",
+        status: "COMPLETED",
+        created_at: new Date(
+          Date.now() - 5 * 24 * 60 * 60 * 1000,
+        ).toISOString(),
         total_route: { total_distance: 4800, total_duration: 2400 },
       },
     ];
@@ -293,22 +314,25 @@ const HistoryScreen = ({ studentId, isDemo = false, language = 'en' }) => {
         <View style={styles.tripHeader}>
           <View style={styles.tripTypeContainer}>
             <MaterialIcons
-              name={item.type === 'PICKUP' ? 'arrow-upward' : 'arrow-downward'}
+              name={item.type === "PICKUP" ? "arrow-upward" : "arrow-downward"}
               size={20}
               color="#3185FC"
             />
             <Text style={styles.tripType}>
-              {item.type === 'PICKUP' ? t.pickup : t.dropoff}
+              {item.type === "PICKUP" ? t.pickup : t.dropoff}
             </Text>
           </View>
           <View
             style={[
               styles.statusBadge,
-              { backgroundColor: getStatusColor(item.status) + '20' },
+              { backgroundColor: getStatusColor(item.status) + "20" },
             ]}
           >
             <Text
-              style={[styles.statusText, { color: getStatusColor(item.status) }]}
+              style={[
+                styles.statusText,
+                { color: getStatusColor(item.status) },
+              ]}
             >
               {getStatusLabel(item.status)}
             </Text>
@@ -317,18 +341,24 @@ const HistoryScreen = ({ studentId, isDemo = false, language = 'en' }) => {
         <View style={styles.tripDetails}>
           <View style={styles.tripDetailRow}>
             <MaterialIcons name="calendar-today" size={16} color="#9CA3AF" />
-            <Text style={styles.tripDetailText}>{formatDate(item.created_at)}</Text>
+            <Text style={styles.tripDetailText}>
+              {formatDate(item.created_at)}
+            </Text>
           </View>
           {duration && (
             <View style={styles.tripDetailRow}>
               <MaterialIcons name="access-time" size={16} color="#9CA3AF" />
-              <Text style={styles.tripDetailText}>{formatDuration(duration)}</Text>
+              <Text style={styles.tripDetailText}>
+                {formatDuration(duration)}
+              </Text>
             </View>
           )}
           {distance && (
             <View style={styles.tripDetailRow}>
               <MaterialIcons name="straighten" size={16} color="#9CA3AF" />
-              <Text style={styles.tripDetailText}>{formatDistance(distance)}</Text>
+              <Text style={styles.tripDetailText}>
+                {formatDistance(distance)}
+              </Text>
             </View>
           )}
         </View>
@@ -365,24 +395,24 @@ const HistoryScreen = ({ studentId, isDemo = false, language = 'en' }) => {
     }
 
     // Prepare chart data
-    const tripsChartData = monthlyChartData.map(item => ({
+    const tripsChartData = monthlyChartData.map((item) => ({
       month: item.month,
       value: item.trips,
     }));
 
-    const distanceChartData = monthlyChartData.map(item => ({
+    const distanceChartData = monthlyChartData.map((item) => ({
       month: item.month,
       value: item.distance,
     }));
 
-    const timeChartData = monthlyChartData.map(item => ({
+    const timeChartData = monthlyChartData.map((item) => ({
       month: item.month,
       value: item.timeMinutes,
     }));
 
-    const maxTrips = Math.max(...tripsChartData.map(d => d.value), 1);
-    const maxDistance = Math.max(...distanceChartData.map(d => d.value), 1);
-    const maxTime = Math.max(...timeChartData.map(d => d.value), 1);
+    const maxTrips = Math.max(...tripsChartData.map((d) => d.value), 1);
+    const maxDistance = Math.max(...distanceChartData.map((d) => d.value), 1);
+    const maxTime = Math.max(...timeChartData.map((d) => d.value), 1);
 
     return (
       <ScrollView
@@ -406,7 +436,9 @@ const HistoryScreen = ({ studentId, isDemo = false, language = 'en' }) => {
             <View style={styles.statIconContainer}>
               <MaterialIcons name="straighten" size={32} color="#3185FC" />
             </View>
-            <Text style={styles.statValue}>{formatDistance(statistics.totalDistance)}</Text>
+            <Text style={styles.statValue}>
+              {formatDistance(statistics.totalDistance)}
+            </Text>
             <Text style={styles.statLabel}>{t.totalDistance}</Text>
           </View>
 
@@ -485,7 +517,9 @@ const HistoryScreen = ({ studentId, isDemo = false, language = 'en' }) => {
         data={trips}
         renderItem={renderTripItem}
         keyExtractor={(item) => item.id}
-        contentContainerStyle={trips.length === 0 ? styles.emptyList : styles.list}
+        contentContainerStyle={
+          trips.length === 0 ? styles.emptyList : styles.list
+        }
         ListEmptyComponent={() => (
           <View style={styles.emptyContainer}>
             <MaterialIcons name="history" size={64} color="#D1D5DB" />
@@ -502,39 +536,35 @@ const HistoryScreen = ({ studentId, isDemo = false, language = 'en' }) => {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.container} edges={["left", "right"]}>
       <StatusBar style="dark" />
-      <Header
-        title={t.title}
-        subtitle={t.subtitle}
-        language={language}
-        studentId={studentId}
-        isDemo={isDemo}
-      />
 
       {/* Tabs */}
       <View style={styles.tabsContainer}>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'history' && styles.activeTab]}
-          onPress={() => setActiveTab('history')}
+          style={[styles.tab, activeTab === "history" && styles.activeTab]}
+          onPress={() => setActiveTab("history")}
           activeOpacity={0.7}
         >
           <Text
             style={[
               styles.tabText,
-              activeTab === 'history' && styles.activeTabText,
+              activeTab === "history" && styles.activeTabText,
             ]}
           >
             {t.tripHistory}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'stats' && styles.activeTab]}
-          onPress={() => setActiveTab('stats')}
+          style={[styles.tab, activeTab === "stats" && styles.activeTab]}
+          onPress={() => setActiveTab("stats")}
           activeOpacity={0.7}
         >
           <Text
-            style={[styles.tabText, activeTab === 'stats' && styles.activeTabText]}
+            style={[
+              styles.tabText,
+              activeTab === "stats" && styles.activeTabText,
+            ]}
           >
             {t.monthlyStats}
           </Text>
@@ -542,7 +572,7 @@ const HistoryScreen = ({ studentId, isDemo = false, language = 'en' }) => {
       </View>
 
       {/* Content */}
-      {activeTab === 'history' ? renderTripHistory() : renderStatistics()}
+      {activeTab === "history" ? renderTripHistory() : renderStatistics()}
     </SafeAreaView>
   );
 };
@@ -550,183 +580,174 @@ const HistoryScreen = ({ studentId, isDemo = false, language = 'en' }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#F8FAFC",
   },
   tabsContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 24,
-    paddingTop: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    flexDirection: "row",
+    paddingHorizontal: 20,
+    paddingTop: 0,
+    paddingBottom: 4,
+    backgroundColor: "#F8FAFC",
   },
   tab: {
     flex: 1,
-    paddingVertical: 12,
-    alignItems: 'center',
-    borderBottomWidth: 2,
-    borderBottomColor: 'transparent',
+    paddingVertical: 14,
+    alignItems: "center",
+    borderBottomWidth: 3,
+    borderBottomColor: "transparent",
   },
   activeTab: {
-    borderBottomColor: '#3185FC',
+    borderBottomColor: "#3B82F6",
   },
   tabText: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#9CA3AF',
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#94A3B8",
   },
   activeTabText: {
-    color: '#3185FC',
-    fontWeight: '600',
+    color: "#0F172A",
   },
   loadingContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   errorContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     padding: 24,
   },
   errorText: {
     fontSize: 16,
-    color: '#EF4444',
+    color: "#EF4444",
     marginTop: 16,
-    textAlign: 'center',
+    textAlign: "center",
   },
   list: {
-    paddingVertical: 8,
+    padding: 20,
+    paddingBottom: 40,
   },
   emptyList: {
     flexGrow: 1,
   },
   emptyContainer: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
     paddingVertical: 64,
   },
   emptyTitle: {
     fontSize: 18,
-    fontWeight: '600',
-    color: '#6B7280',
+    fontWeight: "800",
+    color: "#64748B",
     marginTop: 16,
     marginBottom: 8,
   },
   emptyDesc: {
     fontSize: 14,
-    color: '#9CA3AF',
-    textAlign: 'center',
-    paddingHorizontal: 48,
+    color: "#94A3B8",
+    textAlign: "center",
+    paddingHorizontal: 40,
   },
   tripItem: {
-    backgroundColor: '#FFFFFF',
-    marginHorizontal: 24,
-    marginVertical: 8,
+    backgroundColor: "#FFFFFF",
+    marginBottom: 16,
     padding: 16,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#F3F4F6',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    borderColor: "#E2E8F0",
   },
   tripHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 12,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 16,
   },
   tripTypeContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
   tripType: {
     fontSize: 16,
-    fontWeight: '600',
-    color: '#111827',
+    fontWeight: "800",
+    color: "#0F172A",
   },
   statusBadge: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderRadius: 12,
+    borderRadius: 8,
   },
   statusText: {
     fontSize: 12,
-    fontWeight: '600',
+    fontWeight: "700",
+    textTransform: "uppercase",
   },
   tripDetails: {
-    gap: 8,
+    gap: 10,
+    paddingTop: 16,
+    borderTopWidth: 1,
+    borderTopColor: "#F1F5F9",
   },
   tripDetailRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
   },
   tripDetailText: {
     fontSize: 14,
-    color: '#6B7280',
+    color: "#64748B",
+    fontWeight: "500",
   },
   statisticsContainer: {
-    padding: 24,
+    padding: 20,
     paddingBottom: 40,
   },
   summaryCards: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 12,
     marginBottom: 24,
   },
   statCard: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     padding: 16,
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#F3F4F6',
-    alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    borderColor: "#E2E8F0",
+    alignItems: "center",
   },
   statIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#F0F9FF',
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "#F0F7FF",
+    justifyContent: "center",
+    alignItems: "center",
     marginBottom: 12,
   },
   statValue: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: '#3185FC',
+    fontSize: 22,
+    fontWeight: "800",
+    color: "#3B82F6",
     marginBottom: 4,
   },
   statLabel: {
-    fontSize: 16,
-    color: '#6B7280',
+    fontSize: 12,
+    color: "#64748B",
+    fontWeight: "700",
+    textTransform: "uppercase",
+    textAlign: "center",
   },
   chartCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 12,
-    padding: 20,
+    padding: 16,
     marginBottom: 16,
     borderWidth: 1,
-    borderColor: '#F3F4F6',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 4,
-    elevation: 2,
+    borderColor: "#E2E8F0",
   },
 });
 
 export default HistoryScreen;
-

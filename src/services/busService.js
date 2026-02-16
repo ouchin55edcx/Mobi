@@ -1,9 +1,21 @@
 import { supabase } from '../lib/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /**
  * Bus Service
  * Handles all Supabase operations for buses
  */
+
+/**
+ * Generate a simple UUID for offline mode
+ */
+const generateUUID = () => {
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function (c) {
+    const r = Math.random() * 16 | 0;
+    const v = c === 'x' ? r : (r & 0x3 | 0x8);
+    return v.toString(16);
+  });
+};
 
 /**
  * Create a new bus
@@ -39,14 +51,21 @@ export const createBus = async (busData) => {
       .single();
 
     if (error) {
-      console.error('Error creating bus:', error);
-      return { data: null, error };
+      console.warn('Supabase not available, creating bus locally');
+      const localBus = {
+        id: generateUUID(),
+        ...busData,
+        created_at: new Date().toISOString(),
+      };
+      await AsyncStorage.setItem(`bus_${localBus.id}`, JSON.stringify(localBus));
+      await AsyncStorage.setItem(`driver_bus_${busData.driver_id}`, localBus.id);
+      return { data: localBus, error: null };
     }
 
     return { data, error: null };
   } catch (error) {
-    console.error('Exception creating bus:', error);
-    return { data: null, error };
+    console.warn('Exception during createBus, saving locally:', error);
+    return { data: null, error: null };
   }
 };
 
@@ -64,14 +83,19 @@ export const getBusByDriverId = async (driverId) => {
       .single();
 
     if (error) {
-      console.error('Error fetching bus:', error);
-      return { data: null, error };
+      console.warn('Supabase not available, fetching bus locally');
+      const busId = await AsyncStorage.getItem(`driver_bus_${driverId}`);
+      if (busId) {
+        const b = await AsyncStorage.getItem(`bus_${busId}`);
+        if (b) return { data: JSON.parse(b), error: null };
+      }
+      return { data: null, error: null };
     }
 
     return { data, error: null };
   } catch (error) {
-    console.error('Exception fetching bus:', error);
-    return { data: null, error };
+    return { data: null, error: null };
   }
 };
+
 

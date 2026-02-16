@@ -1,4 +1,4 @@
-import { supabase } from '../lib/supabase';
+import { supabase } from "../lib/supabase";
 
 /**
  * Student Service
@@ -19,7 +19,7 @@ import { supabase } from '../lib/supabase';
 export const createStudent = async (studentData) => {
   try {
     const { data, error } = await supabase
-      .from('students')
+      .from("students")
       .insert([
         {
           fullname: studentData.fullname,
@@ -37,13 +37,13 @@ export const createStudent = async (studentData) => {
       .single();
 
     if (error) {
-      console.error('Error creating student:', error);
+      console.error("Error creating student:", error);
       return { data: null, error };
     }
 
     return { data, error: null };
   } catch (error) {
-    console.error('Exception creating student:', error);
+    console.error("Exception creating student:", error);
     return { data: null, error };
   }
 };
@@ -56,20 +56,26 @@ export const createStudent = async (studentData) => {
 export const getStudentById = async (studentId) => {
   try {
     const { data, error } = await supabase
-      .from('students')
-      .select(`
+      .from("students")
+      .select(
+        `
         *,
         schools:school_id (
           id,
           name,
-          name_ar
+          name_ar,
+          latitude,
+          longitude,
+          address,
+          city
         )
-      `)
-      .eq('id', studentId)
+      `,
+      )
+      .eq("id", studentId)
       .single();
 
     if (error) {
-      console.error('Error fetching student:', error);
+      console.error("Error fetching student:", error);
       return { data: null, error };
     }
 
@@ -81,7 +87,7 @@ export const getStudentById = async (studentId) => {
 
     return { data, error: null };
   } catch (error) {
-    console.error('Exception fetching student:', error);
+    console.error("Exception fetching student:", error);
     return { data: null, error };
   }
 };
@@ -94,20 +100,26 @@ export const getStudentById = async (studentId) => {
 export const getStudentByEmail = async (email) => {
   try {
     const { data, error } = await supabase
-      .from('students')
-      .select(`
+      .from("students")
+      .select(
+        `
         *,
         schools:school_id (
           id,
           name,
-          name_ar
+          name_ar,
+          latitude,
+          longitude,
+          address,
+          city
         )
-      `)
-      .eq('email', email)
+      `,
+      )
+      .eq("email", email)
       .single();
 
     if (error) {
-      console.error('Error fetching student by email:', error);
+      console.error("Error fetching student by email:", error);
       return { data: null, error };
     }
 
@@ -119,7 +131,7 @@ export const getStudentByEmail = async (email) => {
 
     return { data, error: null };
   } catch (error) {
-    console.error('Exception fetching student by email:', error);
+    console.error("Exception fetching student by email:", error);
     return { data: null, error };
   }
 };
@@ -132,8 +144,9 @@ export const getStudentByEmail = async (email) => {
 export const getStudentsBySchoolId = async (schoolId) => {
   try {
     const { data, error } = await supabase
-      .from('students')
-      .select(`
+      .from("students")
+      .select(
+        `
         *,
         schools:school_id (
           id,
@@ -144,18 +157,19 @@ export const getStudentsBySchoolId = async (schoolId) => {
           address,
           city
         )
-      `)
-      .eq('school_id', schoolId)
-      .order('created_at', { ascending: false });
+      `,
+      )
+      .eq("school_id", schoolId)
+      .order("created_at", { ascending: false });
 
     if (error) {
-      console.error('Error fetching students by school:', error);
+      console.error("Error fetching students by school:", error);
       return { data: null, error };
     }
 
     return { data, error: null };
   } catch (error) {
-    console.error('Exception fetching students by school:', error);
+    console.error("Exception fetching students by school:", error);
     return { data: null, error };
   }
 };
@@ -168,29 +182,29 @@ export const getStudentsBySchoolId = async (schoolId) => {
  */
 export const updateStudent = async (studentId, updates) => {
   try {
-    // Map school to school_id if provided
+    // MVP rule: school is immutable after registration.
     const updateData = { ...updates };
-    if (updateData.school) {
-      updateData.school_id = updateData.school;
-      delete updateData.school;
-    }
+    delete updateData.school;
+    delete updateData.school_id;
 
     const { data, error } = await supabase
-      .from('students')
+      .from("students")
       .update(updateData)
-      .eq('id', studentId)
-      .select(`
+      .eq("id", studentId)
+      .select(
+        `
         *,
         schools:school_id (
           id,
           name,
           name_ar
         )
-      `)
+      `,
+      )
       .single();
 
     if (error) {
-      console.error('Error updating student:', error);
+      console.error("Error updating student:", error);
       return { data: null, error };
     }
 
@@ -202,8 +216,7 @@ export const updateStudent = async (studentId, updates) => {
 
     return { data, error: null };
   } catch (error) {
-    console.error('Exception updating student:', error);
+    console.error("Exception updating student:", error);
     return { data: null, error };
   }
 };
-

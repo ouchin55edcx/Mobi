@@ -1,315 +1,297 @@
-import { supabase } from '../lib/supabase';
-import { isValidUUID } from '../utils/validation';
+import { supabase } from "../lib/supabase";
+import { isValidUUID } from "../utils/validation";
 
 /**
  * Trip History Service
- * Handles fetching past trips and statistics
+ * Reads student history from transport grouping tables:
+ * - transport_trip_members
+ * - transport_trips
+ * - bookings
  */
 
-/**
- * Generate mock trip data for demo mode
- */
 const generateMockTrips = () => {
   const now = new Date();
   return [
     {
-      id: 'mock-trip-1',
-      type: 'PICKUP',
-      status: 'COMPLETED',
+      id: "mock-trip-1",
+      type: "PICKUP",
+      status: "COMPLETED",
       created_at: new Date(now.getTime() - 2 * 24 * 60 * 60 * 1000).toISOString(),
       total_route: { total_distance: 5200, total_duration: 2700 },
     },
     {
-      id: 'mock-trip-2',
-      type: 'DROPOFF',
-      status: 'COMPLETED',
+      id: "mock-trip-2",
+      type: "DROPOFF",
+      status: "COMPLETED",
       created_at: new Date(now.getTime() - 5 * 24 * 60 * 60 * 1000).toISOString(),
       total_route: { total_distance: 4800, total_duration: 2400 },
     },
     {
-      id: 'mock-trip-3',
-      type: 'PICKUP',
-      status: 'COMPLETED',
+      id: "mock-trip-3",
+      type: "PICKUP",
+      status: "COMPLETED",
       created_at: new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString(),
       total_route: { total_distance: 5500, total_duration: 3000 },
     },
   ];
 };
 
-/**
- * Get trip history for a student
- * @param {string} studentId - Student ID
- * @param {Object} options - Query options
- * @param {number} options.limit - Limit number of results
- * @param {number} options.offset - Offset for pagination
- * @param {string} options.status - Filter by status (optional)
- * @returns {Promise<Object>} - Result object with data and error
- */
-export const getTripHistory = async (studentId, options = {}) => {
-  try {
-    // Check if studentId is a valid UUID, if not return mock data (demo mode)
-    if (!studentId || !isValidUUID(studentId)) {
-      const mockTrips = generateMockTrips();
-      const { status } = options;
-      if (status) {
-        return { data: mockTrips.filter(trip => trip.status === status), error: null };
-      }
-      return { data: mockTrips, error: null };
-    }
+const generateMockStatistics = () => ({
+  totalTrips: 12,
+  totalDistance: 58.4,
+  totalTimeMinutes: 540,
+  totalTimeHours: 9.0,
+});
 
-    const { limit = 20, offset = 0, status } = options;
-    
-    let query = supabase
-      .from('trips')
-      .select('*')
-      .eq('student_id', studentId)
-      .order('created_at', { ascending: false })
-      .range(offset, offset + limit - 1);
-
-    // Filter by status if provided
-    if (status) {
-      query = query.eq('status', status);
-    }
-
-    const { data, error } = await query;
-
-    if (error) {
-      console.error('Error fetching trip history:', error);
-      return { data: null, error };
-    }
-
-    return { data: data || [], error: null };
-  } catch (error) {
-    console.error('Exception fetching trip history:', error);
-    return { data: null, error };
-  }
-};
-
-/**
- * Get completed trips for a student
- * @param {string} studentId - Student ID
- * @returns {Promise<Object>} - Result object with data and error
- */
-export const getCompletedTrips = async (studentId) => {
-  try {
-    const { data, error } = await getTripHistory(studentId, {
-      status: 'COMPLETED',
-      limit: 1000, // Get all completed trips for statistics
-    });
-
-    return { data, error };
-  } catch (error) {
-    console.error('Exception fetching completed trips:', error);
-    return { data: null, error };
-  }
-};
-
-/**
- * Generate mock statistics for demo mode
- */
-const generateMockStatistics = () => {
-  return {
-    totalTrips: 12,
-    totalDistance: 58.4,
-    totalTimeMinutes: 540,
-    totalTimeHours: 9.0,
-  };
-};
-
-/**
- * Generate mock monthly statistics for multiple months (demo mode)
- */
 const generateMockMonthlyData = (months = 6) => {
   const data = [];
   const now = new Date();
-  
-  for (let i = months - 1; i >= 0; i--) {
+
+  for (let i = months - 1; i >= 0; i -= 1) {
     const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-    const monthName = date.toLocaleDateString('en-US', { month: 'short' });
-    
-    // Generate random but realistic data
+    const monthName = date.toLocaleDateString("en-US", { month: "short" });
+
     const trips = Math.floor(Math.random() * 15) + 5;
     const distance = Math.round((Math.random() * 30 + 20) * 10) / 10;
     const timeMinutes = Math.round(trips * (Math.random() * 20 + 30));
-    
-    data.push({
-      month: monthName,
-      trips,
-      distance,
-      timeMinutes,
-    });
+
+    data.push({ month: monthName, trips, distance, timeMinutes });
   }
-  
+
   return data;
 };
 
-/**
- * Get monthly statistics for a student
- * @param {string} studentId - Student ID
- * @param {Date} month - Month to get statistics for (defaults to current month)
- * @returns {Promise<Object>} - Result object with statistics and error
- */
+const mapTransportStatus = (tripStatus, bookingStatus) => {
+  if ((bookingStatus || "").toUpperCase() === "CANCELLED") return "CANCELLED";
+
+  switch (tripStatus) {
+    case "trip_completed":
+      return "COMPLETED";
+    case "trip_started":
+      return "IN_PROGRESS";
+    case "trip_pending":
+      return "PENDING";
+    default:
+      if ((bookingStatus || "").toUpperCase() === "COMPLETED") return "COMPLETED";
+      return (bookingStatus || "PENDING").toUpperCase();
+  }
+};
+
+const mapMemberRowToHistoryTrip = (row) => {
+  const booking = row?.bookings || null;
+  const trip = row?.transport_trips || null;
+
+  const durationSeconds = Number.isFinite(trip?.total_duration_s)
+    ? trip.total_duration_s
+    : booking?.start_time && booking?.end_time
+      ? Math.max(0, Math.round((new Date(booking.end_time) - new Date(booking.start_time)) / 1000))
+      : 0;
+
+  const distanceMeters = Number.isFinite(trip?.total_distance_m)
+    ? trip.total_distance_m
+    : 0;
+
+  return {
+    id: booking?.id || `${row.trip_id || "trip"}-${row.booking_id || row.created_at}`,
+    type: booking?.type || "PICKUP",
+    status: mapTransportStatus(trip?.status, booking?.status),
+    created_at:
+      trip?.end_time || booking?.end_time || booking?.updated_at || row?.created_at || new Date().toISOString(),
+    total_route: {
+      total_distance: distanceMeters,
+      total_duration: durationSeconds,
+    },
+  };
+};
+
+const filterHistoryByStatus = (trips, status) => {
+  if (!status) return trips;
+  const target = String(status).toUpperCase();
+  return trips.filter((trip) => String(trip.status).toUpperCase() === target);
+};
+
+const fetchTransportHistoryRows = async ({ studentId, limit = 20, offset = 0 }) => {
+  return supabase
+    .from("transport_trip_members")
+    .select(
+      `
+      trip_id,
+      booking_id,
+      created_at,
+      bookings:booking_id (
+        id,
+        type,
+        status,
+        start_time,
+        end_time,
+        created_at,
+        updated_at
+      ),
+      transport_trips:trip_id (
+        id,
+        status,
+        start_time,
+        end_time,
+        total_distance_m,
+        total_duration_s,
+        updated_at
+      )
+    `,
+    )
+    .eq("student_id", studentId)
+    .order("created_at", { ascending: false })
+    .range(offset, offset + limit - 1);
+};
+
+const computeStatsFromTrips = (trips = []) => {
+  const totalTrips = trips.length;
+  const totalDistance = trips.reduce(
+    (sum, trip) => sum + ((trip?.total_route?.total_distance || 0) / 1000),
+    0,
+  );
+  const totalTimeMinutes = trips.reduce(
+    (sum, trip) => sum + ((trip?.total_route?.total_duration || 0) / 60),
+    0,
+  );
+
+  return {
+    totalTrips,
+    totalDistance: Math.round(totalDistance * 10) / 10,
+    totalTimeMinutes: Math.round(totalTimeMinutes),
+    totalTimeHours: Math.round((totalTimeMinutes / 60) * 10) / 10,
+  };
+};
+
+const isDateWithinMonth = (dateValue, month) => {
+  if (!dateValue) return false;
+  const date = new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return false;
+  return (
+    date.getFullYear() === month.getFullYear() &&
+    date.getMonth() === month.getMonth()
+  );
+};
+
+export const getTripHistory = async (studentId, options = {}) => {
+  try {
+    if (!studentId || !isValidUUID(studentId)) {
+      const mockTrips = generateMockTrips();
+      return { data: filterHistoryByStatus(mockTrips, options.status), error: null };
+    }
+
+    const { limit = 20, offset = 0, status } = options;
+
+    const { data, error } = await fetchTransportHistoryRows({ studentId, limit, offset });
+
+    if (error) {
+      return { data: [], error };
+    }
+
+    const mapped = (data || []).map(mapMemberRowToHistoryTrip);
+    return { data: filterHistoryByStatus(mapped, status), error: null };
+  } catch (error) {
+    return { data: [], error };
+  }
+};
+
+export const getCompletedTrips = async (studentId) => {
+  return getTripHistory(studentId, { status: "COMPLETED", limit: 1000 });
+};
+
 export const getMonthlyStatistics = async (studentId, month = new Date()) => {
   try {
-    // Check if studentId is a valid UUID, if not return mock data (demo mode)
     if (!studentId || !isValidUUID(studentId)) {
       return { statistics: generateMockStatistics(), error: null };
     }
 
-    // Get start and end of month
-    const startOfMonth = new Date(month.getFullYear(), month.getMonth(), 1);
-    const endOfMonth = new Date(month.getFullYear(), month.getMonth() + 1, 0, 23, 59, 59);
+    const { data, error } = await getTripHistory(studentId, { limit: 500 });
+    if (error) return { statistics: null, error };
 
-    const { data, error } = await supabase
-      .from('trips')
-      .select('*')
-      .eq('student_id', studentId)
-      .eq('status', 'COMPLETED')
-      .gte('created_at', startOfMonth.toISOString())
-      .lte('created_at', endOfMonth.toISOString());
+    const completedThisMonth = (data || []).filter(
+      (trip) => trip.status === "COMPLETED" && isDateWithinMonth(trip.created_at, month),
+    );
 
-    if (error) {
-      console.error('Error fetching monthly statistics:', error);
-      return { statistics: null, error };
-    }
-
-    // Calculate statistics
-    const trips = data || [];
-    let totalDistance = 0;
-    let totalDuration = 0;
-
-    trips.forEach((trip) => {
-      // Extract distance from route data
-      if (trip.total_route?.total_distance) {
-        totalDistance += trip.total_route.total_distance / 1000; // Convert to km
-      } else if (trip.home_to_pickup_route?.distance && trip.pickup_to_destination_route?.distance) {
-        totalDistance += (trip.home_to_pickup_route.distance + trip.pickup_to_destination_route.distance) / 1000;
-      }
-
-      // Extract duration from route data
-      if (trip.total_route?.total_duration) {
-        totalDuration += trip.total_route.total_duration / 60; // Convert to minutes
-      } else if (trip.home_to_pickup_route?.duration && trip.pickup_to_destination_route?.duration) {
-        totalDuration += (trip.home_to_pickup_route.duration + trip.pickup_to_destination_route.duration) / 60;
-      } else if (trip.reach_destination_time && trip.leave_home_time) {
-        // Calculate from timestamps if route data not available
-        const start = new Date(trip.leave_home_time);
-        const end = new Date(trip.reach_destination_time);
-        totalDuration += (end - start) / (1000 * 60); // Convert to minutes
-      }
-    });
-
-    const statistics = {
-      totalTrips: trips.length,
-      totalDistance: Math.round(totalDistance * 10) / 10, // Round to 1 decimal
-      totalTimeMinutes: Math.round(totalDuration),
-      totalTimeHours: Math.round(totalDuration / 60 * 10) / 10, // Round to 1 decimal
+    return {
+      statistics: computeStatsFromTrips(completedThisMonth),
+      error: null,
     };
-
-    return { statistics, error: null };
   } catch (error) {
-    console.error('Exception calculating monthly statistics:', error);
     return { statistics: null, error };
   }
 };
 
-/**
- * Get monthly statistics for multiple months
- * @param {string} studentId - Student ID
- * @param {number} months - Number of months to fetch (default: 6)
- * @returns {Promise<Object>} - Result object with monthly data array and error
- */
 export const getMonthlyStatisticsChart = async (studentId, months = 6) => {
   try {
-    // Check if studentId is a valid UUID, if not return mock data (demo mode)
     if (!studentId || !isValidUUID(studentId)) {
       return { data: generateMockMonthlyData(months), error: null };
     }
 
-    const monthlyData = [];
+    const { data, error } = await getTripHistory(studentId, { limit: 1000 });
+    if (error) return { data: [], error };
+
+    const allCompleted = (data || []).filter((trip) => trip.status === "COMPLETED");
     const now = new Date();
+    const monthlyData = [];
 
-    // Get data for each month
-    for (let i = months - 1; i >= 0; i--) {
+    for (let i = months - 1; i >= 0; i -= 1) {
       const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const startOfMonth = new Date(monthDate.getFullYear(), monthDate.getMonth(), 1);
-      const endOfMonth = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 0, 23, 59, 59);
+      const monthTrips = allCompleted.filter((trip) =>
+        isDateWithinMonth(trip.created_at, monthDate),
+      );
+      const stats = computeStatsFromTrips(monthTrips);
 
-      const { data, error } = await supabase
-        .from('trips')
-        .select('*')
-        .eq('student_id', studentId)
-        .eq('status', 'COMPLETED')
-        .gte('created_at', startOfMonth.toISOString())
-        .lte('created_at', endOfMonth.toISOString());
-
-      if (error) {
-        console.error(`Error fetching data for month ${i}:`, error);
-        continue;
-      }
-
-      const trips = data || [];
-      let totalDistance = 0;
-      let totalDuration = 0;
-
-      trips.forEach((trip) => {
-        // Extract distance from route data
-        if (trip.total_route?.total_distance) {
-          totalDistance += trip.total_route.total_distance / 1000; // Convert to km
-        } else if (trip.home_to_pickup_route?.distance && trip.pickup_to_destination_route?.distance) {
-          totalDistance += (trip.home_to_pickup_route.distance + trip.pickup_to_destination_route.distance) / 1000;
-        }
-
-        // Extract duration from route data
-        if (trip.total_route?.total_duration) {
-          totalDuration += trip.total_route.total_duration / 60; // Convert to minutes
-        } else if (trip.home_to_pickup_route?.duration && trip.pickup_to_destination_route?.duration) {
-          totalDuration += (trip.home_to_pickup_route.duration + trip.pickup_to_destination_route.duration) / 60;
-        } else if (trip.reach_destination_time && trip.leave_home_time) {
-          const start = new Date(trip.leave_home_time);
-          const end = new Date(trip.reach_destination_time);
-          totalDuration += (end - start) / (1000 * 60);
-        }
-      });
-
-      const monthName = monthDate.toLocaleDateString('en-US', { month: 'short' });
       monthlyData.push({
-        month: monthName,
-        trips: trips.length,
-        distance: Math.round(totalDistance * 10) / 10,
-        timeMinutes: Math.round(totalDuration),
+        month: monthDate.toLocaleDateString("en-US", { month: "short" }),
+        trips: stats.totalTrips,
+        distance: stats.totalDistance,
+        timeMinutes: stats.totalTimeMinutes,
       });
     }
 
     return { data: monthlyData, error: null };
   } catch (error) {
-    console.error('Exception calculating monthly statistics chart:', error);
-    return { data: null, error };
+    return { data: [], error };
   }
 };
 
-/**
- * Get trip by ID with full details
- * @param {string} tripId - Trip ID
- * @returns {Promise<Object>} - Result object with data and error
- */
 export const getTripById = async (tripId) => {
   try {
     const { data, error } = await supabase
-      .from('trips')
-      .select('*')
-      .eq('id', tripId)
-      .single();
+      .from("transport_trip_members")
+      .select(
+        `
+        trip_id,
+        booking_id,
+        created_at,
+        bookings:booking_id (
+          id,
+          type,
+          status,
+          start_time,
+          end_time,
+          created_at,
+          updated_at
+        ),
+        transport_trips:trip_id (
+          id,
+          status,
+          start_time,
+          end_time,
+          total_distance_m,
+          total_duration_s,
+          updated_at
+        )
+      `,
+      )
+      .eq("trip_id", tripId)
+      .limit(1)
+      .maybeSingle();
 
-    if (error) {
-      console.error('Error fetching trip:', error);
-      return { data: null, error };
-    }
+    if (error) return { data: null, error };
+    if (!data) return { data: null, error: null };
 
-    return { data, error: null };
+    return { data: mapMemberRowToHistoryTrip(data), error: null };
   } catch (error) {
-    console.error('Exception fetching trip:', error);
     return { data: null, error };
   }
 };
-

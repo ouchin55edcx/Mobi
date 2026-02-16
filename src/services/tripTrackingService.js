@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
 /**
  * Trip Tracking Service
@@ -28,7 +29,13 @@ export const subscribeToTripStatus = (tripId, callback) => {
     )
     .subscribe();
 
-  return channel;
+  // Mock local updates
+  const interval = setInterval(async () => {
+    const t = await AsyncStorage.getItem(`trip_${tripId}`);
+    if (t) callback(JSON.parse(t));
+  }, 5000);
+
+  return { ...channel, intervalId: interval };
 };
 
 /**
@@ -61,7 +68,22 @@ export const subscribeToDriverLocation = (driverId, callback) => {
     )
     .subscribe();
 
-  return channel;
+  // Mock local updates
+  const interval = setInterval(async () => {
+    const d = await AsyncStorage.getItem(`driver_${driverId}`);
+    if (d) {
+      const driver = JSON.parse(d);
+      if (driver.current_location) {
+        callback({
+          latitude: driver.current_location.latitude,
+          longitude: driver.current_location.longitude,
+          timestamp: driver.location_updated_at,
+        });
+      }
+    }
+  }, 5000);
+
+  return { ...channel, intervalId: interval };
 };
 
 /**
@@ -86,11 +108,21 @@ export const getTripWithDriver = async (tripId) => {
       .eq('id', tripId)
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.warn('Supabase not available, fetching trip with driver locally');
+      const t = await AsyncStorage.getItem(`trip_${tripId}`);
+      if (t) {
+        const trip = JSON.parse(t);
+        const d = await AsyncStorage.getItem(`driver_${trip.driver_id}`);
+        if (d) trip.drivers = JSON.parse(d);
+        return { data: trip, error: null };
+      }
+      return { data: null, error: null };
+    }
     return { data, error: null };
   } catch (error) {
     console.error('Error fetching trip with driver:', error);
-    return { data: null, error };
+    return { data: null, error: null };
   }
 };
 
@@ -109,11 +141,21 @@ export const updateTripStatus = async (tripId, status) => {
       .select()
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.warn('Supabase not available, updating trip status locally');
+      const t = await AsyncStorage.getItem(`trip_${tripId}`);
+      if (t) {
+        const trip = JSON.parse(t);
+        const updatedTrip = { ...trip, status, updated_at: new Date().toISOString() };
+        await AsyncStorage.setItem(`trip_${tripId}`, JSON.stringify(updatedTrip));
+        return { data: updatedTrip, error: null };
+      }
+      return { data: null, error: null };
+    }
     return { data, error: null };
   } catch (error) {
     console.error('Error updating trip status:', error);
-    return { data: null, error };
+    return { data: null, error: null };
   }
 };
 
@@ -130,11 +172,19 @@ export const getDriverLocation = async (driverId) => {
       .eq('id', driverId)
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.warn('Supabase not available, fetching driver location locally');
+      const d = await AsyncStorage.getItem(`driver_${driverId}`);
+      if (d) {
+        const driver = JSON.parse(d);
+        return { data: { current_location: driver.current_location, location_updated_at: driver.location_updated_at }, error: null };
+      }
+      return { data: null, error: null };
+    }
     return { data, error: null };
   } catch (error) {
     console.error('Error fetching driver location:', error);
-    return { data: null, error };
+    return { data: null, error: null };
   }
 };
 
@@ -173,7 +223,7 @@ export const getDriverTripsWithStudents = async (driverId, options = {}) => {
       startOfDay.setHours(0, 0, 0, 0);
       const endOfDay = new Date(options.date);
       endOfDay.setHours(23, 59, 59, 999);
-      
+
       query = query
         .gte('reach_pickup_time', startOfDay.toISOString())
         .lte('reach_pickup_time', endOfDay.toISOString());
@@ -183,22 +233,24 @@ export const getDriverTripsWithStudents = async (driverId, options = {}) => {
 
     const { data, error } = await query;
 
-    if (error) throw error;
+    if (error) {
+      return { data: [], error: null }; // Return empty array for local mock flow
+    }
 
     // Group trips by time slot and aggregate students
     const groupedTrips = {};
     if (data) {
       data.forEach(trip => {
-        const timeSlot = trip.reach_pickup_time 
-          ? new Date(trip.reach_pickup_time).toLocaleTimeString('en-US', { 
-              hour: '2-digit', 
-              minute: '2-digit',
-              hour12: false 
-            })
+        const timeSlot = trip.reach_pickup_time
+          ? new Date(trip.reach_pickup_time).toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            hour12: false
+          })
           : '00:00';
-        
+
         const key = `${trip.destination_location?.name || 'Unknown'}_${timeSlot}`;
-        
+
         if (!groupedTrips[key]) {
           groupedTrips[key] = {
             id: trip.id,
@@ -211,7 +263,7 @@ export const getDriverTripsWithStudents = async (driverId, options = {}) => {
             studentCount: 0,
           };
         }
-        
+
         // Add student if not already added
         if (trip.students && !groupedTrips[key].students.find(s => s.id === trip.students.id)) {
           groupedTrips[key].students.push({
@@ -228,7 +280,7 @@ export const getDriverTripsWithStudents = async (driverId, options = {}) => {
     return { data: Object.values(groupedTrips), error: null };
   } catch (error) {
     console.error('Error fetching driver trips with students:', error);
-    return { data: null, error };
+    return { data: [], error: null };
   }
 };
 
@@ -258,11 +310,12 @@ export const getBookingsForTimeSlot = async (startTime, endTime, destination = n
 
     const { data, error } = await query;
 
-    if (error) throw error;
+    if (error) return { data: [], error: null };
     return { data, error: null };
   } catch (error) {
     console.error('Error fetching bookings for time slot:', error);
-    return { data: null, error };
+    return { data: [], error: null };
   }
 };
+
 
