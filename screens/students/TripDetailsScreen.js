@@ -1,4 +1,18 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+/**
+ * TripDetailsScreen.js  (Students)
+ *
+ * Shows the journey timeline with THREE dynamically-computed times:
+ *
+ *   1. leaveHomeTime  → when student must leave home
+ *   2. pickupTime     → when student must be at pickup station
+ *   3. schoolTime     → target school arrival (≈ student's start_time)
+ *
+ * Timing formula (backward from school start):
+ *   schoolTime    = tripData.startTime
+ *   pickupTime    = schoolTime − driverEtaToSchool
+ *   leaveHomeTime = pickupTime − walkTime − 2min buffer + orderOffset
+ */
+import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
   Linking,
@@ -11,837 +25,602 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-import { MaterialIcons } from "@expo/vector-icons";
+import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 
 import MapboxRoutePreview from "../../components/MapboxRoutePreview";
 import { getDirectionsRoute } from "../../src/services/mapboxService";
+import { findOptimalPickupStation, formatWalkDistance, formatWalkTime } from "../../src/services/pickupStationService";
+import { computeTripTimes, getTimeBadge, BADGE_STYLE } from "../../src/services/tripTimingService";
 import { UbuntuFonts } from "../../src/utils/fonts";
 
-const COLORS = {
-  primary: "#1E88E5",
-  primaryDark: "#1565C0",
-  accent: "#E3F2FD",
+/* ─────────────────────────────── constants ─────────────────────────────── */
+const C = {
+  primary: "#2196F3",
+  success: "#4CAF50",
+  warning: "#FF9800",
+  danger: "#F44336",
+  orange: "#F97316",
+  gray: "#9E9E9E",
+  lightGray: "#F5F5F5",
   white: "#FFFFFF",
-  bg: "#F5F9FF",
-  text: "#0F172A",
-  subtext: "#64748B",
-  border: "#D6E9FF",
-  success: "#10B981",
-  warning: "#F59E0B",
-  danger: "#DC2626",
+  bg: "#F8F9FB",
+  text: "#212121",
+  subtext: "#757575",
+  border: "#EEEEEE",
+  pickupBg: "#FFF7ED",
+  pickupBorder: "#FDBA74",
+  alertBg: "#F1F8FF",
+  alertBorder: "#2196F3",
 };
 
 const COPY = {
   en: {
     title: "Trip Details",
-    liveTrip: "Live Trip",
-    loading: "Loading trip details...",
-    invalid: "Trip data is incomplete. Please go back and try again.",
-    routeToSchool: "Route to school",
-    from: "From",
-    to: "To",
-    pickupTime: "Pickup Time",
     eta: "ETA",
-    distance: "Distance",
-    busCapacity: "Bus",
-    schoolName: "School",
-    onTheWay: "On the way",
-    routeSync: "Syncing best route...",
-    grouping: "Assigning a group",
+    distance: "DISTANCE",
+    driver: "Driver",
+    timeline: "Journey Timeline",
     call: "Call",
     message: "Message",
+    startLive: "Start Live Tracking",
+    online: "Online",
+    offline: "Offline",
+    home: "Home",
+    leaveHome: "Leave Home",
+    pickup: "Pickup Station",
+    reachPickup: "Be Here",
+    school: "School",
+    finalDest: "Final destination",
+    walkToStation: "Walk to station",
+    loading: "Resolving route…",
     noPhone: "Phone unavailable",
+    pickupCard: "Your Pickup Point",
+    walkDist: "Walk distance",
+    walkTime: "Walk time",
+    outOfRange: "⚠ Beyond 500 m",
+    withinRange: "✓ On driver's route",
+    order: "Pickup #",
+    schoolTarget: "Target arrival",
   },
   ar: {
     title: "تفاصيل الرحلة",
-    liveTrip: "رحلة مباشرة",
-    loading: "جاري تحميل تفاصيل الرحلة...",
-    invalid: "بيانات الرحلة غير مكتملة. ارجع وحاول مرة أخرى.",
-    routeToSchool: "المسار إلى المدرسة",
-    from: "من",
-    to: "إلى",
-    pickupTime: "وقت الالتقاط",
     eta: "وقت الوصول",
     distance: "المسافة",
-    busCapacity: "الحافلة",
-    schoolName: "المدرسة",
-    onTheWay: "في الطريق",
-    routeSync: "جاري مزامنة أفضل مسار...",
-    grouping: "جاري تعيين المجموعة",
+    driver: "السائق",
+    timeline: "مسار الرحلة",
     call: "اتصال",
     message: "رسالة",
+    startLive: "بدء التتبع المباشر",
+    online: "متصل",
+    offline: "غير متصل",
+    home: "المنزل",
+    leaveHome: "مغادرة المنزل",
+    pickup: "نقطة الالتقاط",
+    reachPickup: "تواجد هنا",
+    school: "المدرسة",
+    finalDest: "الوجهة النهائية",
+    walkToStation: "المشي للنقطة",
+    loading: "جاري تحميل المسار…",
     noPhone: "رقم غير متوفر",
+    pickupCard: "نقطة الالتقاط الخاصة بك",
+    walkDist: "مسافة المشي",
+    walkTime: "وقت المشي",
+    outOfRange: "⚠ أبعد من 500م",
+    withinRange: "✓ على مسار السائق",
+    order: "ترتيب الالتقاط #",
+    schoolTarget: "وقت الوصول المستهدف",
   },
 };
 
-const isValidCoordinate = (point) => {
-  if (!point) return false;
-  const lat = Number(point.latitude);
-  const lng = Number(point.longitude);
-  return (
-    Number.isFinite(lat) &&
-    Number.isFinite(lng) &&
-    Math.abs(lat) <= 90 &&
-    Math.abs(lng) <= 180
-  );
-};
+/* ─────────────────────────────── helpers ───────────────────────────────── */
+const isValidCoord = (p) =>
+  p && Number.isFinite(Number(p.latitude)) && Number.isFinite(Number(p.longitude));
 
-const normalizeCoordinate = (point, fallback = null) => {
-  if (isValidCoordinate(point)) {
-    return {
-      latitude: Number(point.latitude),
-      longitude: Number(point.longitude),
-    };
-  }
-  return fallback;
-};
+const normalizeCoord = (p, fallback) =>
+  isValidCoord(p)
+    ? { latitude: Number(p.latitude), longitude: Number(p.longitude) }
+    : fallback;
 
-const sanitizeLine = (line, start, end) => {
-  if (!Array.isArray(line)) return [start, end].filter(Boolean);
-  const points = line
-    .map((point) => normalizeCoordinate(point, null))
-    .filter(Boolean);
-  if (points.length >= 2) return points;
-  return [start, end].filter(Boolean);
-};
-
-const toRadians = (value) => (value * Math.PI) / 180;
-const haversineKm = (a, b) => {
-  if (!a || !b) return 0;
-  const R = 6371;
-  const dLat = toRadians(b.latitude - a.latitude);
-  const dLng = toRadians(b.longitude - a.longitude);
-  const lat1 = toRadians(a.latitude);
-  const lat2 = toRadians(b.latitude);
-  const h =
-    Math.sin(dLat / 2) ** 2 +
-    Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLng / 2) ** 2;
-  return 2 * R * Math.asin(Math.sqrt(h));
-};
-
-const routeDistanceKm = (coordinates) => {
-  if (!Array.isArray(coordinates) || coordinates.length < 2) return 0;
-  let total = 0;
-  for (let i = 0; i < coordinates.length - 1; i += 1) {
-    total += haversineKm(coordinates[i], coordinates[i + 1]);
-  }
-  return total;
-};
-
-const formatTime = (value) => {
-  if (!value) return "--:--";
-  const date = value instanceof Date ? value : new Date(value);
-  if (Number.isNaN(date.getTime())) return "--:--";
-  const hours = String(date.getHours()).padStart(2, "0");
-  const minutes = String(date.getMinutes()).padStart(2, "0");
-  return `${hours}:${minutes}`;
-};
-
-const formatDistance = (distanceKm) => {
-  if (!Number.isFinite(distanceKm)) return "--";
-  return `${distanceKm.toFixed(distanceKm >= 10 ? 0 : 1)} km`;
-};
-
+/* ═══════════════════════════════ component ════════════════════════════════ */
 const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
-  const text = COPY[language] || COPY.en;
+  const t = COPY[language] || COPY.en;
   const isRTL = language === "ar";
-  const handleBack = onBack || (() => {});
 
-  const [isHydrating, setIsHydrating] = useState(true);
-  const [isResolvingRoute, setIsResolvingRoute] = useState(false);
-  const mountedRef = useRef(true);
+  /* ── sanitise coordinates ──────────────────────────────────────────── */
+  const studentLoc = useMemo(
+    () => normalizeCoord(tripData?.homeLocation, { latitude: 33.5731, longitude: -7.5898 }),
+    [tripData?.homeLocation],
+  );
+  const schoolLoc = useMemo(
+    () => normalizeCoord(tripData?.destinationLocation, { latitude: 33.58, longitude: -7.592 }),
+    [tripData?.destinationLocation],
+  );
+  const driverName = tripData?.driverName || "Captain Ahmed";
+  const driverPhone = tripData?.driverPhone || null;
+  const isOnline = ["IN_PROGRESS", "STARTED"].includes(tripData?.status);
+  const schoolName = tripData?.schoolName || tripData?.destinationName || t.school;
+  const studentOrder = Number.isFinite(tripData?.studentOrder) ? tripData.studentOrder : 1;
 
-  const safeTrip = useMemo(() => {
-    const fallbackHome = { latitude: 33.5731, longitude: -7.5898 };
-    const fallbackSchool = { latitude: 33.58, longitude: -7.592 };
-
-    const studentLocation = normalizeCoordinate(
-      tripData?.homeLocation,
-      fallbackHome,
-    );
-    const schoolLocation = normalizeCoordinate(
-      tripData?.destinationLocation,
-      fallbackSchool,
-    );
-    const pickupLocation = normalizeCoordinate(
-      tripData?.pickupLocation,
-      studentLocation,
-    );
-
-    const routeCoordinates = sanitizeLine(
-      tripData?.routeCoordinates,
-      pickupLocation,
-      schoolLocation,
-    );
-
-    const estimatedDistanceKm = Number.isFinite(tripData?.totalDistanceKm)
-      ? tripData.totalDistanceKm
-      : routeDistanceKm(routeCoordinates);
-
-    const etaMinutes = Number.isFinite(tripData?.estimatedArrivalMinutes)
-      ? tripData.estimatedArrivalMinutes
-      : Math.max(1, Math.round((estimatedDistanceKm / 24) * 60));
-
-    return {
-      studentLocation,
-      schoolLocation,
-      pickupLocation,
-      routeCoordinates,
-      pickupTime: tripData?.leaveHomeTime || tripData?.startTime || null,
-      schoolName:
-        tripData?.schoolName || tripData?.destinationName || text.schoolName,
-      etaMinutes,
-      distanceKm: estimatedDistanceKm,
-      busUsed: Number.isFinite(tripData?.membersCount)
-        ? tripData.membersCount
-        : Number.isFinite(tripData?.busUsed)
-          ? tripData.busUsed
-          : 1,
-      busTotal: Number.isFinite(tripData?.capacity)
-        ? tripData.capacity
-        : Number.isFinite(tripData?.busCapacity)
-          ? tripData.busCapacity
-          : 12,
-      driverName: tripData?.driverName || "Mobi Driver",
-      driverPhone: tripData?.driverPhone || null,
-      busNumber: tripData?.vehicleInfo || tripData?.busNumber || "BUS-01",
-      processingState: tripData?.processingState || null,
-    };
-  }, [tripData, text.schoolName]);
-
-  const [displayRoute, setDisplayRoute] = useState(safeTrip.routeCoordinates);
-  const [distanceKm, setDistanceKm] = useState(safeTrip.distanceKm);
-  const [etaMinutes, setEtaMinutes] = useState(safeTrip.etaMinutes);
-
-  const canRenderMap =
-    isValidCoordinate(safeTrip.pickupLocation) &&
-    isValidCoordinate(safeTrip.schoolLocation) &&
-    Array.isArray(displayRoute) &&
-    displayRoute.length >= 2;
-
-  useEffect(() => {
-    mountedRef.current = true;
-    const timer = setTimeout(() => {
-      if (mountedRef.current) setIsHydrating(false);
-    }, 240);
-
-    return () => {
-      mountedRef.current = false;
-      clearTimeout(timer);
-    };
-  }, []);
+  /* ── route resolution ──────────────────────────────────────────────── */
+  const [routeCoords, setRouteCoords] = useState([]);
+  const [distanceKm, setDistanceKm] = useState(tripData?.totalDistanceKm || 2.5);
+  const [etaMinutes, setEtaMinutes] = useState(tripData?.estimatedArrivalMinutes || 10);
+  const [etaToSchoolSecs, setEtaToSchoolSecs] = useState(null);  // driver pickup→school
+  const [isResolving, setIsResolving] = useState(false);
 
   useEffect(() => {
     let active = true;
-
-    const fallbackLine = sanitizeLine(
-      safeTrip.routeCoordinates,
-      safeTrip.pickupLocation,
-      safeTrip.schoolLocation,
-    );
-    setDisplayRoute(fallbackLine);
-    setDistanceKm(safeTrip.distanceKm);
-    setEtaMinutes(safeTrip.etaMinutes);
-
-    const resolveRoute = async () => {
-      if (
-        !isValidCoordinate(safeTrip.pickupLocation) ||
-        !isValidCoordinate(safeTrip.schoolLocation)
-      ) {
-        return;
-      }
-
-      setIsResolvingRoute(true);
+    const resolve = async () => {
+      if (!isValidCoord(studentLoc) || !isValidCoord(schoolLoc)) return;
+      setIsResolving(true);
       try {
-        const route = await getDirectionsRoute({
-          origin: safeTrip.pickupLocation,
-          destination: safeTrip.schoolLocation,
+        /* Full route student-home → school (for map display) */
+        const route = await getDirectionsRoute({ origin: studentLoc, destination: schoolLoc });
+        if (!active) return;
+        if (route?.coordinates?.length) {
+          setRouteCoords(route.coordinates);
+          setDistanceKm(route.distanceMeters / 1000);
+          setEtaMinutes(Math.max(1, Math.round(route.durationSeconds / 60)));
+        }
+      } catch (_) { /* silent */ }
+      finally { if (active) setIsResolving(false); }
+    };
+    resolve();
+    return () => { active = false; };
+  }, [studentLoc, schoolLoc]);
+
+  /* ── pickup station (projected on route) ──────────────────────────── */
+  const pickupStation = useMemo(() => {
+    if (routeCoords.length < 2) return null;
+    return findOptimalPickupStation(studentLoc, routeCoords);
+  }, [routeCoords, studentLoc]);
+
+  /* ── driver ETA from pickup point to school ───────────────────────── */
+  useEffect(() => {
+    if (!pickupStation?.pickupPoint || !isValidCoord(schoolLoc)) return;
+    let active = true;
+    const resolve = async () => {
+      try {
+        const leg = await getDirectionsRoute({
+          origin: pickupStation.pickupPoint,
+          destination: schoolLoc,
+          profile: "driving",
         });
-
-        if (!active) return;
-
-        const bestLine = sanitizeLine(
-          route?.coordinates,
-          safeTrip.pickupLocation,
-          safeTrip.schoolLocation,
-        );
-
-        setDisplayRoute(bestLine);
-
-        const resolvedDistanceKm =
-          route?.distanceMeters > 0
-            ? route.distanceMeters / 1000
-            : routeDistanceKm(bestLine);
-
-        const resolvedEtaMinutes =
-          route?.durationSeconds > 0
-            ? Math.max(1, Math.round(route.durationSeconds / 60))
-            : Math.max(1, Math.round((resolvedDistanceKm / 24) * 60));
-
-        setDistanceKm(resolvedDistanceKm);
-        setEtaMinutes(resolvedEtaMinutes);
-      } catch (_error) {
-        if (!active) return;
-        setDisplayRoute(fallbackLine);
-      } finally {
-        if (active) setIsResolvingRoute(false);
-      }
+        if (active && leg?.durationSeconds > 0) {
+          setEtaToSchoolSecs(leg.durationSeconds);
+        }
+      } catch (_) { /* silent */ }
     };
+    resolve();
+    return () => { active = false; };
+  }, [pickupStation, schoolLoc]);
 
-    resolveRoute();
-
-    return () => {
-      active = false;
-    };
+  /* ── timing computation (re-runs whenever inputs change) ──────────── */
+  const timing = useMemo(() => {
+    return computeTripTimes({
+      startTime: tripData?.startTime || tripData?.start_time || null,
+      walkDistMeters: pickupStation?.walkDistMeters ?? 400,
+      driverEtaToSchoolSecs: etaToSchoolSecs,
+      pickupToSchoolDistMeters: distanceKm * 1_000 * 0.6, // rough pickup→school portion
+      studentOrder,
+    });
   }, [
-    safeTrip.pickupLocation,
-    safeTrip.schoolLocation,
-    safeTrip.routeCoordinates,
-    safeTrip.distanceKm,
-    safeTrip.etaMinutes,
+    tripData?.startTime,
+    tripData?.start_time,
+    pickupStation?.walkDistMeters,
+    etaToSchoolSecs,
+    distanceKm,
+    studentOrder,
   ]);
 
-  const openCall = async () => {
-    if (!safeTrip.driverPhone) return;
-    const url = `tel:${safeTrip.driverPhone}`;
-    const canOpen = await Linking.canOpenURL(url);
-    if (canOpen) Linking.openURL(url);
-  };
+  /* ── badge states based on real clock ─────────────────────────────── */
+  const homeBadge = getTimeBadge(timing.leaveHomeTime);
+  const pickupBadge = getTimeBadge(timing.pickupTime);
+  const schoolBadge = getTimeBadge(timing.schoolTime);
 
-  const openMessage = async () => {
-    if (!safeTrip.driverPhone) return;
-    const url = `sms:${safeTrip.driverPhone}`;
-    const canOpen = await Linking.canOpenURL(url);
-    if (canOpen) Linking.openURL(url);
-  };
+  /* ── contact ───────────────────────────────────────────────────────── */
+  const handleCall = () => driverPhone && Linking.openURL(`tel:${driverPhone}`);
+  const handleMessage = () => driverPhone && Linking.openURL(`sms:${driverPhone}`);
 
-  if (isHydrating) {
-    return (
-      <SafeAreaView style={styles.loaderScreen}>
-        <StatusBar style="dark" />
-        <View style={styles.skeletonMap} />
-        <View style={styles.skeletonCard} />
-        <ActivityIndicator size="large" color={COLORS.primary} />
-        <Text style={styles.loaderText}>{text.loading}</Text>
-      </SafeAreaView>
-    );
-  }
-
-  if (!canRenderMap) {
-    return (
-      <SafeAreaView style={styles.loaderScreen}>
-        <StatusBar style="dark" />
-        <MaterialIcons name="error-outline" size={36} color={COLORS.danger} />
-        <Text style={styles.errorText}>{text.invalid}</Text>
-        <TouchableOpacity style={styles.backBtn} onPress={handleBack}>
-          <Text style={styles.backBtnText}>Back</Text>
-        </TouchableOpacity>
-      </SafeAreaView>
-    );
-  }
-
+  /* ═══════════════════════════════ render ═══════════════════════════════ */
   return (
-    <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
+    <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
       <StatusBar style="dark" />
 
+      {/* ── MAP ─────────────────────────────────────────────────────── */}
       <View style={styles.mapStage}>
         <MapboxRoutePreview
           style={styles.map}
-          homeLocation={safeTrip.pickupLocation}
-          destinationLocation={safeTrip.schoolLocation}
-          routeCoordinates={displayRoute}
+          homeLocation={studentLoc}
+          destinationLocation={schoolLoc}
+          pickupLocation={pickupStation?.pickupPoint ?? null}
+          routeCoordinates={routeCoords}
           interactive
           showRoute
-          studentLabel={language === "ar" ? "نقطة الانطلاق" : "Pickup"}
-          schoolLabel={language === "ar" ? "المدرسة" : "School"}
+          studentLabel={t.home}
+          schoolLabel={schoolName}
+          pickupLabel={t.pickup}
         />
 
-        <View style={styles.topOverlay}>
-          <TouchableOpacity style={styles.topBarBtn} onPress={handleBack}>
-            <MaterialIcons
-              name={isRTL ? "arrow-forward-ios" : "arrow-back-ios"}
-              size={16}
-              color={COLORS.text}
-            />
+        {/* floating header */}
+        <View style={styles.headerOverlay}>
+          <TouchableOpacity onPress={onBack} style={styles.backArea}>
+            <View style={styles.backBtn}>
+              <MaterialIcons name={isRTL ? "chevron-right" : "chevron-left"} size={26} color={C.text} />
+            </View>
           </TouchableOpacity>
-
-          <View style={styles.topTitleWrap}>
-            <Text
-              style={[styles.topBarTitle, isRTL && styles.rtl]}
-              numberOfLines={1}
-            >
-              {text.title}
-            </Text>
-            <Text
-              style={[styles.topBarSub, isRTL && styles.rtl]}
-              numberOfLines={1}
-            >
-              {text.liveTrip}
-            </Text>
-          </View>
-
-          <View style={styles.topStatusChip}>
-            <View style={styles.statusDot} />
-            <Text style={styles.topStatusText}>{text.onTheWay}</Text>
-          </View>
+          <Text style={styles.headerTitle}>{t.title}</Text>
+          <View style={{ width: 40 }} />
         </View>
 
-        {isResolvingRoute && (
-          <View style={styles.mapSyncChip}>
-            <ActivityIndicator size="small" color={COLORS.primary} />
-            <Text style={styles.mapSyncText}>{text.routeSync}</Text>
+        {isResolving && (
+          <View style={styles.syncChip}>
+            <ActivityIndicator size="small" color={C.primary} />
+            <Text style={styles.syncText}>{t.loading}</Text>
           </View>
         )}
       </View>
 
+      {/* ── BOTTOM SHEET ────────────────────────────────────────────── */}
       <View style={styles.bottomSheet}>
-        <View style={styles.sheetHandleArea}>
-          <View style={styles.sheetHandle} />
+        <View style={styles.handleArea}>
+          <View style={styles.handle} />
         </View>
 
-        <ScrollView
-          contentContainerStyle={styles.sheetContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <View style={styles.routeCard}>
-            <Text style={styles.routeCardTitle}>{text.routeToSchool}</Text>
+        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
 
-            <View style={styles.routeLine}>
-              <View style={styles.routeDotStart} />
-              <View style={styles.routeLineDivider} />
-              <View style={styles.routeDotEnd} />
+          {/* ETA / Distance pills */}
+          <View style={styles.statsRow}>
+            <View style={styles.statCard}>
+              <View style={[styles.iconCircle, { backgroundColor: "#E3F2FD" }]}>
+                <MaterialIcons name="access-time" size={20} color={C.primary} />
+              </View>
+              <View>
+                <Text style={styles.statLabel}>{t.eta}</Text>
+                <View style={styles.statValueRow}>
+                  <Text style={styles.statNum}>{etaMinutes}</Text>
+                  <Text style={styles.statUnit}>min</Text>
+                </View>
+              </View>
             </View>
 
-            <View style={styles.routeRows}>
-              <View style={styles.routeRow}>
-                <Text style={styles.routeLabel}>{text.from}</Text>
-                <Text style={styles.routeValue} numberOfLines={1}>
-                  {formatTime(safeTrip.pickupTime)}
-                </Text>
+            <View style={styles.statCard}>
+              <View style={[styles.iconCircle, { backgroundColor: "#E8F5E9" }]}>
+                <MaterialCommunityIcons name="ruler" size={20} color={C.success} />
               </View>
-
-              <View style={styles.routeRow}>
-                <Text style={styles.routeLabel}>{text.to}</Text>
-                <Text style={styles.routeValue} numberOfLines={1}>
-                  {safeTrip.schoolName}
-                </Text>
+              <View>
+                <Text style={styles.statLabel}>{t.distance}</Text>
+                <View style={styles.statValueRow}>
+                  <Text style={styles.statNum}>{distanceKm.toFixed(1)}</Text>
+                  <Text style={styles.statUnit}>km</Text>
+                </View>
               </View>
             </View>
           </View>
 
-          <View style={styles.quickStatsRow}>
-            <View style={styles.statPill}>
-              <MaterialIcons name="schedule" size={15} color={COLORS.primary} />
-              <Text style={styles.statLabel}>{text.eta}</Text>
-              <Text style={styles.statValue}>{etaMinutes} min</Text>
-            </View>
+          {/* ── Pickup Station card ─────────────────────────────────── */}
+          {pickupStation && (
+            <View style={[styles.card, styles.pickupCard]}>
+              <View style={styles.pickupCardHeader}>
+                <View style={styles.pickupIconWrap}>
+                  <MaterialIcons name="location-on" size={22} color={C.orange} />
+                </View>
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.cardTitle, { color: C.orange, marginBottom: 2 }]}>
+                    {t.pickupCard}
+                  </Text>
+                  <Text style={[
+                    styles.rangeTag,
+                    { color: pickupStation.withinConstraint ? C.success : C.warning },
+                  ]}>
+                    {pickupStation.withinConstraint ? t.withinRange : t.outOfRange}
+                  </Text>
+                </View>
+                {studentOrder > 1 && (
+                  <View style={styles.orderBadge}>
+                    <Text style={styles.orderBadgeTxt}>{t.order}{studentOrder}</Text>
+                  </View>
+                )}
+              </View>
 
-            <View style={styles.statPill}>
-              <MaterialIcons name="route" size={15} color={COLORS.primary} />
-              <Text style={styles.statLabel}>{text.distance}</Text>
-              <Text style={styles.statValue}>{formatDistance(distanceKm)}</Text>
+              <View style={styles.pickupStatsRow}>
+                <View style={styles.pickupStat}>
+                  <MaterialIcons name="directions-walk" size={18} color={C.orange} />
+                  <View>
+                    <Text style={styles.pickupStatLabel}>{t.walkDist}</Text>
+                    <Text style={styles.pickupStatValue}>
+                      {formatWalkDistance(pickupStation.walkDistMeters)}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.statDivider} />
+                <View style={styles.pickupStat}>
+                  <MaterialIcons name="timer" size={18} color={C.orange} />
+                  <View>
+                    <Text style={styles.pickupStatLabel}>{t.walkTime}</Text>
+                    <Text style={styles.pickupStatValue}>
+                      {formatWalkTime(timing.walkTimeMinutes)}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.statDivider} />
+                <View style={styles.pickupStat}>
+                  <MaterialIcons name="school" size={18} color={C.primary} />
+                  <View>
+                    <Text style={styles.pickupStatLabel}>{t.schoolTarget}</Text>
+                    <Text style={[styles.pickupStatValue, { color: C.primary }]}>
+                      {timing.formatted.schoolTime}
+                    </Text>
+                  </View>
+                </View>
+              </View>
             </View>
+          )}
 
-            <View style={styles.statPill}>
-              <MaterialIcons
-                name="directions-bus"
-                size={15}
-                color={COLORS.primary}
-              />
-              <Text style={styles.statLabel}>{text.busCapacity}</Text>
-              <Text style={styles.statValue}>
-                {safeTrip.busUsed}/{safeTrip.busTotal}
-              </Text>
-            </View>
-          </View>
-
-          <View style={styles.driverCard}>
-            <View style={styles.driverLeft}>
+          {/* ── Driver card ─────────────────────────────────────────── */}
+          <View style={styles.card}>
+            <Text style={[styles.cardTitle, isRTL && styles.rtl]}>{t.driver}</Text>
+            <View style={[styles.row, { gap: 12, marginBottom: 14 }, isRTL && styles.rowRev]}>
               <View style={styles.driverAvatar}>
-                <MaterialIcons name="person" size={20} color={COLORS.white} />
+                <MaterialIcons name="person" size={24} color={C.white} />
               </View>
-
-              <View style={styles.driverMeta}>
-                <Text style={styles.driverName} numberOfLines={1}>
-                  {safeTrip.driverName}
-                </Text>
-                <Text style={styles.driverBus} numberOfLines={1}>
-                  {safeTrip.busNumber}
-                </Text>
-                {safeTrip.processingState === "grouping_in_progress" ? (
-                  <Text style={styles.groupingHint}>{text.grouping}</Text>
-                ) : null}
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.driverName, isRTL && styles.rtl]}>{driverName}</Text>
+                <View style={[styles.row, isRTL && styles.rowRev]}>
+                  <View style={[styles.dot, { backgroundColor: isOnline ? C.success : C.gray }]} />
+                  <Text style={[styles.statusTxt, { color: isOnline ? C.success : C.gray }]}>
+                    {isOnline ? t.online : t.offline}
+                  </Text>
+                </View>
               </View>
             </View>
-
-            <View style={styles.actionRow}>
+            <View style={[styles.row, { gap: 12 }, isRTL && styles.rowRev]}>
               <TouchableOpacity
-                style={[
-                  styles.contactBtn,
-                  !safeTrip.driverPhone && styles.disabledBtn,
-                ]}
-                onPress={openCall}
-                disabled={!safeTrip.driverPhone}
+                style={[styles.contactBtn, !driverPhone && styles.disabledBtn]}
+                onPress={handleCall}
+                disabled={!driverPhone}
               >
-                <MaterialIcons
-                  name="call"
-                  size={18}
-                  color={safeTrip.driverPhone ? COLORS.primary : "#94A3B8"}
-                />
-                <Text
-                  style={[
-                    styles.contactText,
-                    !safeTrip.driverPhone && styles.disabledText,
-                  ]}
-                >
-                  {safeTrip.driverPhone ? text.call : text.noPhone}
+                <MaterialIcons name="call" size={18} color={driverPhone ? C.primary : C.gray} />
+                <Text style={[styles.contactTxt, !driverPhone && { color: C.gray }]}>
+                  {driverPhone ? t.call : t.noPhone}
                 </Text>
               </TouchableOpacity>
-
               <TouchableOpacity
-                style={[
-                  styles.contactBtn,
-                  !safeTrip.driverPhone && styles.disabledBtn,
-                ]}
-                onPress={openMessage}
-                disabled={!safeTrip.driverPhone}
+                style={[styles.contactBtn, !driverPhone && styles.disabledBtn]}
+                onPress={handleMessage}
+                disabled={!driverPhone}
               >
-                <MaterialIcons
-                  name="chat-bubble-outline"
-                  size={18}
-                  color={safeTrip.driverPhone ? COLORS.primary : "#94A3B8"}
-                />
-                <Text
-                  style={[
-                    styles.contactText,
-                    !safeTrip.driverPhone && styles.disabledText,
-                  ]}
-                >
-                  {safeTrip.driverPhone ? text.message : text.noPhone}
+                <MaterialIcons name="message" size={18} color={driverPhone ? C.primary : C.gray} />
+                <Text style={[styles.contactTxt, !driverPhone && { color: C.gray }]}>
+                  {driverPhone ? t.message : t.noPhone}
                 </Text>
               </TouchableOpacity>
             </View>
           </View>
+
+          {/* ── Journey Timeline ─────────────────────────────────────── */}
+          <View style={styles.card}>
+            <Text style={[styles.cardTitle, isRTL && styles.rtl]}>{t.timeline}</Text>
+
+            {/* 1 – Leave Home */}
+            <TLRow
+              icon="home" iconBg={BADGE_STYLE[homeBadge].color}
+              time={timing.formatted.leaveHomeTime}
+              badge={homeBadge}
+              title={t.home} sub={t.leaveHome}
+              hasLine isRTL={isRTL}
+            />
+
+            {/* 2 – Pickup Station */}
+            <TLRow
+              icon="location-on" iconBg={C.primary}
+              time={timing.formatted.pickupTime}
+              badge={pickupBadge}
+              title={t.pickup} sub={t.reachPickup}
+              hasLine isRTL={isRTL}
+            >
+              {pickupStation && (
+                <View style={[styles.inlineAlert, isRTL && styles.rowRev]}>
+                  <MaterialIcons name="directions-walk" size={16} color={C.primary} />
+                  <Text style={[styles.inlineAlertTxt, isRTL && styles.rtl]}>
+                    {t.walkToStation}:{" "}
+                    <Text style={{ fontFamily: UbuntuFonts.bold }}>
+                      {formatWalkDistance(pickupStation.walkDistMeters)} · {formatWalkTime(timing.walkTimeMinutes)}
+                    </Text>
+                  </Text>
+                </View>
+              )}
+            </TLRow>
+
+            {/* 3 – School */}
+            <TLRow
+              icon="school" iconBg={BADGE_STYLE[schoolBadge].color}
+              time={timing.formatted.schoolTime}
+              badge={schoolBadge}
+              title={schoolName} sub={t.finalDest}
+              hasLine={false} isRTL={isRTL}
+            />
+          </View>
+
         </ScrollView>
+      </View>
+
+      {/* ── FOOTER ──────────────────────────────────────────────────── */}
+      <View style={styles.footer}>
+        <TouchableOpacity style={[styles.mainBtn, isRTL && styles.rowRev]} activeOpacity={0.85}>
+          <Text style={styles.mainBtnTxt}>{t.startLive}</Text>
+          <MaterialIcons name={isRTL ? "arrow-back" : "arrow-forward"} size={22} color={C.white} />
+        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
 };
 
+/* ──────────────────── Timeline Row sub-component ───────────────────────── */
+const TLRow = ({ icon, iconBg, time, badge, title, sub, hasLine, isRTL, children }) => {
+  const bs = BADGE_STYLE[badge] || BADGE_STYLE.SOON;
+  return (
+    <View style={[styles.tlItem, isRTL && styles.rowRev]}>
+      <View style={styles.tlLeft}>
+        <View style={[styles.tlIconCircle, { backgroundColor: iconBg }]}>
+          <MaterialIcons name={icon} size={18} color={C.white} />
+        </View>
+        {hasLine && <View style={[styles.tlLine, { backgroundColor: iconBg, opacity: 0.35 }]} />}
+      </View>
+      <View style={[styles.tlRight, isRTL && { paddingLeft: 0, paddingRight: 8 }]}>
+        <View style={[styles.row, { justifyContent: "space-between" }, isRTL && styles.rowRev]}>
+          <Text style={styles.tlTime}>{time}</Text>
+          <View style={[styles.badge, { backgroundColor: bs.bg }]}>
+            <Text style={[styles.badgeTxt, { color: bs.color }]}>{badge}</Text>
+          </View>
+        </View>
+        <Text style={[styles.tlTitle, isRTL && styles.rtl]}>{title}</Text>
+        <Text style={[styles.tlSub, isRTL && styles.rtl]}>{sub}</Text>
+        {children}
+      </View>
+    </View>
+  );
+};
+
+/* ───────────────────────────────── styles ──────────────────────────────── */
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.bg,
+  container: { flex: 1, backgroundColor: C.bg },
+  mapStage: { height: 300, width: "100%" },
+  map: { flex: 1 },
+
+  headerOverlay: {
+    position: "absolute",
+    top: Platform.OS === "ios" ? 10 : 20,
+    left: 16, right: 16,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    backgroundColor: "rgba(255,255,255,0.93)",
+    borderRadius: 16,
+    paddingHorizontal: 8, paddingVertical: 8,
+    borderWidth: 1, borderColor: "rgba(238,238,238,0.9)",
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1, shadowRadius: 4, elevation: 3,
   },
-  loaderScreen: {
-    flex: 1,
-    backgroundColor: COLORS.bg,
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 12,
-    paddingHorizontal: 24,
-  },
-  skeletonMap: {
-    width: "100%",
-    height: 190,
-    borderRadius: 18,
-    backgroundColor: "#EAF3FF",
-  },
-  skeletonCard: {
-    width: "100%",
-    height: 160,
-    borderRadius: 18,
-    backgroundColor: "#EAF3FF",
-  },
-  loaderText: {
-    color: COLORS.subtext,
-    fontFamily: UbuntuFonts.medium,
-    fontSize: 14,
-  },
-  errorText: {
-    color: COLORS.text,
-    textAlign: "center",
-    fontFamily: UbuntuFonts.medium,
-    fontSize: 14,
-  },
+  backArea: { padding: 4 },
   backBtn: {
-    backgroundColor: COLORS.primary,
-    borderRadius: 10,
-    paddingHorizontal: 16,
-    paddingVertical: 10,
+    width: 32, height: 32, borderRadius: 16,
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: "#F0F4F8",
   },
-  backBtnText: {
-    color: COLORS.white,
-    fontFamily: UbuntuFonts.semiBold,
-    fontSize: 13,
-  },
-  rtl: {
-    textAlign: "right",
-  },
-  mapStage: {
-    width: "100%",
-    flex: 7,
-  },
-  map: {
-    flex: 1,
-  },
-  topOverlay: {
-    position: "absolute",
-    top: 12,
-    left: 12,
-    right: 12,
-    borderRadius: 16,
-    backgroundColor: "rgba(255,255,255,0.95)",
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-  },
-  topBarBtn: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#EEF6FF",
-  },
-  topTitleWrap: {
-    flex: 1,
-  },
-  topBarTitle: {
-    color: COLORS.text,
-    fontFamily: UbuntuFonts.bold,
-    fontSize: 15,
-    marginBottom: 1,
-  },
-  topBarSub: {
-    color: COLORS.subtext,
-    fontFamily: UbuntuFonts.medium,
-    fontSize: 11,
-  },
-  topStatusChip: {
-    backgroundColor: "#ECFDF5",
-    borderWidth: 1,
-    borderColor: "#BBF7D0",
-    borderRadius: 999,
-    paddingHorizontal: 8,
-    paddingVertical: 5,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-  },
-  statusDot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-    backgroundColor: COLORS.success,
-  },
-  topStatusText: {
-    color: "#047857",
-    fontFamily: UbuntuFonts.semiBold,
-    fontSize: 11,
-  },
-  mapSyncChip: {
-    position: "absolute",
-    top: 74,
-    alignSelf: "center",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
+  headerTitle: { fontSize: 16, fontFamily: UbuntuFonts.bold, color: C.text },
+
+  syncChip: {
+    position: "absolute", top: 80, alignSelf: "center",
+    flexDirection: "row", alignItems: "center", gap: 8,
     backgroundColor: "rgba(255,255,255,0.96)",
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+    borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8,
+    elevation: 3,
   },
-  mapSyncText: {
-    color: COLORS.primaryDark,
-    fontFamily: UbuntuFonts.medium,
-    fontSize: 12,
-  },
+  syncText: { fontFamily: UbuntuFonts.medium, fontSize: 12, color: C.primary },
+
   bottomSheet: {
-    flex: 3,
-    backgroundColor: COLORS.white,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    shadowColor: "#0F172A",
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: Platform.OS === "ios" ? 0.14 : 0,
-    shadowRadius: 12,
-    elevation: 14,
+    flex: 1, backgroundColor: C.bg,
+    borderTopLeftRadius: 24, borderTopRightRadius: 24,
+    marginTop: -20, overflow: "hidden",
+    shadowColor: "#000", shadowOffset: { width: 0, height: -4 },
+    shadowOpacity: 0.08, shadowRadius: 8, elevation: 10,
   },
-  sheetHandleArea: {
-    alignItems: "center",
-    paddingTop: 8,
-    paddingBottom: 6,
+  handleArea: { alignItems: "center", paddingTop: 10, paddingBottom: 4 },
+  handle: { width: 48, height: 5, borderRadius: 3, backgroundColor: "#E0E0E0" },
+  scroll: { padding: 16, paddingBottom: 32 },
+
+  statsRow: { flexDirection: "row", gap: 12, marginBottom: 16 },
+  statCard: {
+    flex: 1, backgroundColor: C.white, borderRadius: 16, padding: 14,
+    flexDirection: "row", alignItems: "center", gap: 12,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05, shadowRadius: 5, elevation: 2,
   },
-  sheetHandle: {
-    width: 52,
-    height: 5,
-    borderRadius: 4,
-    backgroundColor: "#C6DEFF",
+  iconCircle: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
+  statLabel: { fontSize: 10, color: C.gray, fontFamily: UbuntuFonts.semiBold, letterSpacing: 0.5 },
+  statValueRow: { flexDirection: "row", alignItems: "baseline", gap: 3 },
+  statNum: { fontSize: 18, fontFamily: UbuntuFonts.bold, color: C.text },
+  statUnit: { fontSize: 12, fontFamily: UbuntuFonts.regular, color: C.gray },
+
+  card: {
+    backgroundColor: C.white, borderRadius: 20, padding: 18, marginBottom: 16,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05, shadowRadius: 5, elevation: 2,
   },
-  sheetContent: {
-    paddingHorizontal: 16,
-    paddingBottom: 22,
+  pickupCard: { borderWidth: 1, borderColor: C.pickupBorder, backgroundColor: C.pickupBg },
+
+  pickupCardHeader: { flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 14 },
+  pickupIconWrap: {
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: "#FFF0E0", alignItems: "center", justifyContent: "center",
   },
-  routeCard: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    backgroundColor: "#F8FBFF",
-    borderRadius: 16,
-    padding: 12,
-    marginBottom: 12,
+  rangeTag: { fontSize: 11, fontFamily: UbuntuFonts.semiBold, marginTop: 2 },
+  orderBadge: {
+    backgroundColor: "#E3F2FD", borderRadius: 99,
+    paddingHorizontal: 8, paddingVertical: 3,
   },
-  routeCardTitle: {
-    color: COLORS.text,
-    fontFamily: UbuntuFonts.semiBold,
-    fontSize: 14,
-    marginBottom: 10,
+  orderBadgeTxt: { fontSize: 11, fontFamily: UbuntuFonts.bold, color: C.primary },
+
+  pickupStatsRow: {
+    flexDirection: "row", alignItems: "center",
+    backgroundColor: C.white, borderRadius: 12,
+    paddingVertical: 12, paddingHorizontal: 10,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.04, shadowRadius: 3, elevation: 1,
   },
-  routeLine: {
-    position: "absolute",
-    left: 18,
-    top: 41,
-    bottom: 14,
-    alignItems: "center",
-  },
-  routeDotStart: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: COLORS.primary,
-  },
-  routeLineDivider: {
-    width: 2,
-    flex: 1,
-    marginVertical: 3,
-    backgroundColor: "#BFDBFE",
-  },
-  routeDotEnd: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: COLORS.success,
-  },
-  routeRows: {
-    marginLeft: 24,
-    gap: 12,
-  },
-  routeRow: {
-    gap: 2,
-  },
-  routeLabel: {
-    color: COLORS.subtext,
-    fontFamily: UbuntuFonts.medium,
-    fontSize: 11,
-  },
-  routeValue: {
-    color: COLORS.text,
-    fontFamily: UbuntuFonts.semiBold,
-    fontSize: 13,
-  },
-  quickStatsRow: {
-    flexDirection: "row",
-    gap: 8,
-    marginBottom: 12,
-  },
-  statPill: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 14,
-    backgroundColor: COLORS.white,
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    alignItems: "center",
-    gap: 2,
-  },
-  statLabel: {
-    color: COLORS.subtext,
-    fontFamily: UbuntuFonts.medium,
-    fontSize: 11,
-  },
-  statValue: {
-    color: COLORS.primaryDark,
-    fontFamily: UbuntuFonts.bold,
-    fontSize: 13,
-  },
-  driverCard: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 14,
-    backgroundColor: COLORS.white,
-    padding: 12,
-  },
-  driverLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 10,
-  },
+  pickupStat: { flex: 1, flexDirection: "row", alignItems: "center", gap: 7 },
+  statDivider: { width: 1, height: 36, backgroundColor: C.border },
+  pickupStatLabel: { fontSize: 9, color: C.gray, fontFamily: UbuntuFonts.medium },
+  pickupStatValue: { fontSize: 13, fontFamily: UbuntuFonts.bold, color: C.text },
+
+  cardTitle: { fontSize: 15, fontFamily: UbuntuFonts.bold, color: C.text, marginBottom: 14 },
   driverAvatar: {
-    width: 42,
-    height: 42,
-    borderRadius: 21,
-    backgroundColor: COLORS.primary,
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 10,
+    width: 44, height: 44, borderRadius: 22,
+    backgroundColor: C.primary, alignItems: "center", justifyContent: "center",
   },
-  driverMeta: {
-    flex: 1,
-  },
-  driverName: {
-    color: COLORS.text,
-    fontFamily: UbuntuFonts.semiBold,
-    fontSize: 14,
-    marginBottom: 1,
-  },
-  driverBus: {
-    color: COLORS.subtext,
-    fontFamily: UbuntuFonts.medium,
-    fontSize: 12,
-  },
-  groupingHint: {
-    marginTop: 3,
-    color: COLORS.warning,
-    fontFamily: UbuntuFonts.medium,
-    fontSize: 11,
-  },
-  actionRow: {
-    flexDirection: "row",
-    gap: 10,
-  },
+  driverName: { fontSize: 15, fontFamily: UbuntuFonts.bold, color: C.text, marginBottom: 2 },
+  statusTxt: { fontSize: 12, fontFamily: UbuntuFonts.medium },
+  dot: { width: 8, height: 8, borderRadius: 4 },
   contactBtn: {
-    flex: 1,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 12,
-    backgroundColor: "#F8FBFF",
-    paddingVertical: 11,
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 7,
+    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 6, backgroundColor: C.lightGray, paddingVertical: 11, borderRadius: 12,
   },
-  contactText: {
-    color: COLORS.primary,
-    fontFamily: UbuntuFonts.semiBold,
-    fontSize: 13,
+  contactTxt: { fontSize: 13, fontFamily: UbuntuFonts.semiBold, color: C.primary },
+  disabledBtn: { opacity: 0.5 },
+
+  tlItem: { flexDirection: "row", minHeight: 80 },
+  tlLeft: { width: 38, alignItems: "center" },
+  tlIconCircle: {
+    width: 30, height: 30, borderRadius: 15,
+    alignItems: "center", justifyContent: "center", zIndex: 1,
   },
-  disabledBtn: {
-    backgroundColor: "#F8FAFC",
-    borderColor: "#E2E8F0",
+  tlLine: { width: 2, flex: 1, marginTop: -4, marginBottom: -4 },
+  tlRight: { flex: 1, paddingBottom: 20, paddingLeft: 10 },
+  tlTime: { fontSize: 16, fontFamily: UbuntuFonts.bold, color: C.text },
+  tlTitle: { fontSize: 13, fontFamily: UbuntuFonts.bold, color: C.text, marginTop: 2 },
+  tlSub: { fontSize: 11, fontFamily: UbuntuFonts.medium, color: C.gray, marginBottom: 2 },
+  badge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
+  badgeTxt: { fontSize: 10, fontFamily: UbuntuFonts.bold },
+
+  inlineAlert: {
+    flexDirection: "row", alignItems: "center", gap: 8,
+    backgroundColor: C.alertBg, borderWidth: 1, borderColor: C.alertBorder,
+    borderRadius: 10, padding: 9, marginTop: 8, borderLeftWidth: 4,
   },
-  disabledText: {
-    color: "#94A3B8",
+  inlineAlertTxt: { fontSize: 11, fontFamily: UbuntuFonts.medium, color: "#1565C0", flex: 1 },
+
+  footer: { padding: 16, backgroundColor: C.white, borderTopWidth: 1, borderTopColor: C.border },
+  mainBtn: {
+    backgroundColor: C.primary,
+    flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 10, paddingVertical: 15, borderRadius: 16,
+    shadowColor: C.primary,
+    shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
   },
+  mainBtnTxt: { fontSize: 16, fontFamily: UbuntuFonts.bold, color: C.white },
+
+  row: { flexDirection: "row", alignItems: "center" },
+  rowRev: { flexDirection: "row-reverse" },
+  rtl: { textAlign: "right" },
 });
 
 export default TripDetailsScreen;

@@ -8,6 +8,7 @@ import {
   ScrollView,
   Alert,
   Platform,
+  Vibration,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -34,6 +35,11 @@ const translations = {
     ok: 'OK',
     error: 'Error',
     errorMessage: 'Failed to check status',
+    logout: 'Logout',
+    logoutConfirm: 'Are you sure you want to logout?',
+    logoutConfirmTitle: 'Logout',
+    yes: 'Yes',
+    no: 'No',
   },
   ar: {
     title: 'قيد المراجعة',
@@ -52,10 +58,15 @@ const translations = {
     ok: 'حسناً',
     error: 'خطأ',
     errorMessage: 'فشل التحقق من الحالة',
+    logout: 'تسجيل الخروج',
+    logoutConfirm: 'هل أنت متأكد من تسجيل الخروج؟',
+    logoutConfirmTitle: 'تسجيل الخروج',
+    yes: 'نعم',
+    no: 'لا',
   },
 };
 
-const PendingApprovalScreen = ({ driverId, language = 'en', onApproved, onRejected }) => {
+const PendingApprovalScreen = ({ driverId, language = 'en', onApproved, onRejected, onLogout }) => {
   const [driver, setDriver] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -172,6 +183,29 @@ const PendingApprovalScreen = ({ driverId, language = 'en', onApproved, onReject
     }
   };
 
+  const handleLogout = () => {
+    if (Platform.OS !== 'web') {
+      Vibration.vibrate(50);
+    }
+    Alert.alert(
+      t.logoutConfirmTitle,
+      t.logoutConfirm,
+      [
+        { text: t.no, style: 'cancel' },
+        {
+          text: t.yes,
+          style: 'destructive',
+          onPress: async () => {
+            if (onLogout) {
+              await onLogout();
+            }
+          },
+        },
+      ],
+      { cancelable: true }
+    );
+  };
+
   const getStatusColor = (status) => {
     switch (status) {
       case 'APPROVED':
@@ -210,6 +244,8 @@ const PendingApprovalScreen = ({ driverId, language = 'en', onApproved, onReject
     );
   }
 
+  const statusColor = getStatusColor(driver?.status || 'PENDING');
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar style="dark" />
@@ -217,7 +253,6 @@ const PendingApprovalScreen = ({ driverId, language = 'en', onApproved, onReject
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Header */}
         <View style={styles.header}>
           <View style={styles.iconContainer}>
             <MaterialIcons name="pending" size={64} color="#F59E0B" />
@@ -230,14 +265,13 @@ const PendingApprovalScreen = ({ driverId, language = 'en', onApproved, onReject
           </Text>
         </View>
 
-        {/* Status Card */}
         {driver && (
           <View style={styles.statusCard}>
             <View style={styles.statusHeader}>
               <MaterialIcons
                 name={getStatusIcon(driver.status)}
                 size={32}
-                color={getStatusColor(driver.status)}
+                color={statusColor}
               />
               <View style={styles.statusInfo}>
                 <Text style={[styles.statusLabel, language === 'ar' && styles.rtl]}>
@@ -246,7 +280,7 @@ const PendingApprovalScreen = ({ driverId, language = 'en', onApproved, onReject
                 <Text
                   style={[
                     styles.statusValue,
-                    { color: getStatusColor(driver.status) },
+                    { color: statusColor },
                     language === 'ar' && styles.rtl,
                   ]}
                 >
@@ -259,14 +293,12 @@ const PendingApprovalScreen = ({ driverId, language = 'en', onApproved, onReject
           </View>
         )}
 
-        {/* Message */}
         <View style={styles.messageContainer}>
           <Text style={[styles.messageText, language === 'ar' && styles.rtl]}>
             {t.message}
           </Text>
         </View>
 
-        {/* Driver Info */}
         {driver && (
           <View style={styles.infoCard}>
             <View style={styles.infoRow}>
@@ -290,7 +322,6 @@ const PendingApprovalScreen = ({ driverId, language = 'en', onApproved, onReject
           </View>
         )}
 
-        {/* Error Message */}
         {error && (
           <View style={styles.errorContainer}>
             <MaterialIcons name="error-outline" size={24} color="#EF4444" />
@@ -298,7 +329,6 @@ const PendingApprovalScreen = ({ driverId, language = 'en', onApproved, onReject
           </View>
         )}
 
-        {/* Refresh Button */}
         <TouchableOpacity
           style={[styles.refreshButton, refreshing && styles.refreshButtonDisabled]}
           onPress={handleRefresh}
@@ -313,6 +343,17 @@ const PendingApprovalScreen = ({ driverId, language = 'en', onApproved, onReject
               <Text style={styles.refreshButtonText}>{t.refresh}</Text>
             </>
           )}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={styles.logoutButton}
+          onPress={handleLogout}
+          activeOpacity={0.7}
+        >
+          <MaterialIcons name="logout" size={20} color="#EF4444" />
+          <Text style={[styles.logoutButtonText, language === 'ar' && styles.rtl]}>
+            {t.logout}
+          </Text>
         </TouchableOpacity>
       </ScrollView>
     </SafeAreaView>
@@ -359,11 +400,13 @@ const styles = StyleSheet.create({
     color: '#3185FC',
     marginBottom: 12,
     textAlign: 'center',
+    fontFamily: 'Ubuntu_700Bold',
   },
   subtitle: {
     fontSize: 16,
     color: '#666666',
     textAlign: 'center',
+    fontFamily: 'Ubuntu_400Regular',
   },
   rtl: {
     textAlign: 'right',
@@ -373,16 +416,13 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 20,
     marginBottom: 24,
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: '#F3F4F6',
     shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.1,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.05,
     shadowRadius: 8,
-    elevation: 3,
+    elevation: 2,
   },
   statusHeader: {
     flexDirection: 'row',
@@ -452,12 +492,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: '#FFFFFF',
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: '#3185FC',
     borderRadius: 12,
     paddingVertical: 16,
     paddingHorizontal: 24,
-    gap: 8,
+    gap: 10,
   },
   refreshButtonDisabled: {
     opacity: 0.6,
@@ -465,9 +505,25 @@ const styles = StyleSheet.create({
   refreshButtonText: {
     color: '#3185FC',
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
+  },
+  logoutButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 18,
+    borderRadius: 16,
+    backgroundColor: '#FFF1F1',
+    borderWidth: 1,
+    borderColor: '#FEE2E2',
+    marginTop: 24,
+  },
+  logoutButtonText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#EF4444',
   },
 });
 
 export default PendingApprovalScreen;
-

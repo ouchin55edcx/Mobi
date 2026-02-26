@@ -59,9 +59,9 @@ const calculateDistance = (lat1, lon1, lat2, lon2) => {
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
+    Math.cos((lat2 * Math.PI) / 180) *
+    Math.sin(dLon / 2) *
+    Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 };
@@ -104,10 +104,10 @@ const TripLiveViewScreen = ({
   const [remainingSeconds, setRemainingSeconds] = useState(20 * 60); // simple countdown for demo
   const [driverLocation, setDriverLocation] = useState(
     trip.parkingLocation ||
-      trip.students?.[0]?.homeLocation || {
-        latitude: 33.575,
-        longitude: -7.59,
-      },
+    trip.students?.[0]?.homeLocation || {
+      latitude: 33.575,
+      longitude: -7.59,
+    },
   );
   const [routeIndex, setRouteIndex] = useState(0);
   const [studentAtPickup, setStudentAtPickup] = useState(false);
@@ -126,11 +126,11 @@ const TripLiveViewScreen = ({
   // Calculate distance to next student
   const distanceToNextStudent = nextStudent?.homeLocation
     ? calculateDistance(
-        driverLocation.latitude,
-        driverLocation.longitude,
-        nextStudent.homeLocation.latitude,
-        nextStudent.homeLocation.longitude,
-      )
+      driverLocation.latitude,
+      driverLocation.longitude,
+      nextStudent.homeLocation.latitude,
+      nextStudent.homeLocation.longitude,
+    )
     : 0;
 
   // Check if student is at pickup point (within 50 meters)

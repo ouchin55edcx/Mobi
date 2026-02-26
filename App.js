@@ -450,6 +450,7 @@ export default function App() {
         <PendingApprovalScreen
           driverId={driverData.driverId}
           language={language}
+          onLogout={handleLogout}
           onApproved={() => {
             console.log("Driver approved");
             // Navigate to driver home

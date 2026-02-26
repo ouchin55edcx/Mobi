@@ -9,6 +9,7 @@ import {
   Alert,
   ActivityIndicator,
   Platform,
+  Vibration,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
@@ -129,7 +130,7 @@ const DriverProfileScreen = ({
   const loadDriverData = async () => {
     try {
       setLoading(true);
-      
+
       if (isDemo) {
         // Use demo data
         await new Promise(resolve => setTimeout(resolve, 500));
@@ -175,7 +176,7 @@ const DriverProfileScreen = ({
   const handleSave = async () => {
     try {
       setSaving(true);
-      
+
       if (isDemo) {
         // Simulate API call
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -199,7 +200,7 @@ const DriverProfileScreen = ({
         // if (error) throw error;
         Alert.alert(t.saved, '', [{ text: t.ok }]);
       }
-      
+
       setEditing(false);
     } catch (error) {
       console.error('Error saving driver:', error);
@@ -210,6 +211,9 @@ const DriverProfileScreen = ({
   };
 
   const handleLogout = () => {
+    if (Platform.OS !== 'web') {
+      Vibration.vibrate(50);
+    }
     Alert.alert(
       t.logoutConfirmTitle,
       t.logoutConfirm,
@@ -218,13 +222,14 @@ const DriverProfileScreen = ({
         {
           text: t.yes,
           style: 'destructive',
-          onPress: () => {
+          onPress: async () => {
             if (onLogout) {
-              onLogout();
+              await onLogout();
             }
           },
         },
-      ]
+      ],
+      { cancelable: true }
     );
   };
 
@@ -246,7 +251,7 @@ const DriverProfileScreen = ({
     <View style={styles.container}>
       <StatusBar style="dark" />
       <Header title={t.title} subtitle={t.subtitle} language={language} />
-      
+
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.scrollContent}
@@ -612,16 +617,21 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 8,
-    paddingVertical: 16,
-    borderRadius: 12,
-    backgroundColor: '#FEF2F2',
+    paddingVertical: 18,
+    borderRadius: 16,
+    backgroundColor: '#FFF1F1',
     borderWidth: 1,
     borderColor: '#FEE2E2',
-    marginTop: 16,
+    marginTop: 32,
+    shadowColor: '#EF4444',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
+    elevation: 2,
   },
   logoutButtonText: {
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '700',
     color: '#EF4444',
   },
   rtl: {
