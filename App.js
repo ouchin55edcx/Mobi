@@ -2,21 +2,21 @@ import React, { useState, useEffect } from "react";
 import { Alert, StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useFonts } from "expo-font";
-import SplashScreen from "./components/SplashScreen";
-import WelcomeScreen from "./components/WelcomeScreen";
-import LoginScreen from "./components/LoginScreen";
-import SelectRoleScreen from "./components/SelectRoleScreen";
-import StudentRegisterScreen from "./screens/students/StudentRegisterScreen";
-import EmailVerificationScreen from "./screens/students/EmailVerificationScreen";
-import StudentTabNavigator from "./components/StudentTabNavigator";
-import DriverRegistrationFlow from "./screens/drivers/DriverRegistrationFlow";
-import PendingApprovalScreen from "./screens/drivers/PendingApprovalScreen";
-import DriverTabNavigator from "./components/DriverTabNavigator";
-import TripLiveViewScreen from "./screens/drivers/TripLiveViewScreen";
-import DriverTripDetailsScreen from "./screens/drivers/DriverTripDetailsScreen";
-import TripDetailsScreen from "./screens/students/TripDetailsScreen";
-import mockDriverScenario from "./src/mock/mockDriverData";
-import { DEMO_STUDENT, DEMO_DRIVER } from "./src/data/demoData";
+import SplashScreen from "./src/public/SplashScreen";
+import WelcomeScreen from "./src/public/WelcomeScreen";
+import LoginScreen from "./src/auth/LoginScreen";
+import SelectRoleScreen from "./src/auth/SelectRoleScreen";
+import StudentRegisterScreen from "./src/student/StudentRegisterScreen";
+import EmailVerificationScreen from "./src/auth/EmailVerificationScreen";
+import StudentTabNavigator from "./src/shared/components/navigation/StudentTabNavigator";
+import DriverRegistrationFlow from "./src/driver/DriverRegistrationFlow";
+import PendingApprovalScreen from "./src/driver/PendingApprovalScreen";
+import DriverTabNavigator from "./src/shared/components/navigation/DriverTabNavigator";
+import TripLiveViewScreen from "./src/driver/TripLiveViewScreen";
+import DriverTripDetailsScreen from "./src/driver/DriverTripDetailsScreen";
+import TripDetailsScreen from "./src/student/TripDetailsScreen";
+import mockDriverScenario from "./src/shared/mock/mockDriverData";
+import { DEMO_STUDENT, DEMO_DRIVER } from "./src/shared/data/demoData";
 import {
   getSession,
   signIn,
@@ -24,13 +24,13 @@ import {
   requestPasswordResetCode,
   confirmPasswordResetWithCode,
   signOut,
-} from "./src/services/authService";
-import { getStudentByEmail } from "./src/services/studentService";
-import { getDriverByEmail } from "./src/services/driverService";
+} from "./src/shared/services/authService";
+import { getStudentByEmail } from "./src/shared/services/studentService";
+import { getDriverByEmail } from "./src/shared/services/driverService";
 import {
   startAssignedTrip,
   completeAssignedTrip,
-} from "./src/services/groupingService";
+} from "./src/shared/services/groupingService";
 
 const isValidCoordinate = (point) =>
   !!point &&
@@ -54,22 +54,22 @@ export default function App() {
 
   // Load Ubuntu fonts
   const [fontsLoaded, fontError] = useFonts({
-    "UbuntuSans-Thin": require("./assets/fonts/UbuntuSans-Thin.ttf"),
-    "UbuntuSans-ThinItalic": require("./assets/fonts/UbuntuSans-ThinItalic.ttf"),
-    "UbuntuSans-ExtraLight": require("./assets/fonts/UbuntuSans-ExtraLight.ttf"),
-    "UbuntuSans-ExtraLightItalic": require("./assets/fonts/UbuntuSans-ExtraLightItalic.ttf"),
-    "UbuntuSans-Light": require("./assets/fonts/UbuntuSans-Light.ttf"),
-    "UbuntuSans-LightItalic": require("./assets/fonts/UbuntuSans-LightItalic.ttf"),
-    "UbuntuSans-Regular": require("./assets/fonts/UbuntuSans-Regular.ttf"),
-    "UbuntuSans-Italic": require("./assets/fonts/UbuntuSans-Italic.ttf"),
-    "UbuntuSans-Medium": require("./assets/fonts/UbuntuSans-Medium.ttf"),
-    "UbuntuSans-MediumItalic": require("./assets/fonts/UbuntuSans-MediumItalic.ttf"),
-    "UbuntuSans-SemiBold": require("./assets/fonts/UbuntuSans-SemiBold.ttf"),
-    "UbuntuSans-SemiBoldItalic": require("./assets/fonts/UbuntuSans-SemiBoldItalic.ttf"),
-    "UbuntuSans-Bold": require("./assets/fonts/UbuntuSans-Bold.ttf"),
-    "UbuntuSans-BoldItalic": require("./assets/fonts/UbuntuSans-BoldItalic.ttf"),
-    "UbuntuSans-ExtraBold": require("./assets/fonts/UbuntuSans-ExtraBold.ttf"),
-    "UbuntuSans-ExtraBoldItalic": require("./assets/fonts/UbuntuSans-ExtraBoldItalic.ttf"),
+    "UbuntuSans-Thin": require("./src/shared/assets/fonts/UbuntuSans-Thin.ttf"),
+    "UbuntuSans-ThinItalic": require("./src/shared/assets/fonts/UbuntuSans-ThinItalic.ttf"),
+    "UbuntuSans-ExtraLight": require("./src/shared/assets/fonts/UbuntuSans-ExtraLight.ttf"),
+    "UbuntuSans-ExtraLightItalic": require("./src/shared/assets/fonts/UbuntuSans-ExtraLightItalic.ttf"),
+    "UbuntuSans-Light": require("./src/shared/assets/fonts/UbuntuSans-Light.ttf"),
+    "UbuntuSans-LightItalic": require("./src/shared/assets/fonts/UbuntuSans-LightItalic.ttf"),
+    "UbuntuSans-Regular": require("./src/shared/assets/fonts/UbuntuSans-Regular.ttf"),
+    "UbuntuSans-Italic": require("./src/shared/assets/fonts/UbuntuSans-Italic.ttf"),
+    "UbuntuSans-Medium": require("./src/shared/assets/fonts/UbuntuSans-Medium.ttf"),
+    "UbuntuSans-MediumItalic": require("./src/shared/assets/fonts/UbuntuSans-MediumItalic.ttf"),
+    "UbuntuSans-SemiBold": require("./src/shared/assets/fonts/UbuntuSans-SemiBold.ttf"),
+    "UbuntuSans-SemiBoldItalic": require("./src/shared/assets/fonts/UbuntuSans-SemiBoldItalic.ttf"),
+    "UbuntuSans-Bold": require("./src/shared/assets/fonts/UbuntuSans-Bold.ttf"),
+    "UbuntuSans-BoldItalic": require("./src/shared/assets/fonts/UbuntuSans-BoldItalic.ttf"),
+    "UbuntuSans-ExtraBold": require("./src/shared/assets/fonts/UbuntuSans-ExtraBold.ttf"),
+    "UbuntuSans-ExtraBoldItalic": require("./src/shared/assets/fonts/UbuntuSans-ExtraBoldItalic.ttf"),
   });
 
   useEffect(() => {
@@ -349,8 +349,9 @@ export default function App() {
       }
       return (
         <EmailVerificationScreen
-          studentId={studentData.studentId}
+          userId={studentData.studentId}
           email={studentData.email}
+          userType="student"
           language={language}
           onBack={() => setCurrentScreen("studentRegister")}
           onSuccess={() => {
