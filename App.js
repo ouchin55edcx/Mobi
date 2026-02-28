@@ -3,7 +3,6 @@ import { Alert, StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useFonts } from "expo-font";
 import SplashScreen from "./src/public/SplashScreen";
-import WelcomeScreen from "./src/public/WelcomeScreen";
 import LoginScreen from "./src/auth/LoginScreen";
 import SelectRoleScreen from "./src/auth/SelectRoleScreen";
 import StudentRegisterScreen from "./src/student/StudentRegisterScreen";
@@ -41,7 +40,7 @@ const isValidCoordinate = (point) =>
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
-  const [currentScreen, setCurrentScreen] = useState("welcome");
+  const [currentScreen, setCurrentScreen] = useState("login");
   const [language, setLanguage] = useState("en");
   const [selectedRole, setSelectedRole] = useState(null);
   const [isDemoMode, setIsDemoMode] = useState(false);
@@ -121,7 +120,7 @@ export default function App() {
           return;
         }
       } catch (e) {
-        // Fall through to welcome if restore fails
+        // Fall through to login if restore fails
       } finally {
         setIsBootstrappingAuth(false);
       }
@@ -275,7 +274,7 @@ export default function App() {
       return (
         <LoginScreen
           language={language}
-          onBack={() => setCurrentScreen("welcome")}
+          onBack={null}
           onSignUp={() => setCurrentScreen("selectRole")}
           onFacebookLogin={handleFacebookLogin}
           onLogin={handleEmailPasswordLogin}
@@ -291,7 +290,7 @@ export default function App() {
           language={language}
           onBack={() => {
             setIsDemoMode(false);
-            setCurrentScreen("welcome");
+            setCurrentScreen("login");
           }}
           onRoleSelect={(role) => {
             if (isDemoMode) {
@@ -459,8 +458,8 @@ export default function App() {
           }}
           onRejected={() => {
             console.log("Driver rejected");
-            // Could navigate to a rejection screen or back to welcome
-            setCurrentScreen("welcome");
+            // Could navigate to a rejection screen or back to login
+            setCurrentScreen("login");
             setDriverData(null);
           }}
         />
@@ -548,19 +547,7 @@ export default function App() {
       );
     }
 
-    return (
-      <WelcomeScreen
-        language={language}
-        onLanguageChange={setLanguage}
-        onLogin={() => setCurrentScreen("login")}
-        onRegister={() => setCurrentScreen("selectRole")}
-        onDemoMode={() => {
-          // Navigate to role selection in demo mode
-          setIsDemoMode(true);
-          setCurrentScreen("selectRole");
-        }}
-      />
-    );
+    return null;
   };
 
   return <SafeAreaProvider>{renderScreen()}</SafeAreaProvider>;
