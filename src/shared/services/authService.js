@@ -217,18 +217,21 @@ export const signInWithMagicLink = async (email) => {
 };
 
 /**
- * Sign in with Facebook OAuth (Expo/React Native deep link flow)
+ * Sign in with Google OAuth (Expo/React Native deep link flow)
  * @returns {Promise<Object>} - Result object with data and error
  */
-export const signInWithFacebook = async () => {
+export const signInWithGoogle = async () => {
   try {
     const redirectTo = ExpoLinking.createURL(OAUTH_REDIRECT_PATH);
 
     const { data, error } = await supabase.auth.signInWithOAuth({
-      provider: "facebook",
+      provider: "google",
       options: {
         redirectTo,
-        scopes: "email public_profile",
+        queryParams: {
+          access_type: "offline",
+          prompt: "consent",
+        },
         skipBrowserRedirect: true,
       },
     });
@@ -283,12 +286,13 @@ export const signInWithFacebook = async () => {
 
     return {
       data: null,
-      error: { message: "Could not complete Facebook login from callback URL" },
+      error: { message: "Could not complete Google login from callback URL" },
     };
   } catch (error) {
     return { data: null, error };
   }
 };
+
 
 /**
  * Sign out current user

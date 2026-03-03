@@ -6,6 +6,7 @@ import {
   ScrollView,
   TouchableOpacity,
   TextInput,
+  Image,
   Modal,
   Alert,
   ActivityIndicator,
@@ -15,6 +16,7 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { MaterialIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import Header from "../shared/components/common/Header";
 import MapboxRoutePreview from "../shared/components/common/MapboxRoutePreview";
 import {
   getStudentById,
@@ -124,12 +126,21 @@ const formatLockDate = (date, language = "en") =>
         day: "numeric",
       })
     : "--";
+const getInitials = (name = "") =>
+  name
+    .split(" ")
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((chunk) => chunk[0])
+    .join("")
+    .toUpperCase();
 
 const ProfileScreen = ({
   studentId,
   isDemo = false,
   language = "en",
   onLogout,
+  onBack,
 }) => {
   const [student, setStudent] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -148,6 +159,8 @@ const ProfileScreen = ({
   const [locationModalVisible, setLocationModalVisible] = useState(false);
 
   const t = translations[language];
+  const avatarUri =
+    student?.avatar_url || student?.avatarUrl || student?.profile_photo || null;
   const hasValidHomeLocation =
     Number.isFinite(student?.home_location?.latitude) &&
     Number.isFinite(student?.home_location?.longitude);
@@ -368,13 +381,86 @@ const ProfileScreen = ({
   }
 
   return (
-    <SafeAreaView style={styles.container} edges={["left", "right"]}>
+    <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <StatusBar style="dark" />
+      <Header
+        title={t.title}
+        subtitle={t.subtitle}
+        language={language}
+        onBack={onBack}
+        studentId={studentId}
+        isDemo={isDemo}
+      />
 
       <ScrollView
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
+        {/* Profile Header */}
+        <View style={styles.profileHero}>
+          <View style={styles.profileHeroAccent} />
+          <View style={styles.profileHeroContent}>
+            <View style={styles.avatarWrap}>
+              {avatarUri ? (
+                <Image source={{ uri: avatarUri }} style={styles.avatarImage} />
+              ) : (
+                <Text style={styles.avatarInitials}>
+                  {getInitials(student.fullname || "S")}
+                </Text>
+              )}
+            </View>
+            <View style={styles.profileMeta}>
+              <Text
+                style={[styles.profileName, language === "ar" && styles.rtl]}
+              >
+                {student.fullname || "--"}
+              </Text>
+              <View
+                style={[
+                  styles.profileMetaRow,
+                  language === "ar" && styles.rowReverse,
+                ]}
+              >
+                <MaterialIcons name="mail-outline" size={16} color="#1D4ED8" />
+                <Text
+                  style={[
+                    styles.profileMetaText,
+                    language === "ar" && styles.rtl,
+                  ]}
+                >
+                  {student.email || "--"}
+                </Text>
+              </View>
+              <View
+                style={[
+                  styles.profileMetaRow,
+                  language === "ar" && styles.rowReverse,
+                ]}
+              >
+                <MaterialIcons name="phone" size={16} color="#1D4ED8" />
+                <Text
+                  style={[
+                    styles.profileMetaText,
+                    language === "ar" && styles.rtl,
+                  ]}
+                >
+                  {student.phone || "--"}
+                </Text>
+              </View>
+            </View>
+          </View>
+          {!editing && (
+            <TouchableOpacity
+              style={styles.primaryEditButton}
+              onPress={handleEdit}
+              activeOpacity={0.8}
+            >
+              <MaterialIcons name="edit" size={18} color="#FFFFFF" />
+              <Text style={styles.primaryEditText}>{t.edit}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+
         {/* Personal Information */}
         <View style={styles.section}>
           <View style={styles.sectionHeader}>
@@ -383,119 +469,130 @@ const ProfileScreen = ({
             >
               {t.personalInfo}
             </Text>
-            {!editing && (
-              <TouchableOpacity
-                style={styles.editButton}
-                onPress={handleEdit}
-                activeOpacity={0.7}
-              >
-                <MaterialIcons name="edit" size={20} color="#3185FC" />
-                <Text style={styles.editButtonText}>{t.edit}</Text>
-              </TouchableOpacity>
-            )}
           </View>
 
           <View style={styles.infoContainer}>
             {/* Full Name */}
             <View style={styles.infoRow}>
-              <Text style={[styles.infoLabel, language === "ar" && styles.rtl]}>
-                {t.fullname}
-              </Text>
-              {editing ? (
-                <TextInput
-                  style={styles.input}
-                  value={formData.fullname}
-                  onChangeText={(text) =>
-                    setFormData({ ...formData, fullname: text })
-                  }
-                  placeholder={t.fullname}
-                />
-              ) : (
+              <View style={styles.infoIconWrap}>
+                <MaterialIcons name="badge" size={18} color="#1D4ED8" />
+              </View>
+              <View style={styles.infoBody}>
                 <Text
-                  style={[styles.infoValue, language === "ar" && styles.rtl]}
+                  style={[styles.infoLabel, language === "ar" && styles.rtl]}
                 >
-                  {student.fullname || "--"}
+                  {t.fullname}
                 </Text>
-              )}
+                {editing ? (
+                  <TextInput
+                    style={styles.input}
+                    value={formData.fullname}
+                    onChangeText={(text) =>
+                      setFormData({ ...formData, fullname: text })
+                    }
+                    placeholder={t.fullname}
+                  />
+                ) : (
+                  <Text
+                    style={[styles.infoValue, language === "ar" && styles.rtl]}
+                  >
+                    {student.fullname || "--"}
+                  </Text>
+                )}
+              </View>
             </View>
 
             {/* Email */}
             <View style={styles.infoRow}>
-              <Text style={[styles.infoLabel, language === "ar" && styles.rtl]}>
-                {t.email}
-              </Text>
-              {editing ? (
-                <>
-                  <TextInput
-                    style={[
-                      styles.input,
-                      !canEditEmail && styles.inputDisabled,
-                    ]}
-                    value={formData.email}
-                    onChangeText={(text) =>
-                      setFormData({ ...formData, email: text })
-                    }
-                    placeholder={t.email}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    editable={canEditEmail}
-                  />
-                  {!canEditEmail && (
-                    <Text style={styles.lockHint}>
-                      {t.editableAfter}:{" "}
-                      {formatLockDate(emailEditableAfter, language)}
-                    </Text>
-                  )}
-                </>
-              ) : (
+              <View style={styles.infoIconWrap}>
+                <MaterialIcons name="mail-outline" size={18} color="#1D4ED8" />
+              </View>
+              <View style={styles.infoBody}>
                 <Text
-                  style={[styles.infoValue, language === "ar" && styles.rtl]}
+                  style={[styles.infoLabel, language === "ar" && styles.rtl]}
                 >
-                  {student.email || "--"}
+                  {t.email}
                 </Text>
-              )}
+                {editing ? (
+                  <>
+                    <TextInput
+                      style={[
+                        styles.input,
+                        !canEditEmail && styles.inputDisabled,
+                      ]}
+                      value={formData.email}
+                      onChangeText={(text) =>
+                        setFormData({ ...formData, email: text })
+                      }
+                      placeholder={t.email}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      editable={canEditEmail}
+                    />
+                    {!canEditEmail && (
+                      <Text style={styles.lockHint}>
+                        {t.editableAfter}:{" "}
+                        {formatLockDate(emailEditableAfter, language)}
+                      </Text>
+                    )}
+                  </>
+                ) : (
+                  <Text
+                    style={[styles.infoValue, language === "ar" && styles.rtl]}
+                  >
+                    {student.email || "--"}
+                  </Text>
+                )}
+              </View>
             </View>
 
             {/* Phone */}
             <View style={styles.infoRow}>
-              <Text style={[styles.infoLabel, language === "ar" && styles.rtl]}>
-                {t.phone}
-              </Text>
-              {editing ? (
-                <>
-                  <TextInput
-                    style={[
-                      styles.input,
-                      !canEditPhone && styles.inputDisabled,
-                    ]}
-                    value={formData.phone}
-                    onChangeText={(text) =>
-                      setFormData({ ...formData, phone: text })
-                    }
-                    placeholder={t.phone}
-                    keyboardType="phone-pad"
-                    editable={canEditPhone}
-                  />
-                  {!canEditPhone && (
-                    <Text style={styles.lockHint}>
-                      {t.editableAfter}:{" "}
-                      {formatLockDate(phoneEditableAfter, language)}
-                    </Text>
-                  )}
-                </>
-              ) : (
+              <View style={styles.infoIconWrap}>
+                <MaterialIcons name="phone" size={18} color="#1D4ED8" />
+              </View>
+              <View style={styles.infoBody}>
                 <Text
-                  style={[styles.infoValue, language === "ar" && styles.rtl]}
+                  style={[styles.infoLabel, language === "ar" && styles.rtl]}
                 >
-                  {student.phone || "--"}
+                  {t.phone}
                 </Text>
-              )}
+                {editing ? (
+                  <>
+                    <TextInput
+                      style={[
+                        styles.input,
+                        !canEditPhone && styles.inputDisabled,
+                      ]}
+                      value={formData.phone}
+                      onChangeText={(text) =>
+                        setFormData({ ...formData, phone: text })
+                      }
+                      placeholder={t.phone}
+                      keyboardType="phone-pad"
+                      editable={canEditPhone}
+                    />
+                    {!canEditPhone && (
+                      <Text style={styles.lockHint}>
+                        {t.editableAfter}:{" "}
+                        {formatLockDate(phoneEditableAfter, language)}
+                      </Text>
+                    )}
+                  </>
+                ) : (
+                  <Text
+                    style={[styles.infoValue, language === "ar" && styles.rtl]}
+                  >
+                    {student.phone || "--"}
+                  </Text>
+                )}
+              </View>
             </View>
 
             {/* School - Prominently displayed */}
             <View style={styles.schoolRow}>
               <View style={styles.schoolIconContainer}>
-                <MaterialIcons name="school" size={24} color="#3185FC" />
+                <MaterialIcons name="school" size={22} color="#1D4ED8" />
               </View>
               <View style={styles.schoolInfo}>
                 <Text
@@ -695,9 +792,90 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#F8FAFC",
   },
+  rowReverse: {
+    flexDirection: "row-reverse",
+  },
+  profileHero: {
+    backgroundColor: "#EFF6FF",
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: "#DBEAFE",
+    marginBottom: 18,
+    overflow: "hidden",
+  },
+  profileHeroAccent: {
+    position: "absolute",
+    width: 220,
+    height: 220,
+    borderRadius: 110,
+    backgroundColor: "#DBEAFE",
+    top: -140,
+    right: -60,
+  },
+  profileHeroContent: {
+    flexDirection: "row",
+    gap: 16,
+    alignItems: "center",
+  },
+  avatarWrap: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    backgroundColor: "#2563EB",
+    alignItems: "center",
+    justifyContent: "center",
+    borderWidth: 2,
+    borderColor: "#FFFFFF",
+  },
+  avatarImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 38,
+  },
+  avatarInitials: {
+    color: "#FFFFFF",
+    fontSize: 22,
+    fontWeight: "800",
+  },
+  profileMeta: {
+    flex: 1,
+    gap: 6,
+  },
+  profileName: {
+    fontSize: 20,
+    fontWeight: "800",
+    color: "#0F172A",
+  },
+  profileMetaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  profileMetaText: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#475569",
+  },
+  primaryEditButton: {
+    marginTop: 16,
+    backgroundColor: "#2563EB",
+    borderRadius: 999,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+  },
+  primaryEditText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
+  },
   scrollContent: {
     paddingHorizontal: 20,
-    paddingTop: 8,
+    paddingTop: 16,
     paddingBottom: 40,
   },
   loadingContainer: {
@@ -723,10 +901,10 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
   section: {
-    marginBottom: 24,
+    marginBottom: 20,
     backgroundColor: "#FFFFFF",
-    borderRadius: 12,
-    padding: 16,
+    borderRadius: 18,
+    padding: 18,
     borderWidth: 1,
     borderColor: "#E2E8F0",
   },
@@ -734,34 +912,34 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: 14,
   },
   sectionTitle: {
-    fontSize: 18,
+    fontSize: 17,
     fontWeight: "800",
     color: "#0F172A",
   },
   rtl: {
     textAlign: "right",
   },
-  editButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-    backgroundColor: "#F0F7FF",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 8,
-  },
-  editButtonText: {
-    fontSize: 14,
-    color: "#3B82F6",
-    fontWeight: "700",
-  },
   infoContainer: {
-    gap: 20,
+    gap: 14,
   },
   infoRow: {
+    flexDirection: "row",
+    gap: 12,
+  },
+  infoIconWrap: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
+    backgroundColor: "#E0F2FE",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 4,
+  },
+  infoBody: {
+    flex: 1,
     gap: 6,
   },
   infoLabel: {
@@ -781,16 +959,16 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "#F8FAFC",
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 14,
     borderWidth: 1,
-    borderColor: "#F1F5F9",
-    marginTop: 8,
+    borderColor: "#E2E8F0",
+    marginTop: 4,
   },
   schoolIconContainer: {
     width: 44,
     height: 44,
-    borderRadius: 10,
-    backgroundColor: "#E0F2FE",
+    borderRadius: 14,
+    backgroundColor: "#DBEAFE",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 16,
@@ -805,9 +983,9 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   schoolValue: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: "800",
-    color: "#3B82F6",
+    color: "#2563EB",
   },
   schoolLockedWrap: {
     gap: 4,
@@ -817,7 +995,7 @@ const styles = StyleSheet.create({
     color: "#0F172A",
     borderWidth: 1,
     borderColor: "#E2E8F0",
-    borderRadius: 8,
+    borderRadius: 12,
     padding: 12,
     backgroundColor: "#F8FAFC",
     fontWeight: "600",
@@ -834,25 +1012,26 @@ const styles = StyleSheet.create({
   editActions: {
     flexDirection: "row",
     gap: 12,
-    marginTop: 20,
+    marginTop: 16,
   },
   actionButton: {
     flex: 1,
+    minHeight: 48,
     paddingVertical: 14,
-    borderRadius: 10,
+    borderRadius: 999,
     alignItems: "center",
     justifyContent: "center",
   },
   cancelButton: {
-    backgroundColor: "#F1F5F9",
+    backgroundColor: "#EFF6FF",
   },
   cancelButtonText: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#64748B",
+    color: "#1D4ED8",
   },
   saveButton: {
-    backgroundColor: "#3B82F6",
+    backgroundColor: "#2563EB",
   },
   saveButtonText: {
     fontSize: 16,
@@ -861,11 +1040,11 @@ const styles = StyleSheet.create({
   },
   mapContainer: {
     height: 180,
-    borderRadius: 10,
+    borderRadius: 16,
     overflow: "hidden",
     marginBottom: 12,
     borderWidth: 1,
-    borderColor: "#F1F5F9",
+    borderColor: "#E2E8F0",
   },
   map: {
     width: "100%",
@@ -909,7 +1088,7 @@ const styles = StyleSheet.create({
   locationDetails: {
     backgroundColor: "#F8FAFC",
     padding: 12,
-    borderRadius: 8,
+    borderRadius: 12,
   },
   locationDetailItem: {
     flexDirection: "row",
@@ -925,20 +1104,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#FEF2F2",
-    padding: 18,
-    borderRadius: 12,
+    backgroundColor: "#FFF5F5",
+    padding: 16,
+    borderRadius: 999,
     gap: 10,
-    marginTop: 8,
+    marginTop: 4,
     borderWidth: 1,
-    borderColor: "#FEE2E2",
+    borderColor: "#FECACA",
   },
   logoutButtonText: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#EF4444",
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#DC2626",
   },
   locationModalRoot: {
     flex: 1,

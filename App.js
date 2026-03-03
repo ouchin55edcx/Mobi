@@ -2,24 +2,29 @@ import React, { useState, useEffect } from "react";
 import { Alert, StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useFonts } from "expo-font";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import SplashScreen from "./src/public/SplashScreen";
+import OnboardingScreen from "./src/public/OnboardingScreen";
 import LoginScreen from "./src/auth/LoginScreen";
 import SelectRoleScreen from "./src/auth/SelectRoleScreen";
 import StudentRegisterScreen from "./src/student/StudentRegisterScreen";
 import EmailVerificationScreen from "./src/auth/EmailVerificationScreen";
-import StudentTabNavigator from "./src/shared/components/navigation/StudentTabNavigator";
+import StudentHomeScreen from "./src/student/StudentHomeScreen";
+import ProfileScreen from "./src/student/ProfileScreen";
 import DriverRegistrationFlow from "./src/driver/DriverRegistrationFlow";
 import PendingApprovalScreen from "./src/driver/PendingApprovalScreen";
-import DriverTabNavigator from "./src/shared/components/navigation/DriverTabNavigator";
+import DriverHomeScreen from "./src/driver/DriverHomeScreen";
+import DriverProfileScreen from "./src/driver/DriverProfileScreen";
 import TripLiveViewScreen from "./src/driver/TripLiveViewScreen";
 import DriverTripDetailsScreen from "./src/driver/DriverTripDetailsScreen";
 import TripDetailsScreen from "./src/student/TripDetailsScreen";
+import StudentTripLiveViewScreen from "./src/student/StudentTripLiveViewScreen";
 import mockDriverScenario from "./src/shared/mock/mockDriverData";
 import { DEMO_STUDENT, DEMO_DRIVER } from "./src/shared/data/demoData";
 import {
   getSession,
   signIn,
-  signInWithFacebook,
+  signInWithGoogle,
   requestPasswordResetCode,
   confirmPasswordResetWithCode,
   signOut,
@@ -50,6 +55,7 @@ export default function App() {
   const [tripDetailsData, setTripDetailsData] = useState(null);
   const [studentTripDetailsData, setStudentTripDetailsData] = useState(null);
   const [isBootstrappingAuth, setIsBootstrappingAuth] = useState(true);
+  const [hasSeenOnboarding, setHasSeenOnboarding] = useState(null);
 
   // Load Ubuntu fonts
   const [fontsLoaded, fontError] = useFonts({
@@ -72,15 +78,42 @@ export default function App() {
   });
 
   useEffect(() => {
+    // Check onboarding status
+    const checkOnboarding = async () => {
+      try {
+        const value = await AsyncStorage.getItem("@has_seen_onboarding");
+        setHasSeenOnboarding(value === "true");
+      } catch (e) {
+        setHasSeenOnboarding(false);
+      }
+    };
+    checkOnboarding();
+  }, []);
+
+  useEffect(() => {
     // Wait for fonts to load before showing the app
     if (fontsLoaded || fontError) {
       const timer = setTimeout(() => {
         setShowSplash(false);
+        // If onboarding is not seen, switch to onboarding screen
+        if (hasSeenOnboarding === false) {
+          setCurrentScreen("onboarding");
+        }
       }, 3000); // 3 seconds
 
       return () => clearTimeout(timer);
     }
-  }, [fontsLoaded, fontError]);
+  }, [fontsLoaded, fontError, hasSeenOnboarding]);
+
+  const handleFinishOnboarding = async () => {
+    try {
+      await AsyncStorage.setItem("@has_seen_onboarding", "true");
+      setHasSeenOnboarding(true);
+      setCurrentScreen("login");
+    } catch (e) {
+      setCurrentScreen("login");
+    }
+  };
 
   useEffect(() => {
     const restoreSession = async () => {
@@ -129,14 +162,11 @@ export default function App() {
     restoreSession();
   }, []);
 
-  const handleFacebookLogin = async () => {
-    const { data, error } = await signInWithFacebook();
+  const handleGoogleLogin = async () => {
+    const { data, error } = await signInWithGoogle();
 
     if (error) {
-      Alert.alert(
-        "Facebook Login Failed",
-        error.message || "Please try again.",
-      );
+      Alert.alert("Google Login Failed", error.message || "Please try again.");
       return;
     }
 
@@ -146,7 +176,7 @@ export default function App() {
     }
 
     Alert.alert(
-      "Facebook Login Failed",
+      "Google Login Failed",
       "No user session returned from Supabase.",
     );
   };
@@ -256,6 +286,34 @@ export default function App() {
     setCurrentScreen("login");
   };
 
+  const goToDemoStudentHome = () => {
+    setIsDemoMode(false);
+    setDriverData(null);
+    setTripLiveViewData(null);
+    setTripDetailsData(null);
+    setStudentTripDetailsData(null);
+    setStudentData({
+      studentId: DEMO_STUDENT.id,
+      email: DEMO_STUDENT.email || "student.demo@mobi.app",
+      isDemo: true,
+    });
+    setCurrentScreen("studentHome");
+  };
+
+  const goToDemoDriverHome = () => {
+    setIsDemoMode(false);
+    setStudentData(null);
+    setTripLiveViewData(null);
+    setTripDetailsData(null);
+    setStudentTripDetailsData(null);
+    setDriverData({
+      driverId: DEMO_DRIVER.id,
+      email: DEMO_DRIVER.email || "driver.demo@mobi.app",
+      isDemo: true,
+    });
+    setCurrentScreen("driverHome");
+  };
+
   // Show splash screen while fonts are loading or during initial splash
   if (!fontsLoaded && !fontError) {
     return <SplashScreen />;
@@ -266,8 +324,15 @@ export default function App() {
   }
 
   const renderScreen = () => {
-    if (showSplash) {
-      return <SplashScreen />;
+    if (showSplash) return <SplashScreen language={language} />;
+
+    if (currentScreen === "onboarding") {
+      return (
+        <OnboardingScreen
+          language={language}
+          onFinish={handleFinishOnboarding}
+        />
+      );
     }
 
     if (currentScreen === "login") {
@@ -276,10 +341,13 @@ export default function App() {
           language={language}
           onBack={null}
           onSignUp={() => setCurrentScreen("selectRole")}
-          onFacebookLogin={handleFacebookLogin}
+          onGoogleLogin={handleGoogleLogin}
           onLogin={handleEmailPasswordLogin}
           onRequestResetCode={handleRequestPasswordResetCode}
           onConfirmResetPassword={handleConfirmResetPassword}
+          onDemoStudent={goToDemoStudentHome}
+          onDemoDriver={goToDemoDriverHome}
+          onLanguageChange={setLanguage}
         />
       );
     }
@@ -288,6 +356,7 @@ export default function App() {
       return (
         <SelectRoleScreen
           language={language}
+          onLanguageChange={setLanguage}
           onBack={() => {
             setIsDemoMode(false);
             setCurrentScreen("login");
@@ -329,6 +398,7 @@ export default function App() {
       return (
         <StudentRegisterScreen
           language={language}
+          onLanguageChange={setLanguage}
           onBack={() => setCurrentScreen("selectRole")}
           onSuccess={(data) => {
             console.log("Student registered:", data);
@@ -362,41 +432,39 @@ export default function App() {
       );
     }
 
-    if (
-      currentScreen === "studentHome" ||
-      currentScreen === "history" ||
-      currentScreen === "profile"
-    ) {
+    if (currentScreen === "studentHome") {
       return (
-        <StudentTabNavigator
+        <StudentHomeScreen
           studentId={studentData?.studentId}
           isDemo={studentData?.isDemo || false}
           language={language}
-          onLogout={handleLogout}
           onNavigateToTripDetails={(tripData) => {
             const hasValidPayload =
               isValidCoordinate(tripData?.homeLocation) &&
               isValidCoordinate(tripData?.destinationLocation);
 
-            console.log("[App] onNavigateToTripDetails payload", {
-              hasTripData: !!tripData,
-              hasValidPayload,
-              routePoints: Array.isArray(tripData?.routeCoordinates)
-                ? tripData.routeCoordinates.length
-                : 0,
-            });
-
             if (!hasValidPayload) {
-              Alert.alert(
-                "Trip Data Error",
-                "Trip details are incomplete. Please try again.",
-              );
+              Alert.alert("Trip Data Error", "Trip details are incomplete.");
               return;
             }
 
             setStudentTripDetailsData(tripData);
             setCurrentScreen("studentTripDetails");
           }}
+          onNavigateToLiveTrip={() => setCurrentScreen("studentLiveTrip")}
+          onNavigateToProfile={() => setCurrentScreen("studentProfile")}
+        />
+      );
+    }
+
+    if (currentScreen === "studentProfile") {
+      return (
+        <ProfileScreen
+          studentId={studentData?.studentId}
+          isDemo={studentData?.isDemo || false}
+          language={language}
+          onLogout={handleLogout}
+          onBack={() => setCurrentScreen("studentHome")}
         />
       );
     }
@@ -424,6 +492,7 @@ export default function App() {
       return (
         <DriverRegistrationFlow
           language={language}
+          onLanguageChange={setLanguage}
           onBack={() => setCurrentScreen("selectRole")}
           onSuccess={(data) => {
             console.log("Driver registration completed:", data);
@@ -468,15 +537,44 @@ export default function App() {
 
     if (currentScreen === "driverHome") {
       return (
-        <DriverTabNavigator
+        <DriverHomeScreen
           driverId={driverData?.driverId}
           language={language}
           isDemo={driverData?.isDemo || false}
-          onLogout={handleLogout}
-          onTripPress={(tripData) => {
-            setTripDetailsData(tripData);
-            setCurrentScreen("tripDetails");
+          onSkipToProfile={() => setCurrentScreen("driverProfile")}
+          onTripPress={async (tripData) => {
+            try {
+              if (tripData?.id && driverData?.driverId && !driverData?.isDemo) {
+                await startAssignedTrip({
+                  tripId: tripData.id,
+                  driverId: driverData.driverId,
+                });
+              }
+            } catch (_error) {
+              Alert.alert(
+                "Trip start sync failed",
+                "Trip will start in live view, but server sync could not be completed.",
+              );
+            }
+
+            setTripLiveViewData({
+              ...tripData,
+              status: "trip_started",
+            });
+            setCurrentScreen("tripLiveView");
           }}
+        />
+      );
+    }
+
+    if (currentScreen === "driverProfile") {
+      return (
+        <DriverProfileScreen
+          driverId={driverData?.driverId}
+          isDemo={driverData?.isDemo || false}
+          language={language}
+          onLogout={handleLogout}
+          onBack={() => setCurrentScreen("driverHome")}
         />
       );
     }
@@ -498,7 +596,7 @@ export default function App() {
           }}
           onStartTrip={(tripData) => {
             (async () => {
-              if (tripData?.id && driverData?.driverId) {
+              if (tripData?.id && driverData?.driverId && !driverData?.isDemo) {
                 await startAssignedTrip({
                   tripId: tripData.id,
                   driverId: driverData.driverId,
@@ -530,7 +628,7 @@ export default function App() {
           language={language}
           isDemo={driverData?.isDemo || false}
           onCompleteTrip={async (tripData) => {
-            if (tripData?.id && driverData?.driverId) {
+            if (tripData?.id && driverData?.driverId && !driverData?.isDemo) {
               await completeAssignedTrip({
                 tripId: tripData.id,
                 driverId: driverData.driverId,
@@ -543,6 +641,17 @@ export default function App() {
             setTripLiveViewData(null);
             setCurrentScreen("driverHome");
           }}
+        />
+      );
+    }
+
+    if (currentScreen === "studentLiveTrip") {
+      return (
+        <StudentTripLiveViewScreen
+          studentId={studentData?.studentId}
+          language={language}
+          isDemo={studentData?.isDemo || false}
+          onBack={() => setCurrentScreen("studentHome")}
         />
       );
     }

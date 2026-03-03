@@ -1,4 +1,5 @@
 const MAPBOX_DIRECTIONS_BASE = "https://api.mapbox.com/directions/v5/mapbox";
+const MAPBOX_OPTIMIZED_TRIPS_BASE = "https://api.mapbox.com/optimized-trips/v1/mapbox";
 
 const toCoordPair = (point) => {
   if (!point) return null;
@@ -117,6 +118,76 @@ export const getDirectionsRoute = async ({
     };
   } catch (_error) {
     return buildFallbackRoute({ origin, destination, waypoints });
+  }
+};
+
+export const getOptimizedRoute = async ({
+  origin,
+  destination,
+  waypoints = [],
+  profile = "driving",
+}) => {
+  const accessToken = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN;
+
+  if (!origin || !destination) {
+    throw new Error("Origin and destination are required.");
+  }
+
+  if (!accessToken || waypoints.length === 0) {
+    // If no access token or no waypoints to optimize, use standard directions
+    return getDirectionsRoute({ origin, destination, waypoints, profile });
+  }
+
+  // Optimized API takes all coordinates in the string: origin, waypoints, destination
+  const coordinatePairs = [origin, ...waypoints, destination]
+    .map(toCoordPair)
+    .filter(Boolean);
+
+  const query = new URLSearchParams({
+    access_token: accessToken,
+    geometries: "geojson",
+    overview: "full",
+  });
+
+  // source=first means start at the origin (first coordinate)
+  // destination=last means end at the destination (last coordinate)
+  const url = `${MAPBOX_OPTIMIZED_TRIPS_BASE}/${profile}/${coordinatePairs.join(";")}?${query.toString()}&source=first&destination=last`;
+
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      return getDirectionsRoute({ origin, destination, waypoints, profile });
+    }
+
+    const data = await response.json();
+    const trip = data?.trips?.[0];
+
+    if (!trip || !trip.geometry?.coordinates?.length) {
+      return getDirectionsRoute({ origin, destination, waypoints, profile });
+    }
+
+    // Optimization API returns stop sequence
+    const waypointIndices = (data?.waypoints || [])
+      .sort((a, b) => a.waypoint_index - b.waypoint_index);
+
+    return {
+      coordinates: trip.geometry.coordinates
+        .map(toLatLng)
+        .filter(Boolean),
+      distanceMeters: trip.distance || 0,
+      durationSeconds: trip.duration || 0,
+      legs: (trip.legs || []).map((leg) => ({
+        distanceMeters: leg.distance || 0,
+        durationSeconds: leg.duration || 0,
+      })),
+      waypointOrder: (data?.waypoints || [])
+        .filter(wp => wp.waypoint_index !== 0 && wp.waypoint_index !== coordinatePairs.length - 1)
+        .sort((a, b) => a.waypoint_index - b.waypoint_index)
+        .map(wp => wp.location_index - 1), // location_index 1 is the first waypoint after origin
+      raw: data,
+    };
+  } catch (_error) {
+    return getDirectionsRoute({ origin, destination, waypoints, profile });
   }
 };
 

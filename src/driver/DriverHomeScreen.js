@@ -5,12 +5,11 @@ import React, {
   useRef,
   useState,
 } from "react";
-import { LinearGradient } from "expo-linear-gradient";
-import { BlurView } from "expo-blur";
 import {
   Alert,
   Animated,
   Dimensions,
+  Linking,
   PanResponder,
   ScrollView,
   StyleSheet,
@@ -24,11 +23,7 @@ import { MaterialIcons } from "@expo/vector-icons";
 import MapView, { Marker, Polyline, UrlTile } from "react-native-maps";
 import * as Location from "expo-location";
 import { UbuntuFonts } from "../shared/utils/fonts";
-import {
-  getDirectionsRoute,
-  formatDistanceKm,
-  formatDurationMinutes,
-} from "../shared/services/mapboxService";
+import { getDirectionsRoute } from "../shared/services/mapboxService";
 import {
   getDriverAssignedTrips,
   buildAndPersistTripRoute,
@@ -36,9 +31,12 @@ import {
 import { mockTrip } from "../shared/mock/mockDriverData";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
-const SHEET_HEIGHT = SCREEN_HEIGHT * 0.48;
-const SHEET_COLLAPSED_Y = SCREEN_HEIGHT * 0.2;
-const SHEET_EXPANDED_Y = SCREEN_HEIGHT * 0.04;
+const SHEET_COLLAPSED_RATIO = 0.4;
+const SHEET_EXPANDED_RATIO = 0.78;
+const SHEET_EXPANDED_HEIGHT = SCREEN_HEIGHT * SHEET_EXPANDED_RATIO;
+const SHEET_COLLAPSED_HEIGHT = SCREEN_HEIGHT * SHEET_COLLAPSED_RATIO;
+const SHEET_COLLAPSED_Y = SHEET_EXPANDED_HEIGHT - SHEET_COLLAPSED_HEIGHT;
+const FIT_EDGE_PADDING_BOTTOM = Math.round(SHEET_COLLAPSED_HEIGHT * 0.72);
 
 const COLORS = {
   blue: "#1E88E5",
@@ -54,7 +52,6 @@ const COLORS = {
   route: "#1E88E5",
 };
 
-const BUS_CAPACITY_TOTAL = 24;
 const STATUS_PENDING = "pending";
 const STATUS_PICKED = "picked";
 const STATUS_SKIPPED = "skipped";
@@ -89,17 +86,6 @@ const haversineMeters = (a, b) => {
   return 2 * R * Math.asin(Math.sqrt(h));
 };
 
-const formatEta = (seconds) => {
-  const mins = Math.max(1, Math.round((seconds || 0) / 60));
-  return `${mins} min`;
-};
-
-const formatMeters = (meters) => {
-  if (!Number.isFinite(meters)) return "-";
-  if (meters < 1000) return `${Math.max(1, Math.round(meters))} m`;
-  return `${(meters / 1000).toFixed(1)} km`;
-};
-
 const normalizeStudents = (trip) => {
   if (!Array.isArray(trip?.students)) return [];
 
@@ -108,6 +94,17 @@ const normalizeStudents = (trip) => {
       id: student.id || `student-${index + 1}`,
       name: student.name || `Student ${index + 1}`,
       pickupOrder: Number(student.pickupOrder ?? index + 1),
+      pickupLabel:
+        student.pickupLabel ||
+        student.pickupPoint ||
+        student.pickupLocationName ||
+        `Stop ${index + 1}`,
+      phone:
+        student.phone ||
+        student.phoneNumber ||
+        student.parentPhone ||
+        student.guardianPhone ||
+        null,
       homeLocation: student.homeLocation,
       status: STATUS_PENDING,
       etaSeconds: null,
@@ -123,8 +120,8 @@ const getStudentStatusColor = (status) => {
 
 const getStudentStatusLabel = (status) => {
   if (status === STATUS_PICKED) return "Picked";
-  if (status === STATUS_SKIPPED) return "Skipped";
-  return "Pending";
+  if (status === STATUS_SKIPPED) return "Absent";
+  return "";
 };
 
 const clusterStudentMarkers = (students, latitudeDelta) => {
@@ -212,7 +209,7 @@ const DriverHomeScreen = ({
   const lastRouteRebuildAt = useRef(0);
   const sheetOffsetRef = useRef(SHEET_COLLAPSED_Y);
 
-  const sheetExpandedOffset = SHEET_EXPANDED_Y;
+  const sheetExpandedOffset = 0;
   const sheetCollapsedOffset = SHEET_COLLAPSED_Y;
   const sheetDrag = useRef(new Animated.Value(sheetCollapsedOffset)).current;
 
@@ -227,9 +224,9 @@ const DriverHomeScreen = ({
   const [routeFailed, setRouteFailed] = useState(false);
   const [routeFailureMessage, setRouteFailureMessage] = useState("");
   const [isTripLive, setIsTripLive] = useState(false);
+  const [isSheetExpanded, setIsSheetExpanded] = useState(false);
   const [currentStudentId, setCurrentStudentId] = useState(null);
   const [mapRegionDelta, setMapRegionDelta] = useState(0.02);
-  const [showDetails, setShowDetails] = useState(false);
 
   const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN;
 
@@ -256,52 +253,14 @@ const DriverHomeScreen = ({
     students,
   ]);
 
-  const pickupCompletedCount = useMemo(
-    () => students.filter((s) => s.status === STATUS_PICKED).length,
-    [students],
-  );
-  const skippedCount = useMemo(
-    () => students.filter((s) => s.status === STATUS_SKIPPED).length,
-    [students],
-  );
   const pendingCount = useMemo(
     () => students.filter((s) => s.status === STATUS_PENDING).length,
     [students],
   );
-  const totalStudents = students.length;
-  const capacityTotal = Number(trip?.capacity) || BUS_CAPACITY_TOTAL;
-  const capacityUsed = Math.min(totalStudents, capacityTotal);
-  const totalDistanceMeters =
-    route?.distanceMeters ||
-    (Number.isFinite(Number(trip?.totalDistanceKm))
-      ? Number(trip.totalDistanceKm) * 1000
-      : 0);
-  const totalDurationSeconds =
-    route?.durationSeconds ||
-    (Number.isFinite(Number(trip?.totalDurationMinutes))
-      ? Number(trip.totalDurationMinutes) * 60
-      : Number.isFinite(Number(trip?.estimatedDurationMin))
-        ? Number(trip.estimatedDurationMin) * 60
-        : 0);
-  const tripCompletionPercent = totalStudents
-    ? Math.round(((pickupCompletedCount + skippedCount) / totalStudents) * 100)
-    : 0;
-
   const markerGroups = useMemo(
     () => clusterStudentMarkers(validStudents, mapRegionDelta),
     [validStudents, mapRegionDelta],
   );
-
-  const perStudentDistance = useMemo(() => {
-    const map = new Map();
-    students.forEach((student) => {
-      map.set(
-        student.id,
-        haversineMeters(driverLocation, student.homeLocation),
-      );
-    });
-    return map;
-  }, [students, driverLocation]);
 
   const fitToAllPoints = useCallback(
     (routePoints = null) => {
@@ -321,7 +280,12 @@ const DriverHomeScreen = ({
 
       if (!mapRef.current || points.length < 2) return;
       mapRef.current.fitToCoordinates(points, {
-        edgePadding: { top: 120, right: 50, bottom: 330, left: 50 },
+        edgePadding: {
+          top: 70,
+          right: 44,
+          bottom: FIT_EDGE_PADDING_BOTTOM,
+          left: 44,
+        },
         animated: true,
       });
     },
@@ -621,19 +585,21 @@ const DriverHomeScreen = ({
         onPanResponderMove: (_, gesture) => {
           const base = sheetOffsetRef.current;
           const next = Math.max(
-            sheetCollapsedOffset,
-            Math.min(sheetExpandedOffset, base + gesture.dy),
+            sheetExpandedOffset,
+            Math.min(sheetCollapsedOffset, base + gesture.dy),
           );
           sheetDrag.setValue(next);
         },
         onPanResponderRelease: (_, gesture) => {
           const threshold = (sheetExpandedOffset + sheetCollapsedOffset) / 2;
           const current = sheetOffsetRef.current + gesture.dy;
-          const shouldExpand = gesture.dy < -25 || current < threshold;
+          const shouldExpand = gesture.dy < -22 || current < threshold;
           const toValue = shouldExpand
-            ? sheetCollapsedOffset
-            : sheetExpandedOffset;
+            ? sheetExpandedOffset
+            : sheetCollapsedOffset;
+
           sheetOffsetRef.current = toValue;
+          setIsSheetExpanded(shouldExpand);
           Animated.spring(sheetDrag, {
             toValue,
             useNativeDriver: true,
@@ -654,18 +620,33 @@ const DriverHomeScreen = ({
     }
     setIsTripLive(true);
     buildRoute({ source: "manual" });
-  }, [buildRoute, locationPermission, startLiveTracking]);
+
+    if (typeof onTripPress === "function" && trip) {
+      onTripPress({
+        ...trip,
+        students,
+        destinationLocation: isValidCoordinate(schoolLocation)
+          ? toCoordinate(schoolLocation)
+          : schoolLocation,
+        parkingLocation: isValidCoordinate(driverLocation)
+          ? toCoordinate(driverLocation)
+          : trip?.parkingLocation || trip?.pickupLocation || null,
+      });
+    }
+  }, [
+    buildRoute,
+    driverLocation,
+    locationPermission,
+    onTripPress,
+    schoolLocation,
+    startLiveTracking,
+    students,
+    trip,
+  ]);
 
   const handleRecalculate = useCallback(() => {
     buildRoute({ source: "manual" });
   }, [buildRoute]);
-
-  const handleReportIssue = useCallback(() => {
-    Alert.alert(
-      "Report Issue",
-      "Dispatch has been notified. Keep students safe and wait for instructions.",
-    );
-  }, []);
 
   const markSkipped = useCallback(
     (studentId) => {
@@ -681,6 +662,33 @@ const DriverHomeScreen = ({
     },
     [pickCurrentStudent],
   );
+
+  const handleCallStudent = useCallback(async (phone) => {
+    if (!phone) {
+      Alert.alert("No phone number", "No contact number for this student.");
+      return;
+    }
+
+    const tel = `tel:${String(phone).trim()}`;
+    const supported = await Linking.canOpenURL(tel);
+    if (!supported) {
+      Alert.alert("Call unavailable", "Your device cannot place calls.");
+      return;
+    }
+    Linking.openURL(tel);
+  }, []);
+
+  const handleToggleSheet = useCallback(() => {
+    const nextExpanded = !isSheetExpanded;
+    const toValue = nextExpanded ? sheetExpandedOffset : sheetCollapsedOffset;
+    sheetOffsetRef.current = toValue;
+    setIsSheetExpanded(nextExpanded);
+    Animated.spring(sheetDrag, {
+      toValue,
+      useNativeDriver: true,
+      bounciness: 6,
+    }).start();
+  }, [isSheetExpanded, sheetCollapsedOffset, sheetDrag, sheetExpandedOffset]);
 
   const canRenderMap = !loadingTrip && !missingCoordinates;
 
@@ -710,359 +718,219 @@ const DriverHomeScreen = ({
 
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
-      <StatusBar style="light" />
-
-      <LinearGradient
-        colors={[COLORS.blue, COLORS.blueDark]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={styles.hero}
-      >
-        <View style={styles.heroSide}>
-          <View style={styles.logoPill}>
-            <Text style={styles.logoText}>M</Text>
-          </View>
-          <View>
-            <Text style={styles.heroTitle}>Today's Trip</Text>
-            <Text style={styles.heroSubtitle}>Driver overview and route</Text>
-          </View>
-        </View>
-        <View style={styles.heroRight}>
-          <View style={styles.liveChip}>
-            <Animated.View
-              style={[
-                styles.liveDot,
-                isTripLive && {
-                  opacity: livePulse,
-                  transform: [{ scale: livePulse }],
-                },
-              ]}
-            />
-            <Text style={styles.liveChipText}>
-              {isTripLive ? "Live" : "Ready"}
-            </Text>
-          </View>
-          <TouchableOpacity
-            activeOpacity={0.85}
-            onPress={onSkipToProfile}
-            style={styles.settingsBtn}
-          >
-            <MaterialIcons name="settings" size={20} color={COLORS.white} />
-          </TouchableOpacity>
-        </View>
-      </LinearGradient>
-
-      {!showDetails ? (
-        <ScrollView
-          style={styles.cardHome}
-          contentContainerStyle={styles.cardHomeContent}
-          showsVerticalScrollIndicator={false}
-        >
-          <TouchableOpacity
-            style={styles.tripCard}
-            onPress={() => onTripPress && onTripPress(trip)}
-            activeOpacity={0.95}
-          >
-            <View style={styles.summaryHeader}>
-              <Text style={styles.summaryTitle}>Trip Summary</Text>
-              <MaterialIcons name="chevron-right" size={20} color={COLORS.gray500} />
-            </View>
-            <Text style={styles.summarySchoolCard}>{schoolName}</Text>
-
-            <View style={styles.metricsGrid}>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>Students</Text>
-                <Text style={styles.metricValue}>{totalStudents}</Text>
-              </View>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>Pending</Text>
-                <Text style={styles.metricValue}>{pendingCount}</Text>
-              </View>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>Distance</Text>
-                <Text style={styles.metricValue}>
-                  {formatDistanceKm(totalDistanceMeters)}
-                </Text>
-              </View>
-              <View style={styles.metricCard}>
-                <Text style={styles.metricLabel}>ETA</Text>
-                <Text style={styles.metricValue}>
-                  {formatDurationMinutes(totalDurationSeconds)}
-                </Text>
-              </View>
-            </View>
-
-            <View style={styles.progressSection}>
-              <View style={styles.progressInfo}>
-                <Text style={styles.progressLabel}>Trip Progress</Text>
-                <Text style={styles.progressPercent}>{tripCompletionPercent}%</Text>
-              </View>
-              <View style={styles.progressBarBg}>
-                <LinearGradient
-                  colors={[COLORS.blue, "#64B5F6"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={[styles.progressBarFill, { width: `${tripCompletionPercent}%` }]}
-                />
-              </View>
-            </View>
-
-            <View style={styles.summaryRow}>
-              <Text style={styles.summaryLabel}>Bus Capacity</Text>
-              <Text style={styles.summaryValue}>
-                {capacityUsed}/{capacityTotal}
-              </Text>
-            </View>
-          </TouchableOpacity>
-
-          <View style={styles.tripCard}>
-            <View style={styles.listSectionHeader}>
-              <Text style={styles.pickupTitle}>Pickup Order</Text>
-              <Text style={styles.pickupSubtitle}>{pendingCount} pending</Text>
-            </View>
-            {students.slice(0, 4).map((student) => (
-              <View key={student.id} style={styles.summaryStudentRow}>
-                <Text style={styles.summaryStudentOrder}>
-                  {student.pickupOrder}
-                </Text>
-                <Text style={styles.summaryStudentName} numberOfLines={1}>
-                  {student.name}
-                </Text>
-                <Text style={styles.summaryStudentEta}>
-                  {formatEta(student.etaSeconds || 60)}
-                </Text>
-              </View>
-            ))}
-            {totalStudents > 4 ? (
-              <Text style={styles.moreStudentsText}>
-                +{totalStudents - 4} more students in details
-              </Text>
-            ) : null}
-          </View>
-
-          <View style={styles.actionWrap}>
-            <TouchableOpacity
-              style={[styles.primaryCta, isTripLive && styles.primaryCtaLive]}
-              onPress={isTripLive ? () => setShowDetails(true) : handleStartTrip}
-              activeOpacity={0.9}
-            >
+      <StatusBar style="dark" />
+      <View style={styles.screen}>
+        <View style={styles.mapContainer}>
+          {!canRenderMap ? (
+            <View style={styles.mapFallback}>
               <MaterialIcons
-                name={isTripLive ? "navigation" : "play-circle-outline"}
-                size={22}
-                color={COLORS.white}
+                name="location-off"
+                size={38}
+                color={COLORS.gray500}
               />
-              <Text style={styles.primaryCtaText}>
-                {isTripLive ? "Return to Navigation" : "Start Trip Now"}
+              <Text style={styles.fallbackTitle}>Map unavailable</Text>
+              <Text style={styles.fallbackSubtitle}>
+                Driver, school, and all student coordinates are required to
+                render the map.
               </Text>
-            </TouchableOpacity>
-
-            <View style={styles.secondaryRow}>
-              {!isTripLive && (
-                <TouchableOpacity
-                  style={styles.secondaryBtn}
-                  onPress={() => setShowDetails(true)}
-                  activeOpacity={0.8}
-                >
-                  <MaterialIcons name="map" size={18} color={COLORS.blue} />
-                  <Text style={styles.secondaryBtnText}>Preview Route</Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity
-                style={styles.secondaryBtn}
-                onPress={handleRecalculate}
-                activeOpacity={0.8}
-              >
-                <MaterialIcons name="refresh" size={18} color={COLORS.blue} />
-                <Text style={styles.secondaryBtnText}>Refresh</Text>
+              <TouchableOpacity style={styles.retryBtn} onPress={loadTrip}>
+                <Text style={styles.retryBtnText}>Retry</Text>
               </TouchableOpacity>
             </View>
-          </View>
-        </ScrollView>
-      ) : (
-        <>
-          <View style={styles.mapContainer}>
-            {!canRenderMap ? (
-              <View style={styles.mapFallback}>
-                <MaterialIcons
-                  name="location-off"
-                  size={38}
-                  color={COLORS.gray500}
+          ) : (
+            <MapView
+              ref={mapRef}
+              style={styles.map}
+              mapType="standard"
+              showsCompass={false}
+              toolbarEnabled={false}
+              onRegionChangeComplete={(region) =>
+                setMapRegionDelta(region.latitudeDelta)
+              }
+            >
+              {mapboxToken ? (
+                <UrlTile
+                  urlTemplate={`https://api.mapbox.com/styles/v1/mapbox/light-v11/tiles/256/{z}/{x}/{y}@2x?access_token=${mapboxToken}`}
+                  maximumZ={19}
+                  flipY={false}
+                  zIndex={0}
                 />
-                <Text style={styles.fallbackTitle}>Map unavailable</Text>
-                <Text style={styles.fallbackSubtitle}>
-                  Driver, school, and all student coordinates are required to
-                  render the map.
-                </Text>
-                <TouchableOpacity style={styles.retryBtn} onPress={loadTrip}>
-                  <Text style={styles.retryBtnText}>Retry</Text>
-                </TouchableOpacity>
-              </View>
-            ) : (
-              <MapView
-                ref={mapRef}
-                style={styles.map}
-                mapType="standard"
-                showsCompass={false}
-                toolbarEnabled={false}
-                onRegionChangeComplete={(region) =>
-                  setMapRegionDelta(region.latitudeDelta)
-                }
-              >
-                {mapboxToken ? (
-                  <UrlTile
-                    urlTemplate={`https://api.mapbox.com/styles/v1/mapbox/light-v11/tiles/256/{z}/{x}/{y}@2x?access_token=${mapboxToken}`}
-                    maximumZ={19}
-                    flipY={false}
-                    zIndex={0}
+              ) : null}
+
+              <Marker coordinate={driverLocation} anchor={{ x: 0.5, y: 0.5 }}>
+                <View style={styles.busMarker}>
+                  <MaterialIcons
+                    name="directions-bus"
+                    size={18}
+                    color={COLORS.white}
                   />
-                ) : null}
+                </View>
+              </Marker>
 
-                <Marker coordinate={driverLocation} anchor={{ x: 0.5, y: 0.5 }}>
-                  <View style={styles.busMarker}>
-                    <MaterialIcons
-                      name="directions-bus"
-                      size={18}
-                      color={COLORS.white}
-                    />
-                  </View>
-                </Marker>
+              <Marker coordinate={schoolLocation}>
+                <View style={styles.schoolMarker}>
+                  <MaterialIcons name="school" size={16} color={COLORS.white} />
+                </View>
+              </Marker>
 
-                <Marker coordinate={schoolLocation}>
-                  <View style={styles.schoolMarker}>
-                    <MaterialIcons
-                      name="school"
-                      size={16}
-                      color={COLORS.white}
-                    />
-                  </View>
-                </Marker>
-
-                {markerGroups.map((group, index) => {
-                  if (group.type === "cluster") {
-                    return (
-                      <Marker
-                        key={`cluster-${index}`}
-                        coordinate={group.center}
-                      >
-                        <View style={styles.clusterMarker}>
-                          <Text style={styles.clusterText}>
-                            {group.students.length}
-                          </Text>
-                        </View>
-                      </Marker>
-                    );
-                  }
-
-                  const student = group.students[0];
-                  const active = student.id === currentStudentId;
+              {markerGroups.map((group, index) => {
+                if (group.type === "cluster") {
                   return (
-                    <Marker key={student.id} coordinate={student.homeLocation}>
-                      <View
-                        style={[
-                          styles.studentMarker,
-                          active && styles.studentMarkerActive,
-                        ]}
-                      >
-                        <Text style={styles.studentMarkerText}>
-                          {student.pickupOrder}
+                    <Marker key={`cluster-${index}`} coordinate={group.center}>
+                      <View style={styles.clusterMarker}>
+                        <Text style={styles.clusterText}>
+                          {group.students.length}
                         </Text>
                       </View>
                     </Marker>
                   );
-                })}
+                }
 
-                {!!route?.coordinates?.length && (
-                  <Polyline
-                    coordinates={route.coordinates}
-                    strokeColor={COLORS.route}
-                    strokeWidth={5}
-                    lineCap="round"
-                    lineJoin="round"
-                  />
-                )}
-              </MapView>
-            )}
-
-            <TouchableOpacity
-              style={styles.closeDetailsBtn}
-              onPress={() => setShowDetails(false)}
-              activeOpacity={0.9}
-            >
-              <MaterialIcons name="arrow-back" size={18} color={COLORS.white} />
-              <Text style={styles.closeDetailsText}>Back to Card</Text>
-            </TouchableOpacity>
-
-            {loadingRoute && canRenderMap && (
-              <View style={styles.routeLoadingPill}>
-                <Text style={styles.routeLoadingText}>Updating route...</Text>
-              </View>
-            )}
-
-            {routeFailed && (
-              <View style={styles.routeErrorCard}>
-                <Text style={styles.routeErrorTitle}>Route fetch failed</Text>
-                <Text style={styles.routeErrorBody}>{routeFailureMessage}</Text>
-                <TouchableOpacity
-                  style={styles.routeErrorBtn}
-                  onPress={handleRecalculate}
-                >
-                  <Text style={styles.routeErrorBtnText}>Retry</Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-
-          <Animated.View
-            style={[styles.sheet, { transform: [{ translateY: sheetDrag }] }]}
-          >
-            <View {...panResponder.panHandlers} style={styles.dragHandleWrap}>
-              <View style={styles.dragHandle} />
-            </View>
-
-            <View style={styles.listSectionHeader}>
-              <Text style={styles.pickupTitle}>Student Pickup Order</Text>
-              <Text style={styles.pickupSubtitle}>{pendingCount} pending</Text>
-            </View>
-
-            <ScrollView
-              style={styles.listScroll}
-              contentContainerStyle={styles.listContent}
-              showsVerticalScrollIndicator={false}
-            >
-              {students.map((student) => {
-                const isCurrent = student.id === currentStudentId;
-                const distance = perStudentDistance.get(student.id);
-
+                const student = group.students[0];
+                const active = student.id === currentStudentId;
                 return (
-                  <View
-                    key={student.id}
-                    style={[
-                      styles.studentRow,
-                      isCurrent && styles.studentRowCurrent,
-                    ]}
-                  >
-                    <View style={styles.orderBadge}>
-                      <Text style={styles.orderBadgeText}>
+                  <Marker key={student.id} coordinate={student.homeLocation}>
+                    <View
+                      style={[
+                        styles.studentMarker,
+                        active && styles.studentMarkerActive,
+                      ]}
+                    >
+                      <Text style={styles.studentMarkerText}>
                         {student.pickupOrder}
                       </Text>
                     </View>
-                    <View style={styles.studentInfo}>
-                      <Text style={styles.studentName} numberOfLines={1}>
-                        {student.name}
-                      </Text>
-                      <Text style={styles.studentDistance}>
-                        {formatMeters(distance)} from bus
-                      </Text>
-                    </View>
-                    <View style={styles.studentMeta}>
-                      <Text style={styles.etaInline}>
-                        ETA {formatEta(student.etaSeconds || 60)}
-                      </Text>
+                  </Marker>
+                );
+              })}
+
+              {!!route?.coordinates?.length && (
+                <Polyline
+                  coordinates={route.coordinates}
+                  strokeColor={COLORS.route}
+                  strokeWidth={5}
+                  lineCap="round"
+                  lineJoin="round"
+                />
+              )}
+            </MapView>
+          )}
+
+          <View style={styles.topOverlay}>
+            <View style={styles.liveBadge}>
+              <Animated.View
+                style={[
+                  styles.liveDot,
+                  isTripLive && {
+                    opacity: livePulse,
+                    transform: [{ scale: livePulse }],
+                  },
+                ]}
+              />
+              <Text style={styles.liveBadgeText}>
+                {isTripLive ? "Online" : "Offline"}
+              </Text>
+            </View>
+            <TouchableOpacity
+              activeOpacity={0.85}
+              onPress={onSkipToProfile}
+              style={styles.settingsBtn}
+            >
+              <MaterialIcons
+                name="account-circle"
+                size={22}
+                color={COLORS.gray900}
+              />
+            </TouchableOpacity>
+          </View>
+
+          {loadingRoute && canRenderMap && (
+            <View style={styles.routeLoadingPill}>
+              <Text style={styles.routeLoadingText}>Updating route...</Text>
+            </View>
+          )}
+
+          {routeFailed && (
+            <View style={styles.routeErrorCard}>
+              <Text style={styles.routeErrorTitle}>Route fetch failed</Text>
+              <Text style={styles.routeErrorBody}>{routeFailureMessage}</Text>
+              <TouchableOpacity
+                style={styles.routeErrorBtn}
+                onPress={handleRecalculate}
+              >
+                <Text style={styles.routeErrorBtnText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+
+        <Animated.View
+          style={[styles.sheet, { transform: [{ translateY: sheetDrag }] }]}
+        >
+          <View {...panResponder.panHandlers} style={styles.dragHandleWrap}>
+            <View style={styles.dragHandle} />
+            <TouchableOpacity
+              style={styles.sheetToggleBtn}
+              onPress={handleToggleSheet}
+              activeOpacity={0.8}
+            >
+              <MaterialIcons
+                name={
+                  isSheetExpanded ? "keyboard-arrow-down" : "keyboard-arrow-up"
+                }
+                size={20}
+                color={COLORS.blue}
+              />
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.listSectionHeader}>
+            <View style={styles.listHeaderTextWrap}>
+              <Text style={styles.pickupTitle}>Assigned Students</Text>
+              <Text style={styles.schoolName} numberOfLines={1}>
+                {schoolName}
+              </Text>
+            </View>
+            <Text style={styles.pickupSubtitle}>{pendingCount} waiting</Text>
+          </View>
+
+          <ScrollView
+            style={styles.listScroll}
+            contentContainerStyle={styles.listContent}
+            showsVerticalScrollIndicator={false}
+          >
+            {students.map((student) => {
+              const isCurrent = student.id === currentStudentId;
+              const statusLabel = getStudentStatusLabel(student.status);
+
+              return (
+                <View
+                  key={student.id}
+                  style={[
+                    styles.studentRow,
+                    isCurrent && styles.studentRowCurrent,
+                  ]}
+                >
+                  <View style={styles.orderBadge}>
+                    <Text style={styles.orderBadgeText}>
+                      {student.pickupOrder}
+                    </Text>
+                  </View>
+                  <View style={styles.studentInfo}>
+                    <Text style={styles.studentName} numberOfLines={1}>
+                      {student.name}
+                    </Text>
+                    <Text style={styles.studentPickupLabel} numberOfLines={1}>
+                      {student.pickupLabel}
+                    </Text>
+                  </View>
+                  <View style={styles.studentMeta}>
+                    {statusLabel ? (
                       <View
                         style={[
                           styles.statusBadge,
                           {
-                            backgroundColor: `${getStudentStatusColor(student.status)}20`,
+                            backgroundColor: `${getStudentStatusColor(student.status)}22`,
                           },
                         ]}
                       >
@@ -1072,25 +940,64 @@ const DriverHomeScreen = ({
                             { color: getStudentStatusColor(student.status) },
                           ]}
                         >
-                          {getStudentStatusLabel(student.status)}
+                          {statusLabel}
                         </Text>
                       </View>
-                    </View>
+                    ) : null}
+                    <TouchableOpacity
+                      style={[
+                        styles.callBtn,
+                        !student.phone && styles.callBtnDisabled,
+                      ]}
+                      activeOpacity={0.85}
+                      onPress={() => handleCallStudent(student.phone)}
+                    >
+                      <MaterialIcons
+                        name="call"
+                        size={14}
+                        color={student.phone ? COLORS.blue : COLORS.gray500}
+                      />
+                      <Text
+                        style={[
+                          styles.callBtnText,
+                          !student.phone && styles.callBtnTextDisabled,
+                        ]}
+                      >
+                        Call
+                      </Text>
+                    </TouchableOpacity>
                     {isTripLive && student.status === STATUS_PENDING ? (
                       <TouchableOpacity
                         onPress={() => markSkipped(student.id)}
-                        style={styles.skipBtn}
+                        style={styles.absentBtn}
                       >
-                        <Text style={styles.skipBtnText}>Skip</Text>
+                        <Text style={styles.absentBtnText}>Absent</Text>
                       </TouchableOpacity>
                     ) : null}
                   </View>
-                );
-              })}
-            </ScrollView>
-          </Animated.View>
-        </>
-      )}
+                </View>
+              );
+            })}
+          </ScrollView>
+
+          <View style={styles.actionWrap}>
+            <TouchableOpacity
+              style={[
+                styles.primaryCta,
+                isTripLive && styles.primaryCtaLive,
+                isTripLive && styles.primaryCtaDisabled,
+              ]}
+              onPress={handleStartTrip}
+              activeOpacity={0.9}
+              disabled={isTripLive}
+            >
+              <Text style={styles.primaryCtaText}>
+                {isTripLive ? "LIVE TRIP" : "GO"}
+              </Text>
+            </TouchableOpacity>
+          </View>
+        </Animated.View>
+      </View>
     </SafeAreaView>
   );
 };
@@ -1100,75 +1007,46 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: COLORS.bg,
   },
-  hero: {
-    backgroundColor: COLORS.blue,
-    paddingHorizontal: 14,
-    paddingBottom: 14,
-    paddingTop: 6,
+  screen: {
+    flex: 1,
+    backgroundColor: COLORS.bg,
+  },
+  mapContainer: {
+    flex: 1,
+    backgroundColor: "#EAF2FF",
+    position: "relative",
+  },
+  map: {
+    flex: 1,
+  },
+  topOverlay: {
+    position: "absolute",
+    top: 10,
+    left: 12,
+    right: 12,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.18,
-    shadowRadius: 10,
-    elevation: 8,
-    zIndex: 4,
   },
-  heroSide: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    flex: 1,
-  },
-  logoPill: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(255,255,255,0.2)",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  logoText: {
-    color: COLORS.white,
-    fontFamily: UbuntuFonts.bold,
-    fontSize: 15,
-  },
-  heroTitle: {
-    color: COLORS.white,
-    fontFamily: UbuntuFonts.bold,
-    fontSize: 18,
-  },
-  heroSubtitle: {
-    color: "rgba(255,255,255,0.75)",
-    fontFamily: UbuntuFonts.regular,
-    fontSize: 12,
-    marginTop: 2,
-  },
-  heroRight: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  liveChip: {
-    backgroundColor: "rgba(255,255,255,0.16)",
+  liveBadge: {
+    backgroundColor: "rgba(16,33,58,0.82)",
     borderRadius: 999,
-    paddingHorizontal: 9,
-    paddingVertical: 5,
+    paddingHorizontal: 12,
+    paddingVertical: 7,
     flexDirection: "row",
     alignItems: "center",
-    gap: 5,
+    gap: 7,
   },
   liveDot: {
-    width: 7,
-    height: 7,
+    width: 8,
+    height: 8,
     borderRadius: 4,
     backgroundColor: "#35D07F",
   },
-  liveChipText: {
+  liveBadgeText: {
     color: COLORS.white,
     fontFamily: UbuntuFonts.medium,
-    fontSize: 11,
+    fontSize: 12,
   },
   settingsBtn: {
     width: 34,
@@ -1176,32 +1054,12 @@ const styles = StyleSheet.create({
     borderRadius: 17,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(255,255,255,0.18)",
-  },
-  mapContainer: {
-    flex: 1,
-    minHeight: SCREEN_HEIGHT * 0.6,
-    backgroundColor: "#EAF2FF",
-  },
-  closeDetailsBtn: {
-    position: "absolute",
-    top: 14,
-    right: 12,
-    backgroundColor: "rgba(16,33,58,0.85)",
-    borderRadius: 16,
-    paddingHorizontal: 10,
-    paddingVertical: 7,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  closeDetailsText: {
-    color: COLORS.white,
-    fontFamily: UbuntuFonts.medium,
-    fontSize: 11,
-  },
-  map: {
-    flex: 1,
+    backgroundColor: "rgba(255,255,255,0.9)",
+    shadowColor: "#0A2540",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.14,
+    shadowRadius: 4,
+    elevation: 3,
   },
   busMarker: {
     backgroundColor: COLORS.blue,
@@ -1260,7 +1118,7 @@ const styles = StyleSheet.create({
   },
   routeLoadingPill: {
     position: "absolute",
-    top: 12,
+    top: 54,
     left: 12,
     backgroundColor: "rgba(16,33,58,0.88)",
     borderRadius: 16,
@@ -1274,7 +1132,7 @@ const styles = StyleSheet.create({
   },
   routeErrorCard: {
     position: "absolute",
-    top: 12,
+    top: 54,
     right: 12,
     left: 12,
     backgroundColor: COLORS.white,
@@ -1341,244 +1199,104 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    height: SHEET_HEIGHT,
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
+    height: SHEET_EXPANDED_HEIGHT,
     backgroundColor: COLORS.white,
-    paddingHorizontal: 12,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    paddingHorizontal: 16,
+    paddingTop: 4,
     paddingBottom: 14,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.14,
+    shadowColor: "#0A2540",
+    shadowOffset: { width: 0, height: -2 },
+    shadowOpacity: 0.12,
     shadowRadius: 8,
-    elevation: 8,
+    elevation: 10,
   },
   dragHandleWrap: {
     alignItems: "center",
-    paddingVertical: 7,
+    paddingVertical: 8,
+    position: "relative",
   },
   dragHandle: {
-    width: 42,
+    width: 44,
     height: 4,
     borderRadius: 3,
     backgroundColor: "#D2DCEB",
   },
-  summaryHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
+  sheetToggleBtn: {
+    position: "absolute",
+    right: 0,
+    top: 0,
+    bottom: 0,
+    width: 36,
     alignItems: "center",
-    marginBottom: 8,
-  },
-  summaryTitle: {
-    color: COLORS.gray900,
-    fontSize: 16,
-    fontFamily: UbuntuFonts.bold,
-  },
-  summarySchool: {
-    maxWidth: "58%",
-    color: COLORS.gray700,
-    fontSize: 12,
-    fontFamily: UbuntuFonts.medium,
-    textAlign: "right",
-  },
-  summarySchoolCard: {
-    color: COLORS.gray700,
-    fontSize: 13,
-    fontFamily: UbuntuFonts.medium,
-    marginTop: 2,
-    marginBottom: 10,
-  },
-  metricsGrid: {
-    backgroundColor: "#F7FAFF",
-    borderWidth: 1,
-    borderColor: "#E2ECFA",
-    borderRadius: 14,
-    padding: 8,
-    flexDirection: "row",
-    flexWrap: "wrap",
-    marginBottom: 9,
-    gap: 8,
-  },
-  metricCard: {
-    width: "47%",
-    backgroundColor: COLORS.white,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: "#E8F0FC",
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    shadowColor: COLORS.blue,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.04,
-    shadowRadius: 5,
-    elevation: 2,
-  },
-  metricLabel: {
-    color: COLORS.gray700,
-    fontFamily: UbuntuFonts.regular,
-    fontSize: 11,
-  },
-  metricValue: {
-    marginTop: 2,
-    color: COLORS.gray900,
-    fontSize: 14,
-    fontFamily: UbuntuFonts.bold,
-  },
-  summaryRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginTop: 4,
-  },
-  summaryLabel: {
-    color: COLORS.gray700,
-    fontFamily: UbuntuFonts.regular,
-    fontSize: 12,
-  },
-  summaryValue: {
-    color: COLORS.gray900,
-    fontFamily: UbuntuFonts.bold,
-    fontSize: 13,
-  },
-  cardHome: {
-    flex: 1,
-  },
-  cardHomeContent: {
-    padding: 12,
-    paddingBottom: 22,
-    gap: 10,
-  },
-  tripCard: {
-    backgroundColor: COLORS.white,
-    borderRadius: 18,
-    borderWidth: 1,
-    borderColor: "#E4ECF8",
-    padding: 16,
-    shadowColor: COLORS.blue,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 12,
-    elevation: 3,
-  },
-  progressSection: {
-    marginTop: 4,
-    marginBottom: 12,
-  },
-  progressInfo: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 6,
-  },
-  progressLabel: {
-    fontSize: 11,
-    color: COLORS.gray700,
-    fontFamily: UbuntuFonts.medium,
-  },
-  progressPercent: {
-    fontSize: 11,
-    color: COLORS.blue,
-    fontFamily: UbuntuFonts.bold,
-  },
-  progressBarBg: {
-    height: 6,
-    backgroundColor: "#EEF2F9",
-    borderRadius: 3,
-    overflow: "hidden",
-  },
-  progressBarFill: {
-    height: "100%",
-    borderRadius: 3,
-  },
-  summaryStudentRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 8,
-    borderBottomWidth: 1,
-    borderBottomColor: "#F1F5F9",
-  },
-  summaryStudentOrder: {
-    width: 22,
-    height: 22,
-    borderRadius: 11,
-    textAlign: "center",
-    textAlignVertical: "center",
-    color: COLORS.white,
-    backgroundColor: COLORS.blue,
-    fontFamily: UbuntuFonts.bold,
-    fontSize: 11,
-    marginRight: 8,
-    overflow: "hidden",
-    paddingTop: 3,
-  },
-  summaryStudentName: {
-    flex: 1,
-    color: COLORS.gray900,
-    fontFamily: UbuntuFonts.medium,
-    fontSize: 12,
-  },
-  summaryStudentEta: {
-    color: COLORS.blue,
-    fontFamily: UbuntuFonts.bold,
-    fontSize: 11,
-  },
-  moreStudentsText: {
-    marginTop: 8,
-    color: COLORS.gray700,
-    fontFamily: UbuntuFonts.regular,
-    fontSize: 11,
+    justifyContent: "center",
   },
   listSectionHeader: {
-    marginBottom: 6,
+    marginBottom: 12,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
+  },
+  listHeaderTextWrap: {
+    flex: 1,
+    paddingRight: 12,
   },
   pickupTitle: {
     color: COLORS.gray900,
-    fontSize: 14,
+    fontSize: 17,
     fontFamily: UbuntuFonts.bold,
   },
-  pickupSubtitle: {
+  schoolName: {
+    marginTop: 2,
     color: COLORS.gray700,
     fontFamily: UbuntuFonts.medium,
     fontSize: 12,
   },
+  pickupSubtitle: {
+    color: COLORS.blue,
+    fontFamily: UbuntuFonts.bold,
+    fontSize: 12,
+  },
   listScroll: {
-    maxHeight: SCREEN_HEIGHT * 0.28,
+    flex: 1,
   },
   listContent: {
-    paddingBottom: 3,
-    rowGap: 7,
+    paddingBottom: 10,
+    rowGap: 12,
   },
   studentRow: {
     borderWidth: 1,
-    borderColor: "#E5ECF7",
-    borderRadius: 12,
-    paddingHorizontal: 10,
-    paddingVertical: 8,
+    borderColor: "#E4ECF8",
+    borderRadius: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 12,
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: COLORS.white,
+    shadowColor: "#0A2540",
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.06,
+    shadowRadius: 3,
+    elevation: 2,
   },
   studentRowCurrent: {
-    borderColor: COLORS.blue,
-    backgroundColor: "#F2F8FF",
+    borderColor: "#B8D7FB",
+    backgroundColor: "#F6FAFF",
   },
   orderBadge: {
-    width: 26,
-    height: 26,
-    borderRadius: 13,
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: COLORS.blue,
-    marginRight: 8,
+    marginRight: 10,
   },
   orderBadgeText: {
     color: COLORS.white,
     fontFamily: UbuntuFonts.bold,
-    fontSize: 12,
+    fontSize: 13,
   },
   studentInfo: {
     flex: 1,
@@ -1586,119 +1304,102 @@ const styles = StyleSheet.create({
   studentName: {
     color: COLORS.gray900,
     fontFamily: UbuntuFonts.medium,
-    fontSize: 12,
+    fontSize: 15,
   },
-  studentDistance: {
+  studentPickupLabel: {
     marginTop: 2,
     color: COLORS.gray700,
     fontFamily: UbuntuFonts.regular,
-    fontSize: 10,
+    fontSize: 12,
   },
   studentMeta: {
     alignItems: "flex-end",
-    marginRight: 8,
-  },
-  etaInline: {
-    color: COLORS.blue,
-    fontFamily: UbuntuFonts.bold,
-    fontSize: 10,
-    marginBottom: 3,
+    justifyContent: "center",
+    gap: 6,
   },
   statusBadge: {
-    paddingHorizontal: 7,
-    paddingVertical: 3,
-    borderRadius: 8,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
   },
   statusText: {
     fontFamily: UbuntuFonts.medium,
-    fontSize: 9,
+    fontSize: 11,
   },
-  skipBtn: {
-    paddingHorizontal: 8,
+  absentBtn: {
+    paddingHorizontal: 9,
     paddingVertical: 4,
-    borderRadius: 7,
+    borderRadius: 8,
     borderWidth: 1,
-    borderColor: "#F9C97C",
-    backgroundColor: "#FFF7E8",
+    borderColor: "#F8CACA",
+    backgroundColor: "#FFF4F4",
   },
-  skipBtnText: {
-    color: "#B77200",
+  absentBtnText: {
+    color: COLORS.red,
     fontSize: 10,
     fontFamily: UbuntuFonts.medium,
   },
+  callBtn: {
+    paddingHorizontal: 9,
+    paddingVertical: 4,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#CDE3FA",
+    backgroundColor: "#F5FAFF",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  callBtnDisabled: {
+    backgroundColor: "#F4F6FA",
+    borderColor: "#E1E7F0",
+  },
+  callBtnText: {
+    color: COLORS.blue,
+    fontSize: 10,
+    fontFamily: UbuntuFonts.medium,
+  },
+  callBtnTextDisabled: {
+    color: COLORS.gray500,
+  },
   actionWrap: {
-    marginTop: 9,
+    paddingTop: 12,
   },
   primaryCta: {
-    height: 52,
-    borderRadius: 16,
+    height: 56,
+    borderRadius: 28,
     backgroundColor: COLORS.blue,
     alignItems: "center",
     justifyContent: "center",
-    flexDirection: "row",
-    columnGap: 10,
     shadowColor: COLORS.blue,
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    shadowOpacity: 0.32,
+    shadowRadius: 9,
+    elevation: 7,
   },
   primaryCtaLive: {
-    backgroundColor: COLORS.green,
-    shadowColor: COLORS.green,
+    backgroundColor: COLORS.blue,
+    shadowColor: COLORS.blue,
   },
   primaryCtaDisabled: {
-    backgroundColor: "#4FA3EE",
+    opacity: 0.72,
   },
   primaryCtaText: {
     color: COLORS.white,
     fontFamily: UbuntuFonts.bold,
-    fontSize: 14,
-  },
-  secondaryRow: {
-    marginTop: 8,
-    flexDirection: "row",
-    columnGap: 8,
-  },
-  secondaryBtn: {
-    flex: 1,
-    height: 44,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#CDE3FA",
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
-    columnGap: 6,
-    backgroundColor: "#FFFFFF",
-  },
-  secondaryBtnText: {
-    color: COLORS.blue,
-    fontFamily: UbuntuFonts.medium,
-    fontSize: 11,
-  },
-  liveModeText: {
-    marginTop: 7,
-    color: COLORS.green,
-    fontFamily: UbuntuFonts.medium,
-    fontSize: 11,
-  },
-  locationWarning: {
-    marginTop: 5,
-    color: COLORS.red,
-    fontFamily: UbuntuFonts.regular,
-    fontSize: 11,
+    fontSize: 18,
+    letterSpacing: 1.4,
   },
   skeletonWrap: {
     flex: 1,
     backgroundColor: COLORS.bg,
   },
   skeletonHero: {
-    height: 86,
+    height: 56,
     backgroundColor: "#DDE9FB",
   },
   skeletonMap: {
-    height: SCREEN_HEIGHT * 0.62,
+    height: SCREEN_HEIGHT * 0.56,
     backgroundColor: "#E8F0FC",
   },
   skeletonSheet: {

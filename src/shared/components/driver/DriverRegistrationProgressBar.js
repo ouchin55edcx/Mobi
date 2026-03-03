@@ -1,14 +1,15 @@
 import React, { useEffect, useRef } from 'react';
 import { View, Text, StyleSheet, Animated } from 'react-native';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { UbuntuFonts } from "../../utils/fonts";
 
 const DriverRegistrationProgressBar = ({ currentStep, totalSteps = 3, language = 'en' }) => {
-  const progressAnim = useRef(new Animated.Value((currentStep / totalSteps) * 100)).current;
-  
+  const progressAnim = useRef(new Animated.Value((currentStep - 1) / (totalSteps - 1) * 100)).current;
+
   useEffect(() => {
     Animated.timing(progressAnim, {
-      toValue: (currentStep / totalSteps) * 100,
-      duration: 300,
+      toValue: ((currentStep - 1) / (totalSteps - 1)) * 100,
+      duration: 600,
       useNativeDriver: false,
     }).start();
   }, [currentStep, totalSteps]);
@@ -16,95 +17,77 @@ const DriverRegistrationProgressBar = ({ currentStep, totalSteps = 3, language =
   const steps = [
     {
       number: 1,
-      icon: 'person',
-      label: language === 'ar' ? 'معلومات السائق' : 'Driver Information',
+      icon: 'account-outline',
+      label: language === 'ar' ? 'معلومات السائق' : 'Driver',
     },
     {
       number: 2,
-      icon: 'directions-bus',
-      label: language === 'ar' ? 'معلومات الحافلة' : 'Bus Information',
+      icon: 'bus-side',
+      label: language === 'ar' ? 'معلومات الحافلة' : 'Vehicle',
     },
     {
       number: 3,
-      icon: 'verified',
-      label: language === 'ar' ? 'التحقق' : 'Verification',
+      icon: 'shield-check-outline',
+      label: language === 'ar' ? 'التحقق' : 'Verify',
     },
   ];
 
   return (
     <View style={styles.container}>
-      {/* Progress Bar Background */}
-      <View style={styles.progressBarContainer}>
-        <View style={styles.progressBarBackground} />
-        <Animated.View
-          style={[
-            styles.progressBarFill,
-            {
-              width: progressAnim.interpolate({
-                inputRange: [0, 100],
-                outputRange: ['0%', '100%'],
-              }),
-            },
-          ]}
-        />
-      </View>
+      <View style={styles.stepIndicator}>
+        {/* Progress Bar Background Line */}
+        <View style={styles.track}>
+          <Animated.View
+            style={[
+              styles.trackFill,
+              {
+                width: progressAnim.interpolate({
+                  inputRange: [0, 100],
+                  outputRange: ['0%', '100%'],
+                }),
+              },
+            ]}
+          />
+        </View>
 
-      {/* Steps */}
-      <View style={styles.stepsContainer}>
-        {steps.map((step, index) => {
-          const stepNumber = index + 1;
-          const isActive = stepNumber === currentStep;
-          const isCompleted = stepNumber < currentStep;
+        {/* Circles */}
+        <View style={styles.stepsContainer}>
+          {steps.map((step, index) => {
+            const stepNumber = index + 1;
+            const isActive = stepNumber === currentStep;
+            const isCompleted = stepNumber < currentStep;
 
-          return (
-            <View key={index} style={styles.stepWrapper}>
-              <View style={styles.stepContent}>
-                {/* Step Circle */}
+            return (
+              <View key={index} style={styles.stepWrapper}>
                 <View
                   style={[
-                    styles.stepCircle,
-                    isActive && styles.stepCircleActive,
-                    isCompleted && styles.stepCircleCompleted,
+                    styles.circle,
+                    isActive && styles.circleActive,
+                    isCompleted && styles.circleCompleted,
                   ]}
                 >
                   {isCompleted ? (
-                    <MaterialIcons name="check" size={20} color="#FFFFFF" />
+                    <MaterialIcons name="check" size={16} color="#FFFFFF" />
                   ) : (
-                    <MaterialIcons
+                    <MaterialCommunityIcons
                       name={step.icon}
                       size={20}
-                      color={isActive ? '#FFFFFF' : '#9CA3AF'}
+                      color={isActive ? '#FFFFFF' : '#94A3B8'}
                     />
                   )}
                 </View>
-
-                {/* Step Number */}
-                <Text
-                  style={[
-                    styles.stepNumber,
-                    isActive && styles.stepNumberActive,
-                    isCompleted && styles.stepNumberCompleted,
-                  ]}
-                >
-                  {step.number}
-                </Text>
-
-                {/* Step Label */}
-                <Text
-                  style={[
-                    styles.stepLabel,
-                    isActive && styles.stepLabelActive,
-                    isCompleted && styles.stepLabelCompleted,
-                    language === 'ar' && styles.rtl,
-                  ]}
-                  numberOfLines={2}
-                >
+                <Text style={[
+                  styles.label,
+                  isActive && styles.labelActive,
+                  isCompleted && styles.labelCompleted,
+                  language === 'ar' && styles.rtl
+                ]}>
                   {step.label}
                 </Text>
               </View>
-            </View>
-          );
-        })}
+            );
+          })}
+        </View>
       </View>
     </View>
   );
@@ -113,29 +96,26 @@ const DriverRegistrationProgressBar = ({ currentStep, totalSteps = 3, language =
 const styles = StyleSheet.create({
   container: {
     backgroundColor: '#FFFFFF',
-    paddingTop: 16,
-    paddingBottom: 20,
-    paddingHorizontal: 20,
+    paddingTop: 20,
+    paddingBottom: 24,
+    paddingHorizontal: 28,
     borderBottomWidth: 1,
-    borderBottomColor: '#F3F4F6',
+    borderBottomColor: '#F1F5F9',
   },
-  progressBarContainer: {
-    height: 4,
-    backgroundColor: '#E5E7EB',
-    borderRadius: 2,
-    marginBottom: 24,
-    overflow: 'hidden',
-    position: 'relative',
+  stepIndicator: {
+    height: 60,
+    justifyContent: 'center',
   },
-  progressBarBackground: {
+  track: {
     position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
-    backgroundColor: '#E5E7EB',
+    top: 20, // Center of circle height (Circle height is 40)
+    left: 20,
+    right: 20,
+    height: 4,
+    backgroundColor: '#F1F5F9',
+    borderRadius: 2,
   },
-  progressBarFill: {
+  trackFill: {
     height: '100%',
     backgroundColor: '#3185FC',
     borderRadius: 2,
@@ -143,55 +123,47 @@ const styles = StyleSheet.create({
   stepsContainer: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
   stepWrapper: {
-    flex: 1,
     alignItems: 'center',
+    width: 80,
   },
-  stepContent: {
-    alignItems: 'center',
-    width: '100%',
-  },
-  stepCircle: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: '#E5E7EB',
+  circle: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: '#F1F5F9',
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 8,
+    zIndex: 2,
   },
-  stepCircleActive: {
+  circleActive: {
+    borderColor: '#3185FC',
     backgroundColor: '#3185FC',
+    shadowColor: "#3185FC",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 8,
+    elevation: 4,
   },
-  stepCircleCompleted: {
+  circleCompleted: {
+    borderColor: '#10B981',
     backgroundColor: '#10B981',
   },
-  stepNumber: {
+  label: {
     fontSize: 12,
-    fontWeight: '600',
-    color: '#9CA3AF',
-    marginBottom: 4,
-  },
-  stepNumberActive: {
-    color: '#3185FC',
-  },
-  stepNumberCompleted: {
-    color: '#10B981',
-  },
-  stepLabel: {
-    fontSize: 11,
-    color: '#9CA3AF',
-    fontWeight: '500',
+    color: '#94A3B8',
+    fontFamily: UbuntuFonts.bold,
+    marginTop: 8,
     textAlign: 'center',
-    lineHeight: 14,
   },
-  stepLabelActive: {
+  labelActive: {
     color: '#3185FC',
-    fontWeight: '600',
   },
-  stepLabelCompleted: {
+  labelCompleted: {
     color: '#10B981',
   },
   rtl: {
@@ -200,4 +172,5 @@ const styles = StyleSheet.create({
 });
 
 export default DriverRegistrationProgressBar;
+
 

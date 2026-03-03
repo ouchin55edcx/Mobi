@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import { View, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import StudentHomeScreen from "../../../student/StudentHomeScreen";
-import HistoryScreen from "../../../student/HistoryScreen";
 import ProfileScreen from "../../../student/ProfileScreen";
 import BottomTabNavigator from "./BottomTabNavigator";
 
@@ -27,14 +26,6 @@ const StudentTabNavigator = ({
             onNavigateToProfile={() => setActiveTab("profile")}
           />
         );
-      case "history":
-        return (
-          <HistoryScreen
-            studentId={studentId}
-            isDemo={isDemo}
-            language={language}
-          />
-        );
       case "profile":
         return (
           <ProfileScreen
@@ -42,15 +33,6 @@ const StudentTabNavigator = ({
             isDemo={isDemo}
             language={language}
             onLogout={onLogout}
-          />
-        );
-      case "explore":
-        // For now, show history screen as explore
-        return (
-          <HistoryScreen
-            studentId={studentId}
-            isDemo={isDemo}
-            language={language}
           />
         );
       default:

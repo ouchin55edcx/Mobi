@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -8,40 +8,60 @@ import {
   Platform,
   KeyboardAvoidingView,
   ScrollView,
+  Animated,
+  Easing,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-import { MaterialIcons } from "@expo/vector-icons";
+import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { UbuntuFonts } from "../shared/utils/fonts";
 
 const translations = {
   en: {
-    title: "Login to Mobi",
-    subtitle: "Be logged in allows you to use Mobi more comfortable.",
-    emailLabel: "EMAIL ADDRESS",
-    passwordLabel: "PASSWORD",
-    signUpText: "If you don't have an account",
-    signUpLink: "sign up",
-    continueWithFacebook: "Continue with Facebook",
+    title: "Welcome Back",
+    subtitle: "Sign in to continue your journey with Mobi.",
+    emailLabel: "Email Address",
+    passwordLabel: "Password",
+    emailPlaceholder: "email@example.com",
+    passwordPlaceholder: "••••••••",
+    signUpText: "New to Mobi?",
+    signUpLink: "Create an account",
+    continueWithGoogle: "Continue with Google",
     forgotPassword: "Forgot password?",
-    sendCode: "Send reset code",
-    resetCodeLabel: "RESET CODE",
-    newPasswordLabel: "NEW PASSWORD",
-    resetPasswordButton: "Verify code and reset",
+    sendCode: "Send Reset Code",
+    resetCodeLabel: "Reset Code",
+    newPasswordLabel: "New Password",
+    resetPasswordButton: "Verify & Reset",
+    loginButton: "Sign In",
+    orContinue: "or continue with",
+    demoAccessTitle: "Quick demo access",
+    demoStudent: "Demo Student Home",
+    demoDriver: "Demo Driver Home",
+    languageName: "English",
+    languageFlag: "🇬🇧",
   },
   ar: {
-    title: "تسجيل الدخول إلى موبي",
-    subtitle: "تسجيل الدخول يسمح لك باستخدام موبي بشكل أكثر راحة.",
-    emailLabel: "عنوان البريد الإلكتروني",
+    title: "مرحباً بعودتك",
+    subtitle: "سجل الدخول للمتابعة مع موبي.",
+    emailLabel: "البريد الإلكتروني",
     passwordLabel: "كلمة المرور",
-    signUpText: "إذا لم يكن لديك حساب",
-    signUpLink: "سجل",
-    continueWithFacebook: "المتابعة عبر فيسبوك",
+    emailPlaceholder: "email@example.com",
+    passwordPlaceholder: "••••••••",
+    signUpText: "جديد في موبي؟",
+    signUpLink: "أنشئ حساباً",
+    continueWithGoogle: "المتابعة عبر جوجل",
     forgotPassword: "نسيت كلمة المرور؟",
-    sendCode: "إرسال رمز الاسترجاع",
-    resetCodeLabel: "رمز الاسترجاع",
+    sendCode: "إرسال رمز الاستعادة",
+    resetCodeLabel: "رمز الاستعادة",
     newPasswordLabel: "كلمة المرور الجديدة",
     resetPasswordButton: "تحقق وأعد التعيين",
+    loginButton: "تسجيل الدخول",
+    orContinue: "أو المتابعة عبر",
+    demoAccessTitle: "وصول تجريبي سريع",
+    demoStudent: "الواجهة التجريبية للطالب",
+    demoDriver: "الواجهة التجريبية للسائق",
+    languageName: "العربية",
+    languageFlag: "🇲🇦",
   },
 };
 
@@ -49,10 +69,13 @@ const LoginScreen = ({
   language = "en",
   onBack,
   onSignUp,
-  onFacebookLogin,
+  onGoogleLogin, // Replaced onFacebookLogin
   onLogin,
   onRequestResetCode,
   onConfirmResetPassword,
+  onDemoStudent,
+  onDemoDriver,
+  onLanguageChange, // New prop to handle language switching
 }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -61,52 +84,73 @@ const LoginScreen = ({
   const [newPassword, setNewPassword] = useState("");
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [emailFocused, setEmailFocused] = useState(false);
-  const [passwordFocused, setPasswordFocused] = useState(false);
-  const [facebookLoading, setFacebookLoading] = useState(false);
-  const [loginLoading, setLoginLoading] = useState(false);
-  const [resetCodeLoading, setResetCodeLoading] = useState(false);
-  const [resetConfirmLoading, setResetConfirmLoading] = useState(false);
+  const [activeField, setActiveField] = useState(null); // 'email' | 'password' | 'resetCode' | 'newPassword'
+
+  const [loading, setLoading] = useState({
+    login: false,
+    google: false,
+    resetCode: false,
+    resetConfirm: false,
+  });
+
+  // Animations
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 800,
+        easing: Easing.out(Easing.back(1.5)),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, [forgotPasswordMode]);
 
   const t = translations[language];
 
   const handleLogin = async () => {
-    if (!onLogin || loginLoading) return;
-    setLoginLoading(true);
+    if (!onLogin || loading.login) return;
+    setLoading((prev) => ({ ...prev, login: true }));
     try {
       await onLogin({
         email: email.trim().toLowerCase(),
         password,
       });
     } finally {
-      setLoginLoading(false);
+      setLoading((prev) => ({ ...prev, login: false }));
     }
   };
 
-  const handleFacebookLogin = async () => {
-    if (!onFacebookLogin || facebookLoading) return;
-
-    setFacebookLoading(true);
+  const handleGoogleLogin = async () => {
+    if (!onGoogleLogin || loading.google) return;
+    setLoading((prev) => ({ ...prev, google: true }));
     try {
-      await onFacebookLogin();
+      await onGoogleLogin();
     } finally {
-      setFacebookLoading(false);
+      setLoading((prev) => ({ ...prev, google: false }));
     }
   };
 
   const handleSendResetCode = async () => {
-    if (!onRequestResetCode || resetCodeLoading) return;
-    setResetCodeLoading(true);
+    if (!onRequestResetCode || loading.resetCode) return;
+    setLoading((prev) => ({ ...prev, resetCode: true }));
     try {
       await onRequestResetCode(email.trim().toLowerCase());
     } finally {
-      setResetCodeLoading(false);
+      setLoading((prev) => ({ ...prev, resetCode: false }));
     }
   };
 
   const handleConfirmReset = async () => {
-    if (!onConfirmResetPassword || resetConfirmLoading) return;
-    setResetConfirmLoading(true);
+    if (!onConfirmResetPassword || loading.resetConfirm) return;
+    setLoading((prev) => ({ ...prev, resetConfirm: true }));
     try {
       await onConfirmResetPassword({
         email: email.trim().toLowerCase(),
@@ -117,8 +161,74 @@ const LoginScreen = ({
       setNewPassword("");
       setForgotPasswordMode(false);
     } finally {
-      setResetConfirmLoading(false);
+      setLoading((prev) => ({ ...prev, resetConfirm: false }));
     }
+  };
+
+  const InputField = ({
+    label,
+    value,
+    onChangeText,
+    placeholder,
+    icon,
+    isPassword,
+    showPasswordToggle,
+    onTogglePassword,
+    keyboardType,
+    autoCapitalize,
+    fieldName,
+    maxLength,
+  }) => {
+    const isFocused = activeField === fieldName;
+
+    return (
+      <View style={styles.inputGroup}>
+        <Text style={[styles.label, isFocused && styles.labelFocused]}>
+          {label}
+        </Text>
+        <View
+          style={[
+            styles.inputWrapper,
+            isFocused && styles.inputWrapperFocused,
+            language === "ar" && styles.rtlContainer,
+          ]}
+        >
+          <MaterialIcons
+            name={icon}
+            size={20}
+            color={isFocused ? "#3185FC" : "#94A3B8"}
+            style={styles.inputIcon}
+          />
+          <TextInput
+            style={[styles.input, language === "ar" && styles.rtlText]}
+            placeholder={placeholder}
+            placeholderTextColor="#94A3B8"
+            value={value}
+            onChangeText={onChangeText}
+            onFocus={() => setActiveField(fieldName)}
+            onBlur={() => setActiveField(null)}
+            secureTextEntry={isPassword}
+            keyboardType={keyboardType}
+            autoCapitalize={autoCapitalize || "none"}
+            autoCorrect={false}
+            maxLength={maxLength}
+          />
+          {showPasswordToggle && (
+            <TouchableOpacity
+              style={styles.eyeIcon}
+              onPress={onTogglePassword}
+              activeOpacity={0.6}
+            >
+              <MaterialIcons
+                name={isPassword ? "visibility-off" : "visibility"}
+                size={20}
+                color="#94A3B8"
+              />
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    );
   };
 
   return (
@@ -131,240 +241,265 @@ const LoginScreen = ({
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          {/* Back Button */}
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={onBack}
-            activeOpacity={0.7}
-          >
-            <MaterialIcons name="arrow-back" size={24} color="#1A1A1A" />
-          </TouchableOpacity>
+          {/* Header Navigation */}
+          <View style={styles.navHeader}>
+            {onBack ? (
+              <TouchableOpacity
+                style={styles.backButton}
+                onPress={onBack}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons
+                  name="arrow-back-ios"
+                  size={20}
+                  color="#1A1A1A"
+                />
+              </TouchableOpacity>
+            ) : (
+              <View style={{ width: 40 }} />
+            )}
 
-          {/* Language Switcher */}
-          <View style={styles.languageContainer}>
             <TouchableOpacity
-              style={styles.languageButton}
-              onPress={() => {
-                // Language switching can be handled by parent
-              }}
-              activeOpacity={0.7}
+              style={styles.languagePill}
+              onPress={() =>
+                onLanguageChange &&
+                onLanguageChange(language === "en" ? "ar" : "en")
+              }
+              activeOpacity={0.8}
             >
-              <Text style={styles.languageIcon}>
-                {language === "en" ? "🇬🇧" : "🇲🇦"}
+              <Text style={styles.languagePillText}>
+                {language === "en" ? "العربية" : "English"}
+              </Text>
+              <Text style={styles.languagePillFlag}>
+                {language === "en" ? "🇲🇦" : "🇬🇧"}
               </Text>
             </TouchableOpacity>
           </View>
 
-          {/* Main Content */}
-          <View style={styles.content}>
-            <View style={styles.header}>
-              <Text style={[styles.title, language === "ar" && styles.rtl]}>
-                {t.title}
+          <Animated.View
+            style={{
+              opacity: fadeAnim,
+              transform: [{ translateY: slideAnim }],
+            }}
+          >
+            {/* Title Section */}
+            <View style={styles.titleSection}>
+              <Text style={[styles.title, language === "ar" && styles.rtlText]}>
+                {forgotPasswordMode ? t.forgotPassword : t.title}
               </Text>
-              <Text style={[styles.subtitle, language === "ar" && styles.rtl]}>
-                {t.subtitle}
+              <Text
+                style={[styles.subtitle, language === "ar" && styles.rtlText]}
+              >
+                {forgotPasswordMode
+                  ? "Enter your email to receive a reset code."
+                  : t.subtitle}
               </Text>
             </View>
 
-            {/* Email Input */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>{t.emailLabel}</Text>
-              <View style={styles.inputWrapper}>
-                <TextInput
-                  style={[
-                    styles.input,
-                    emailFocused && styles.inputFocused,
-                    language === "ar" && styles.rtl,
-                  ]}
-                  placeholder="michal@tonik.pl"
-                  placeholderTextColor="#999999"
+            {/* Login Form */}
+            {!forgotPasswordMode ? (
+              <View style={styles.formContainer}>
+                <InputField
+                  label={t.emailLabel}
                   value={email}
                   onChangeText={setEmail}
-                  onFocus={() => setEmailFocused(true)}
-                  onBlur={() => setEmailFocused(false)}
+                  placeholder={t.emailPlaceholder}
+                  icon="alternate-email"
+                  fieldName="email"
                   keyboardType="email-address"
-                  autoCapitalize="none"
-                  autoCorrect={false}
                 />
-                <View style={styles.emailIcon}>
-                  <MaterialIcons
-                    name="alternate-email"
-                    size={20}
-                    color="#FFFFFF"
-                  />
-                </View>
-              </View>
-              <View
-                style={[
-                  styles.underline,
-                  emailFocused
-                    ? styles.underlineActive
-                    : styles.underlineInactive,
-                ]}
-              />
-            </View>
 
-            {/* Password Input */}
-            <View style={styles.inputContainer}>
-              <Text style={styles.label}>{t.passwordLabel}</Text>
-              <View style={styles.inputWrapper}>
-                <TextInput
-                  style={[
-                    styles.input,
-                    passwordFocused && styles.inputFocused,
-                    language === "ar" && styles.rtl,
-                  ]}
-                  placeholder="••••••••"
-                  placeholderTextColor="#999999"
+                <InputField
+                  label={t.passwordLabel}
                   value={password}
                   onChangeText={setPassword}
-                  onFocus={() => setPasswordFocused(true)}
-                  onBlur={() => setPasswordFocused(false)}
-                  secureTextEntry={!showPassword}
-                  autoCapitalize="none"
-                  autoCorrect={false}
+                  placeholder={t.passwordPlaceholder}
+                  icon="lock-outline"
+                  fieldName="password"
+                  isPassword={!showPassword}
+                  showPasswordToggle={true}
+                  onTogglePassword={() => setShowPassword(!showPassword)}
                 />
-                <TouchableOpacity
-                  style={styles.eyeIcon}
-                  onPress={() => setShowPassword(!showPassword)}
-                  activeOpacity={0.7}
-                >
-                  <MaterialIcons
-                    name={showPassword ? "visibility-off" : "visibility"}
-                    size={20}
-                    color="#666666"
-                  />
-                </TouchableOpacity>
-              </View>
-              <View
-                style={[
-                  styles.underline,
-                  passwordFocused
-                    ? styles.underlineActive
-                    : styles.underlineInactive,
-                ]}
-              />
-            </View>
 
-            <TouchableOpacity
-              onPress={() => setForgotPasswordMode((prev) => !prev)}
-              activeOpacity={0.7}
-              style={styles.forgotPasswordButton}
-            >
-              <Text style={styles.forgotPasswordText}>{t.forgotPassword}</Text>
-            </TouchableOpacity>
-
-            {forgotPasswordMode && (
-              <View style={styles.forgotContainer}>
                 <TouchableOpacity
-                  style={styles.forgotActionButton}
-                  onPress={handleSendResetCode}
-                  disabled={resetCodeLoading}
-                  activeOpacity={0.8}
+                  onPress={() => setForgotPasswordMode(true)}
+                  activeOpacity={0.6}
+                  style={styles.forgotPasswordButton}
                 >
-                  <Text style={styles.forgotActionButtonText}>
-                    {resetCodeLoading ? "..." : t.sendCode}
+                  <Text style={styles.forgotPasswordText}>
+                    {t.forgotPassword}
                   </Text>
                 </TouchableOpacity>
 
-                <View style={styles.inputContainer}>
-                  <Text style={styles.label}>{t.resetCodeLabel}</Text>
-                  <View style={styles.inputWrapper}>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="123456"
-                      placeholderTextColor="#999999"
-                      value={resetCode}
-                      onChangeText={setResetCode}
-                      keyboardType="number-pad"
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                      maxLength={6}
-                    />
-                  </View>
-                  <View style={[styles.underline, styles.underlineInactive]} />
+                <TouchableOpacity
+                  style={[
+                    styles.primaryButton,
+                    loading.login && styles.buttonDisabled,
+                  ]}
+                  onPress={handleLogin}
+                  activeOpacity={0.9}
+                  disabled={loading.login}
+                >
+                  {loading.login ? (
+                    <Animated.View style={styles.loadingContainer}>
+                      <MaterialIcons
+                        name="hourglass-top"
+                        size={20}
+                        color="#FFFFFF"
+                      />
+                    </Animated.View>
+                  ) : (
+                    <>
+                      <Text style={styles.primaryButtonText}>
+                        {t.loginButton}
+                      </Text>
+                      <MaterialIcons
+                        name="arrow-forward"
+                        size={20}
+                        color="#FFFFFF"
+                      />
+                    </>
+                  )}
+                </TouchableOpacity>
+
+                {/* Divider */}
+                <View style={styles.dividerContainer}>
+                  <View style={styles.dividerLine} />
+                  <Text style={styles.dividerText}>{t.orContinue}</Text>
+                  <View style={styles.dividerLine} />
                 </View>
 
-                <View style={styles.inputContainer}>
-                  <Text style={styles.label}>{t.newPasswordLabel}</Text>
-                  <View style={styles.inputWrapper}>
-                    <TextInput
-                      style={styles.input}
-                      placeholder="••••••••"
-                      placeholderTextColor="#999999"
-                      value={newPassword}
-                      onChangeText={setNewPassword}
-                      secureTextEntry={!showNewPassword}
-                      autoCapitalize="none"
-                      autoCorrect={false}
-                    />
+                {/* Google Login */}
+                <TouchableOpacity
+                  style={[
+                    styles.googleButton,
+                    loading.google && styles.buttonDisabled,
+                  ]}
+                  onPress={handleGoogleLogin}
+                  activeOpacity={0.8}
+                  disabled={loading.google}
+                >
+                  <MaterialCommunityIcons
+                    name="google"
+                    size={24}
+                    color="#EA4335"
+                  />
+                  <Text style={styles.googleButtonText}>
+                    {t.continueWithGoogle}
+                  </Text>
+                </TouchableOpacity>
+
+                <View style={styles.demoContainer}>
+                  <Text
+                    style={[
+                      styles.demoTitle,
+                      language === "ar" && styles.rtlText,
+                    ]}
+                  >
+                    {t.demoAccessTitle}
+                  </Text>
+                  <View style={styles.demoActionsRow}>
                     <TouchableOpacity
-                      style={styles.eyeIcon}
-                      onPress={() => setShowNewPassword(!showNewPassword)}
-                      activeOpacity={0.7}
+                      style={styles.demoButton}
+                      onPress={onDemoStudent}
+                      activeOpacity={0.8}
                     >
-                      <MaterialIcons
-                        name={showNewPassword ? "visibility-off" : "visibility"}
-                        size={20}
-                        color="#666666"
-                      />
+                      <Text style={styles.demoButtonText}>{t.demoStudent}</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={styles.demoButton}
+                      onPress={onDemoDriver}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={styles.demoButtonText}>{t.demoDriver}</Text>
                     </TouchableOpacity>
                   </View>
-                  <View style={[styles.underline, styles.underlineInactive]} />
                 </View>
+              </View>
+            ) : (
+              /* Forgot Password Form */
+              <View style={styles.formContainer}>
+                <InputField
+                  label={t.emailLabel}
+                  value={email}
+                  onChangeText={setEmail}
+                  placeholder={t.emailPlaceholder}
+                  icon="alternate-email"
+                  fieldName="email"
+                />
 
                 <TouchableOpacity
-                  style={styles.forgotActionButton}
-                  onPress={handleConfirmReset}
-                  disabled={resetConfirmLoading}
+                  style={[
+                    styles.primaryButton,
+                    loading.resetCode && styles.buttonDisabled,
+                  ]}
+                  onPress={handleSendResetCode}
                   activeOpacity={0.8}
+                  disabled={loading.resetCode}
                 >
-                  <Text style={styles.forgotActionButtonText}>
-                    {resetConfirmLoading ? "..." : t.resetPasswordButton}
+                  <Text style={styles.primaryButtonText}>
+                    {loading.resetCode ? "..." : t.sendCode}
                   </Text>
+                </TouchableOpacity>
+
+                <View style={styles.spacing32} />
+
+                <InputField
+                  label={t.resetCodeLabel}
+                  value={resetCode}
+                  onChangeText={setResetCode}
+                  placeholder="123456"
+                  icon="security"
+                  fieldName="resetCode"
+                  keyboardType="number-pad"
+                  maxLength={6}
+                />
+
+                <InputField
+                  label={t.newPasswordLabel}
+                  value={newPassword}
+                  onChangeText={setNewPassword}
+                  placeholder={t.passwordPlaceholder}
+                  icon="vpn-key"
+                  fieldName="newPassword"
+                  isPassword={!showNewPassword}
+                  showPasswordToggle={true}
+                  onTogglePassword={() => setShowNewPassword(!showNewPassword)}
+                />
+
+                <TouchableOpacity
+                  style={[
+                    styles.primaryButton,
+                    loading.resetConfirm && styles.buttonDisabled,
+                  ]}
+                  onPress={handleConfirmReset}
+                  activeOpacity={0.8}
+                  disabled={loading.resetConfirm}
+                >
+                  <Text style={styles.primaryButtonText}>
+                    {loading.resetConfirm ? "..." : t.resetPasswordButton}
+                  </Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity
+                  onPress={() => setForgotPasswordMode(false)}
+                  style={styles.backToLogin}
+                >
+                  <Text style={styles.backToLoginText}>Back to Sign In</Text>
                 </TouchableOpacity>
               </View>
             )}
 
-            {/* Login Button and Sign Up Link */}
+            {/* Registration Footer */}
             <View style={styles.footer}>
-              <TouchableOpacity
-                style={styles.loginButton}
-                onPress={handleLogin}
-                activeOpacity={0.8}
-                disabled={loginLoading}
-              >
-                <MaterialIcons
-                  name={loginLoading ? "hourglass-empty" : "arrow-forward"}
-                  size={24}
-                  color="#FFFFFF"
-                />
+              <Text style={styles.footerText}>{t.signUpText}</Text>
+              <TouchableOpacity onPress={onSignUp} activeOpacity={0.7}>
+                <Text style={styles.footerLink}> {t.signUpLink}</Text>
               </TouchableOpacity>
-
-              <TouchableOpacity
-                style={[
-                  styles.facebookButton,
-                  facebookLoading && styles.facebookButtonDisabled,
-                ]}
-                onPress={handleFacebookLogin}
-                activeOpacity={0.8}
-                disabled={facebookLoading}
-              >
-                <MaterialIcons name="facebook" size={20} color="#1877F2" />
-                <Text style={styles.facebookButtonText}>
-                  {facebookLoading ? "..." : t.continueWithFacebook}
-                </Text>
-              </TouchableOpacity>
-
-              <View style={styles.signUpContainer}>
-                <Text style={styles.signUpText}>{t.signUpText} </Text>
-                <TouchableOpacity onPress={onSignUp} activeOpacity={0.7}>
-                  <Text style={styles.signUpLink}>{t.signUpLink}</Text>
-                </TouchableOpacity>
-              </View>
             </View>
-          </View>
+          </Animated.View>
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>
@@ -381,183 +516,249 @@ const styles = StyleSheet.create({
   },
   scrollContent: {
     flexGrow: 1,
-    paddingHorizontal: 24,
+    paddingHorizontal: 28,
+    paddingBottom: 40,
+  },
+  navHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingVertical: 16,
+    marginBottom: 8,
   },
   backButton: {
-    marginTop: Platform.OS === "ios" ? 10 : 20,
-    marginBottom: 10,
-    alignSelf: "flex-start",
-  },
-  languageContainer: {
-    flexDirection: "row",
-    justifyContent: "flex-end",
-    marginBottom: 20,
-  },
-  languageButton: {
     padding: 8,
+    marginLeft: -8,
   },
-  languageIcon: {
-    fontSize: 24,
+  languagePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F1F5F9",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
   },
-  content: {
-    flex: 1,
-    justifyContent: "center",
-    paddingVertical: 40,
+  languagePillText: {
+    fontSize: 13,
+    color: "#475569",
+    fontFamily: UbuntuFonts.medium,
   },
-  header: {
-    marginBottom: 48,
+  languagePillFlag: {
+    fontSize: 16,
+  },
+  titleSection: {
+    marginBottom: 40,
+    marginTop: 10,
   },
   title: {
-    fontSize: 32,
-    fontWeight: "bold",
-    color: "#3185FC",
-    marginBottom: 12,
+    fontSize: 34,
+    color: "#1A1A1A",
     fontFamily: UbuntuFonts.bold,
+    letterSpacing: -0.5,
+    marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: "#666666",
-    lineHeight: 22,
+    color: "#64748B",
     fontFamily: UbuntuFonts.regular,
+    lineHeight: 24,
   },
-  rtl: {
-    textAlign: "right",
+  formContainer: {
+    width: "100%",
   },
-  inputContainer: {
-    marginBottom: 32,
+  inputGroup: {
+    marginBottom: 24,
   },
   label: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#666666",
+    fontSize: 14,
+    color: "#64748B",
+    fontFamily: UbuntuFonts.medium,
     marginBottom: 8,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
-    fontFamily: UbuntuFonts.semiBold,
+    marginLeft: 4,
+  },
+  labelFocused: {
+    color: "#3185FC",
   },
   inputWrapper: {
     flexDirection: "row",
     alignItems: "center",
-    position: "relative",
+    backgroundColor: "#F8FAFF",
+    borderWidth: 1.5,
+    borderColor: "#EBF2FF",
+    borderRadius: 18,
+    paddingHorizontal: 16,
+    height: 58,
+    transition: "border-color 0.2s",
+  },
+  inputWrapperFocused: {
+    borderColor: "#3185FC",
+    backgroundColor: "#FFFFFF",
+    shadowColor: "#3185FC",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 10,
+    elevation: 2,
+  },
+  inputIcon: {
+    marginRight: 12,
   },
   input: {
     flex: 1,
     fontSize: 16,
     color: "#1A1A1A",
-    paddingVertical: 12,
-    paddingRight: 50,
-    fontFamily: UbuntuFonts.regular,
-  },
-  inputFocused: {
-    color: "#1A1A1A",
-  },
-  emailIcon: {
-    position: "absolute",
-    right: 0,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#3185FC",
-    alignItems: "center",
-    justifyContent: "center",
+    fontFamily: UbuntuFonts.medium,
+    height: "100%",
   },
   eyeIcon: {
-    position: "absolute",
-    right: 0,
-    padding: 6,
-  },
-  underline: {
-    height: 2,
-    marginTop: 4,
-  },
-  underlineActive: {
-    backgroundColor: "#3185FC",
-  },
-  underlineInactive: {
-    backgroundColor: "#E0E0E0",
-  },
-  footer: {
-    marginTop: 40,
+    padding: 8,
   },
   forgotPasswordButton: {
+    alignSelf: "flex-end",
+    marginBottom: 32,
     marginTop: -8,
-    marginBottom: 16,
-    alignSelf: "flex-start",
   },
   forgotPasswordText: {
     fontSize: 14,
     color: "#3185FC",
     fontFamily: UbuntuFonts.semiBold,
   },
-  forgotContainer: {
-    marginBottom: 12,
-  },
-  forgotActionButton: {
+  primaryButton: {
     backgroundColor: "#3185FC",
-    borderRadius: 12,
-    paddingVertical: 10,
-    alignItems: "center",
-    justifyContent: "center",
-    marginBottom: 14,
-  },
-  forgotActionButtonText: {
-    color: "#FFFFFF",
-    fontSize: 14,
-    fontFamily: UbuntuFonts.semiBold,
-  },
-  loginButton: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: "#3185FC",
-    alignItems: "center",
-    justifyContent: "center",
-    shadowColor: "#3185FC",
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
-    marginBottom: 24,
-  },
-  facebookButton: {
-    borderWidth: 1,
-    borderColor: "#D8E2FF",
-    backgroundColor: "#F5F8FF",
-    borderRadius: 14,
-    paddingVertical: 12,
-    paddingHorizontal: 14,
+    borderRadius: 18,
+    height: 58,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    marginBottom: 18,
     gap: 10,
+    shadowColor: "#3185FC",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 8,
   },
-  facebookButtonDisabled: {
-    opacity: 0.7,
+  primaryButtonText: {
+    color: "#FFFFFF",
+    fontSize: 17,
+    fontFamily: UbuntuFonts.bold,
   },
-  facebookButtonText: {
-    fontSize: 14,
+  buttonDisabled: {
+    opacity: 0.6,
+  },
+  dividerContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 32,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#E2E8F0",
+  },
+  dividerText: {
+    marginHorizontal: 16,
+    color: "#94A3B8",
+    fontSize: 13,
+    fontFamily: UbuntuFonts.medium,
+  },
+  googleButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
+    borderRadius: 18,
+    height: 58,
+    gap: 12,
+  },
+  googleButtonText: {
+    fontSize: 16,
     color: "#1A1A1A",
     fontFamily: UbuntuFonts.semiBold,
   },
-  signUpContainer: {
-    flexDirection: "row",
+  googleIconContainer: {
+    width: 24,
+    height: 24,
+    justifyContent: "center",
     alignItems: "center",
-    justifyContent: "flex-start",
   },
-  signUpText: {
-    fontSize: 14,
-    color: "#666666",
+  footer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 40,
+    paddingBottom: 20,
+  },
+  footerText: {
+    fontSize: 15,
+    color: "#64748B",
     fontFamily: UbuntuFonts.regular,
   },
-  signUpLink: {
-    fontSize: 14,
+  footerLink: {
+    fontSize: 15,
     color: "#3185FC",
-    fontWeight: "600",
+    fontFamily: UbuntuFonts.bold,
+  },
+  backToLogin: {
+    alignItems: "center",
+    marginTop: 24,
+  },
+  backToLoginText: {
+    fontSize: 15,
+    color: "#64748B",
+    fontFamily: UbuntuFonts.medium,
+    textDecorationLine: "underline",
+  },
+  rtlContainer: {
+    flexDirection: "row-reverse",
+  },
+  rtlText: {
+    textAlign: "right",
+  },
+  spacing32: {
+    height: 32,
+  },
+  loadingContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  demoContainer: {
+    marginTop: 20,
+    backgroundColor: "#F8FAFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    borderRadius: 16,
+    padding: 12,
+    gap: 10,
+  },
+  demoTitle: {
+    fontSize: 13,
+    color: "#475569",
+    fontFamily: UbuntuFonts.medium,
+  },
+  demoActionsRow: {
+    flexDirection: "row",
+    gap: 8,
+  },
+  demoButton: {
+    flex: 1,
+    minHeight: 40,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: "#BFDBFE",
+    backgroundColor: "#EFF6FF",
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: 8,
+  },
+  demoButtonText: {
+    fontSize: 12,
+    color: "#1D4ED8",
     fontFamily: UbuntuFonts.semiBold,
+    textAlign: "center",
   },
 });
 

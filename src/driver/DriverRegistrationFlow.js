@@ -11,10 +11,12 @@ import {
   Alert,
   ActivityIndicator,
   Animated,
+  Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { UbuntuFonts } from "../shared/utils/fonts";
 import DriverRegistrationProgressBar from '../shared/components/driver/DriverRegistrationProgressBar';
 import Select from '../shared/components/common/Select';
 import MapLocationPickerModal from '../shared/components/common/MapLocationPickerModal';
@@ -186,7 +188,6 @@ const MODELS = {
 // Input Field Component with Icon
 const InputField = React.memo(
   ({
-    field,
     label,
     placeholder,
     icon,
@@ -198,48 +199,48 @@ const InputField = React.memo(
     loading,
     onChangeText,
     onBlur,
+    isFocused,
+    onFocus,
   }) => {
     return (
-      <View style={styles.inputContainer}>
-        <Text style={[styles.label, language === 'ar' && styles.rtl]}>{label}</Text>
-        <View style={styles.inputWrapper}>
-          {icon && (
-            <MaterialIcons
-              name={icon}
-              size={20}
-              color={value ? '#3185FC' : '#9CA3AF'}
-              style={styles.inputIcon}
-            />
-          )}
+      <View style={styles.inputGroup}>
+        <Text style={[
+          styles.label,
+          isFocused && styles.labelFocused,
+          hasError && styles.labelError,
+          language === 'ar' && styles.rtlText
+        ]}>
+          {label}
+        </Text>
+        <View style={[
+          styles.inputWrapper,
+          isFocused && styles.inputWrapperFocused,
+          hasError && styles.inputWrapperError,
+          language === 'ar' && styles.rtlRow
+        ]}>
+          <MaterialIcons
+            name={icon}
+            size={20}
+            color={hasError ? "#EF4444" : isFocused ? "#3185FC" : "#94A3B8"}
+            style={styles.inputIcon}
+          />
           <TextInput
             style={[
               styles.input,
-              hasError && styles.inputError,
-              language === 'ar' && styles.rtl,
+              language === 'ar' && styles.rtlText
             ]}
             placeholder={placeholder}
-            placeholderTextColor="#999999"
+            placeholderTextColor="#94A3B8"
             value={value}
             onChangeText={onChangeText}
+            onFocus={onFocus}
             onBlur={onBlur}
             keyboardType={keyboardType}
             autoCapitalize={autoCapitalize}
             editable={!loading}
-            blurOnSubmit={false}
-            returnKeyType="next"
           />
         </View>
         {hasError && <Text style={styles.errorText}>{hasError}</Text>}
-        <View
-          style={[
-            styles.underline,
-            hasError
-              ? styles.underlineError
-              : value
-              ? styles.underlineActive
-              : styles.underlineInactive,
-          ]}
-        />
       </View>
     );
   }
@@ -247,9 +248,11 @@ const InputField = React.memo(
 
 InputField.displayName = 'InputField';
 
-const DriverRegistrationFlow = ({ language = 'en', onBack, onSuccess }) => {
+const DriverRegistrationFlow = ({ language = 'en', onBack, onSuccess, onLanguageChange }) => {
   const [currentStep, setCurrentStep] = useState(1);
-  const [slideAnim] = useState(new Animated.Value(0));
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+  const [activeField, setActiveField] = useState(null);
 
   // Step 1: Driver Information
   const [step1Data, setStep1Data] = useState({
@@ -290,20 +293,26 @@ const DriverRegistrationFlow = ({ language = 'en', onBack, onSuccess }) => {
 
   const t = translations[language];
 
-  // Animate step transitions
   useEffect(() => {
-    Animated.sequence([
-      Animated.timing(slideAnim, {
-        toValue: 0,
-        duration: 150,
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 600,
         useNativeDriver: true,
       }),
       Animated.timing(slideAnim, {
-        toValue: 1,
-        duration: 150,
+        toValue: 0,
+        duration: 600,
+        easing: Easing.out(Easing.back(1.2)),
         useNativeDriver: true,
       }),
     ]).start();
+
+    // Reset animations when moving to next step
+    return () => {
+      fadeAnim.setValue(0);
+      slideAnim.setValue(20);
+    };
   }, [currentStep]);
 
   // Resend cooldown timer
@@ -422,6 +431,18 @@ const DriverRegistrationFlow = ({ language = 'en', onBack, onSuccess }) => {
       );
     } finally {
       setStep1Loading(false);
+    }
+  };
+
+  // Step 2: Input Change Handler
+  const handleStep2InputChange = (field, value) => {
+    setStep2Data((prev) => ({
+      ...prev,
+      [field]: value,
+      ...(field === 'brand' ? { model: '' } : {}), // Reset model when brand changes
+    }));
+    if (step2Errors[field]) {
+      setStep2Errors((prev) => ({ ...prev, [field]: null }));
     }
   };
 
@@ -568,7 +589,7 @@ const DriverRegistrationFlow = ({ language = 'en', onBack, onSuccess }) => {
         Alert.alert(
           language === 'ar' ? 'خطأ' : 'Error',
           result.error.message ||
-            (language === 'ar' ? 'فشل إنشاء رمز التحقق' : 'Failed to create verification code'),
+          (language === 'ar' ? 'فشل إنشاء رمز التحقق' : 'Failed to create verification code'),
           [{ text: language === 'ar' ? 'حسناً' : 'OK' }]
         );
       }
@@ -707,12 +728,8 @@ const DriverRegistrationFlow = ({ language = 'en', onBack, onSuccess }) => {
     return (
       <View style={styles.stepContainer}>
         <View style={styles.stepHeader}>
-          <Text style={[styles.stepTitle, language === 'ar' && styles.rtl]}>
-            {t.step1Title}
-          </Text>
-          <Text style={[styles.stepSubtitle, language === 'ar' && styles.rtl]}>
-            {t.step1Subtitle}
-          </Text>
+          <Text style={[styles.stepTitle, language === 'ar' && styles.rtlText]}>{t.step1Title}</Text>
+          <Text style={[styles.stepSubtitle, language === 'ar' && styles.rtlText]}>{t.step1Subtitle}</Text>
         </View>
 
         <ScrollView
@@ -722,121 +739,75 @@ const DriverRegistrationFlow = ({ language = 'en', onBack, onSuccess }) => {
         >
           <View style={styles.formCard}>
             <InputField
-              field="fullname"
-              label={t.fullname}
-              placeholder={t.fullnamePlaceholder}
-              icon="person"
-              autoCapitalize="words"
-              value={step1Data.fullname}
-              hasError={step1Touched.fullname && step1Errors.fullname ? step1Errors.fullname : null}
-              language={language}
-              loading={step1Loading}
-              onChangeText={(text) => {
-                setStep1Data((prev) => ({ ...prev, fullname: text }));
-                if (step1Errors.fullname) {
-                  setStep1Errors((prev) => ({ ...prev, fullname: null }));
-                }
+              label={t.fullname} placeholder={t.fullnamePlaceholder} icon="person-outline"
+              autoCapitalize="words" value={step1Data.fullname}
+              hasError={step1Touched.fullname && step1Errors.fullname}
+              language={language} loading={step1Loading}
+              onFocus={() => setActiveField('fullname')}
+              onBlur={() => { setActiveField(null); setStep1Touched(p => ({ ...p, fullname: true })); validateStep1Field('fullname'); }}
+              onChangeText={text => {
+                setStep1Data(p => ({ ...p, fullname: text }));
+                if (step1Errors.fullname) setStep1Errors(p => ({ ...p, fullname: null }));
               }}
-              onBlur={() => {
-                setStep1Touched((prev) => ({ ...prev, fullname: true }));
-                validateStep1Field('fullname');
-              }}
+              isFocused={activeField === 'fullname'}
             />
 
             <InputField
-              field="email"
-              label={t.email}
-              placeholder={t.emailPlaceholder}
-              icon="email"
-              keyboardType="email-address"
-              value={step1Data.email}
-              hasError={step1Touched.email && step1Errors.email ? step1Errors.email : null}
-              language={language}
-              loading={step1Loading}
-              onChangeText={(text) => {
-                setStep1Data((prev) => ({ ...prev, email: text }));
-                if (step1Errors.email) {
-                  setStep1Errors((prev) => ({ ...prev, email: null }));
-                }
+              label={t.email} placeholder={t.emailPlaceholder} icon="alternate-email"
+              keyboardType="email-address" value={step1Data.email}
+              hasError={step1Touched.email && step1Errors.email}
+              language={language} loading={step1Loading}
+              onFocus={() => setActiveField('email')}
+              onBlur={() => { setActiveField(null); setStep1Touched(p => ({ ...p, email: true })); validateStep1Field('email'); }}
+              onChangeText={text => {
+                setStep1Data(p => ({ ...p, email: text }));
+                if (step1Errors.email) setStep1Errors(p => ({ ...p, email: null }));
               }}
-              onBlur={() => {
-                setStep1Touched((prev) => ({ ...prev, email: true }));
-                validateStep1Field('email');
-              }}
+              isFocused={activeField === 'email'}
             />
 
             <InputField
-              field="phone"
-              label={t.phone}
-              placeholder={t.phonePlaceholder}
-              icon="phone"
-              keyboardType="phone-pad"
-              value={step1Data.phone}
-              hasError={step1Touched.phone && step1Errors.phone ? step1Errors.phone : null}
-              language={language}
-              loading={step1Loading}
-              onChangeText={(text) => {
-                setStep1Data((prev) => ({ ...prev, phone: text }));
-                if (step1Errors.phone) {
-                  setStep1Errors((prev) => ({ ...prev, phone: null }));
-                }
+              label={t.phone} placeholder={t.phonePlaceholder} icon="phone-android"
+              keyboardType="phone-pad" value={step1Data.phone}
+              hasError={step1Touched.phone && step1Errors.phone}
+              language={language} loading={step1Loading}
+              onFocus={() => setActiveField('phone')}
+              onBlur={() => { setActiveField(null); setStep1Touched(p => ({ ...p, phone: true })); validateStep1Field('phone'); }}
+              onChangeText={text => {
+                setStep1Data(p => ({ ...p, phone: text }));
+                if (step1Errors.phone) setStep1Errors(p => ({ ...p, phone: null }));
               }}
-              onBlur={() => {
-                setStep1Touched((prev) => ({ ...prev, phone: true }));
-                validateStep1Field('phone');
-              }}
+              isFocused={activeField === 'phone'}
             />
 
             <InputField
-              field="cin"
-              label={t.cin}
-              placeholder={t.cinPlaceholder}
-              icon="badge"
-              autoCapitalize="characters"
-              value={step1Data.cin}
-              hasError={step1Touched.cin && step1Errors.cin ? step1Errors.cin : null}
-              language={language}
-              loading={step1Loading}
-              onChangeText={(text) => {
-                setStep1Data((prev) => ({ ...prev, cin: text }));
-                if (step1Errors.cin) {
-                  setStep1Errors((prev) => ({ ...prev, cin: null }));
-                }
+              label={t.cin} placeholder={t.cinPlaceholder} icon="badge"
+              autoCapitalize="characters" value={step1Data.cin}
+              hasError={step1Touched.cin && step1Errors.cin}
+              language={language} loading={step1Loading}
+              onFocus={() => setActiveField('cin')}
+              onBlur={() => { setActiveField(null); setStep1Touched(p => ({ ...p, cin: true })); validateStep1Field('cin'); }}
+              onChangeText={text => {
+                setStep1Data(p => ({ ...p, cin: text }));
+                if (step1Errors.cin) setStep1Errors(p => ({ ...p, cin: null }));
               }}
-              onBlur={() => {
-                setStep1Touched((prev) => ({ ...prev, cin: true }));
-                validateStep1Field('cin');
-              }}
+              isFocused={activeField === 'cin'}
             />
           </View>
         </ScrollView>
 
         <View style={styles.navigationContainer}>
           <TouchableOpacity
-            style={[
-              styles.nextButton,
-              step1Loading && styles.nextButtonDisabled,
-              (!step1Data.fullname ||
-                !step1Data.email ||
-                !step1Data.phone ||
-                !step1Data.cin ||
-                step1Loading) &&
-                styles.nextButtonDisabled,
-            ]}
+            style={[styles.nextButton, (step1Loading || !step1Data.fullname || !step1Data.email || !step1Data.phone || !step1Data.cin) && styles.nextButtonDisabled]}
             onPress={handleStep1Next}
-            disabled={
-              step1Loading ||
-              !step1Data.fullname ||
-              !step1Data.email ||
-              !step1Data.phone ||
-              !step1Data.cin
-            }
+            disabled={step1Loading || !step1Data.fullname || !step1Data.email || !step1Data.phone || !step1Data.cin}
             activeOpacity={0.8}
           >
-            {step1Loading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.nextButtonText}>{t.next}</Text>
+            {step1Loading ? <ActivityIndicator color="#FFFFFF" /> : (
+              <>
+                <Text style={styles.nextButtonText}>{t.next}</Text>
+                <MaterialIcons name="arrow-forward" size={20} color="#FFFFFF" />
+              </>
             )}
           </TouchableOpacity>
         </View>
@@ -846,17 +817,11 @@ const DriverRegistrationFlow = ({ language = 'en', onBack, onSuccess }) => {
 
   // Render Step 2
   const renderStep2 = () => {
-    const availableModels = getAvailableModels();
-
     return (
       <View style={styles.stepContainer}>
         <View style={styles.stepHeader}>
-          <Text style={[styles.stepTitle, language === 'ar' && styles.rtl]}>
-            {t.step2Title}
-          </Text>
-          <Text style={[styles.stepSubtitle, language === 'ar' && styles.rtl]}>
-            {t.step2Subtitle}
-          </Text>
+          <Text style={[styles.stepTitle, language === 'ar' && styles.rtlText]}>{t.step2Title}</Text>
+          <Text style={[styles.stepSubtitle, language === 'ar' && styles.rtlText]}>{t.step2Subtitle}</Text>
         </View>
 
         <ScrollView
@@ -866,176 +831,72 @@ const DriverRegistrationFlow = ({ language = 'en', onBack, onSuccess }) => {
         >
           <View style={styles.formCard}>
             <Select
-              label={t.busType}
-              placeholder={t.busTypePlaceholder}
-              value={step2Data.type}
-              options={BUS_TYPES}
-              onSelect={(value) => {
-                setStep2Data((prev) => ({ ...prev, type: value }));
-                if (step2Errors.type) {
-                  setStep2Errors((prev) => ({ ...prev, type: null }));
-                }
-              }}
-              icon="directions-bus"
-              hasError={step2Touched.type && step2Errors.type ? step2Errors.type : null}
-              language={language}
-              disabled={step2Loading}
+              label={t.busType} placeholder={t.busTypePlaceholder} options={BUS_TYPES}
+              value={step2Data.type} onSelect={val => handleStep2InputChange('type', val)}
+              error={step2Touched.type && step2Errors.type} language={language}
             />
-
-            <Select
-              label={t.brand}
-              placeholder={t.brandPlaceholder}
-              value={step2Data.brand}
-              options={BRANDS}
-              onSelect={(value) => {
-                setStep2Data((prev) => ({ ...prev, brand: value, model: '' })); // Reset model when brand changes
-                if (step2Errors.brand) {
-                  setStep2Errors((prev) => ({ ...prev, brand: null }));
-                }
-              }}
-              icon="local-offer"
-              hasError={step2Touched.brand && step2Errors.brand ? step2Errors.brand : null}
-              language={language}
-              disabled={step2Loading}
-            />
-
-            <Select
-              label={t.model}
-              placeholder={t.modelPlaceholder}
-              value={step2Data.model}
-              options={availableModels}
-              onSelect={(value) => {
-                setStep2Data((prev) => ({ ...prev, model: value }));
-                if (step2Errors.model) {
-                  setStep2Errors((prev) => ({ ...prev, model: null }));
-                }
-              }}
-              icon="build"
-              hasError={step2Touched.model && step2Errors.model ? step2Errors.model : null}
-              language={language}
-              disabled={step2Loading || !step2Data.brand}
-            />
-
             <View style={styles.row}>
-              <View style={styles.halfWidth}>
+              <View style={styles.flex1}>
                 <Select
-                  label={t.year}
-                  placeholder={t.yearPlaceholder}
-                  value={step2Data.year}
-                  options={YEARS}
-                  onSelect={(value) => {
-                    setStep2Data((prev) => ({ ...prev, year: value }));
-                    if (step2Errors.year) {
-                      setStep2Errors((prev) => ({ ...prev, year: null }));
-                    }
-                  }}
-                  icon="calendar-today"
-                  hasError={step2Touched.year && step2Errors.year ? step2Errors.year : null}
-                  language={language}
-                  disabled={step2Loading}
+                  label={t.brand} placeholder={t.brandPlaceholder} options={BRANDS}
+                  value={step2Data.brand} onSelect={val => handleStep2InputChange('brand', val)}
+                  error={step2Touched.brand && step2Errors.brand} language={language}
                 />
               </View>
-
-              <View style={styles.halfWidth}>
+              <View style={{ width: 16 }} />
+              <View style={styles.flex1}>
+                <Select
+                  label={t.model} placeholder={t.modelPlaceholder} options={getAvailableModels()}
+                  value={step2Data.model} onSelect={val => handleStep2InputChange('model', val)}
+                  error={step2Touched.model && step2Errors.model} language={language}
+                  disabled={!step2Data.brand}
+                />
+              </View>
+            </View>
+            <View style={styles.row}>
+              <View style={styles.flex1}>
+                <Select
+                  label={t.year} placeholder={t.yearPlaceholder} options={YEARS}
+                  value={step2Data.year} onSelect={val => handleStep2InputChange('year', val)}
+                  error={step2Touched.year && step2Errors.year} language={language}
+                />
+              </View>
+              <View style={{ width: 16 }} />
+              <View style={styles.flex1}>
                 <InputField
-                  field="capacity"
-                  label={t.capacity}
-                  placeholder={t.capacityPlaceholder}
-                  icon="people"
-                  keyboardType="numeric"
-                  value={step2Data.capacity}
-                  hasError={
-                    step2Touched.capacity && step2Errors.capacity ? step2Errors.capacity : null
-                  }
-                  language={language}
-                  loading={step2Loading}
-                  onChangeText={(text) => {
-                    setStep2Data((prev) => ({ ...prev, capacity: text }));
-                    if (step2Errors.capacity) {
-                      setStep2Errors((prev) => ({ ...prev, capacity: null }));
-                    }
-                  }}
-                  onBlur={() => {
-                    setStep2Touched((prev) => ({ ...prev, capacity: true }));
-                    validateStep2Field('capacity');
-                  }}
+                  label={t.capacity} placeholder={t.capacityPlaceholder} icon="people-outline"
+                  keyboardType="number-pad" value={step2Data.capacity}
+                  hasError={step2Touched.capacity && step2Errors.capacity} language={language}
+                  onFocus={() => setActiveField('capacity')} onBlur={() => { setActiveField(null); setStep2Touched(p => ({ ...p, capacity: true })); validateStep2Field('capacity'); }}
+                  onChangeText={v => handleStep2InputChange('capacity', v)} isFocused={activeField === 'capacity'}
                 />
               </View>
             </View>
 
             <InputField
-              field="plateNumber"
-              label={t.plateNumber}
-              placeholder={t.plateNumberPlaceholder}
-              icon="confirmation-number"
-              autoCapitalize="characters"
-              value={step2Data.plateNumber}
-              hasError={
-                step2Touched.plateNumber && step2Errors.plateNumber
-                  ? step2Errors.plateNumber
-                  : null
-              }
-              language={language}
-              loading={step2Loading}
-              onChangeText={(text) => {
-                setStep2Data((prev) => ({ ...prev, plateNumber: text }));
-                if (step2Errors.plateNumber) {
-                  setStep2Errors((prev) => ({ ...prev, plateNumber: null }));
-                }
-              }}
-              onBlur={() => {
-                setStep2Touched((prev) => ({ ...prev, plateNumber: true }));
-                validateStep2Field('plateNumber');
-              }}
+              label={t.plateNumber} placeholder={t.plateNumberPlaceholder} icon="directions-bus"
+              autoCapitalize="characters" value={step2Data.plateNumber}
+              hasError={step2Touched.plateNumber && step2Errors.plateNumber} language={language}
+              onFocus={() => setActiveField('plateNumber')} onBlur={() => { setActiveField(null); setStep2Touched(p => ({ ...p, plateNumber: true })); validateStep2Field('plateNumber'); }}
+              onChangeText={v => handleStep2InputChange('plateNumber', v)} isFocused={activeField === 'plateNumber'}
             />
 
             <View style={styles.locationContainer}>
-              <Text style={[styles.label, language === 'ar' && styles.rtl]}>
-                {t.parkingLocation}
-              </Text>
+              <Text style={[styles.label, language === 'ar' && styles.rtlText]}>{t.parkingLocation}</Text>
               <TouchableOpacity
-                style={[
-                  styles.locationButton,
-                  step2Touched.parkingLocation &&
-                    step2Errors.parkingLocation &&
-                    styles.locationButtonError,
-                ]}
-                onPress={() => setShowMapPicker(true)}
-                disabled={step2Loading}
-                activeOpacity={0.7}
+                style={[styles.locationButton, step2Touched.parkingLocation && step2Errors.parkingLocation && styles.locationButtonError]}
+                onPress={() => setShowMapPicker(true)} activeOpacity={0.7}
               >
-                <MaterialIcons
-                  name="location-on"
-                  size={20}
-                  color={step2Data.parkingLocation ? '#3185FC' : '#9CA3AF'}
-                  style={styles.locationButtonIcon}
+                <MaterialCommunityIcons
+                  name="map-marker-radius-outline" size={22}
+                  color={step2Data.parkingLocation ? '#3185FC' : '#94A3B8'}
                 />
-                <Text
-                  style={[
-                    styles.locationButtonText,
-                    !step2Data.parkingLocation && styles.locationButtonTextPlaceholder,
-                    language === 'ar' && styles.rtl,
-                  ]}
-                >
-                  {step2Data.parkingLocation
-                    ? `${step2Data.parkingLocation.latitude.toFixed(4)}, ${step2Data.parkingLocation.longitude.toFixed(4)}`
-                    : t.parkingLocationHelper}
+                <Text style={[styles.locationButtonText, !step2Data.parkingLocation && styles.locationButtonTextPlaceholder, language === 'ar' && styles.rtlText]}>
+                  {step2Data.parkingLocation ? `${step2Data.parkingLocation.latitude.toFixed(4)}, ${step2Data.parkingLocation.longitude.toFixed(4)}` : t.parkingLocationHelper}
                 </Text>
-                <MaterialIcons name="chevron-right" size={20} color="#9CA3AF" />
+                <MaterialIcons name="chevron-right" size={20} color="#94A3B8" />
               </TouchableOpacity>
-              {step2Touched.parkingLocation && step2Errors.parkingLocation && (
-                <Text style={styles.errorText}>{step2Errors.parkingLocation}</Text>
-              )}
-              <View
-                style={[
-                  styles.underline,
-                  step2Touched.parkingLocation && step2Errors.parkingLocation
-                    ? styles.underlineError
-                    : step2Data.parkingLocation
-                    ? styles.underlineActive
-                    : styles.underlineInactive,
-                ]}
-              />
+              {step2Touched.parkingLocation && step2Errors.parkingLocation && <Text style={styles.errorText}>{step2Errors.parkingLocation}</Text>}
             </View>
           </View>
         </ScrollView>
@@ -1043,30 +904,25 @@ const DriverRegistrationFlow = ({ language = 'en', onBack, onSuccess }) => {
         <View style={styles.navigationContainer}>
           <TouchableOpacity
             style={[styles.nextButton, step2Loading && styles.nextButtonDisabled]}
-            onPress={handleStep2Save}
-            disabled={step2Loading}
-            activeOpacity={0.8}
+            onPress={handleStep2Save} disabled={step2Loading} activeOpacity={0.8}
           >
-            {step2Loading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.nextButtonText}>{t.save}</Text>
+            {step2Loading ? <ActivityIndicator color="#FFFFFF" /> : (
+              <>
+                <Text style={styles.nextButtonText}>{t.save}</Text>
+                <MaterialIcons name="check" size={20} color="#FFFFFF" />
+              </>
             )}
           </TouchableOpacity>
         </View>
 
         <MapLocationPickerModal
-          visible={showMapPicker}
-          value={step2Data.parkingLocation}
-          onSelect={(location) => {
-            setStep2Data((prev) => ({ ...prev, parkingLocation: location }));
-            setStep2Touched((prev) => ({ ...prev, parkingLocation: true }));
-            if (step2Errors.parkingLocation) {
-              setStep2Errors((prev) => ({ ...prev, parkingLocation: null }));
-            }
+          visible={showMapPicker} value={step2Data.parkingLocation}
+          onSelect={loc => {
+            setStep2Data(p => ({ ...p, parkingLocation: loc }));
+            setStep2Touched(p => ({ ...p, parkingLocation: true }));
+            if (step2Errors.parkingLocation) setStep2Errors(p => ({ ...p, parkingLocation: null }));
           }}
-          onClose={() => setShowMapPicker(false)}
-          language={language}
+          onClose={() => setShowMapPicker(false)} language={language}
           error={step2Touched.parkingLocation && step2Errors.parkingLocation ? step2Errors.parkingLocation : null}
         />
       </View>
@@ -1076,128 +932,71 @@ const DriverRegistrationFlow = ({ language = 'en', onBack, onSuccess }) => {
   // Render Step 3: Verification
   const renderStep3 = () => {
     if (isVerified) {
-      // Pending Approval Screen
       return (
         <View style={styles.stepContainer}>
-          <ScrollView
-            contentContainerStyle={[styles.scrollContent, styles.pendingContainer]}
-            showsVerticalScrollIndicator={false}
-          >
-            <View style={styles.pendingIconContainer}>
-              <MaterialIcons name="pending" size={80} color="#F59E0B" />
+          <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+            <View style={styles.pendingContainer}>
+              <View style={styles.pendingIconContainer}>
+                <MaterialCommunityIcons name="clock-check-outline" size={70} color="#F59E0B" />
+              </View>
+              <Text style={[styles.pendingTitle, language === 'ar' && styles.rtlText]}>{t.pendingTitle}</Text>
+              <Text style={[styles.pendingSubtitle, language === 'ar' && styles.rtlText]}>{t.pendingSubtitle}</Text>
+              <View style={styles.statusBadge}>
+                <Text style={styles.statusBadgeText}>{t.statusPending}</Text>
+              </View>
+              <Text style={[styles.pendingMessage, language === 'ar' && styles.rtlText]}>{t.pendingMessage}</Text>
             </View>
-            <Text style={[styles.pendingTitle, language === 'ar' && styles.rtl]}>
-              {t.pendingTitle}
-            </Text>
-            <Text style={[styles.pendingSubtitle, language === 'ar' && styles.rtl]}>
-              {t.pendingSubtitle}
-            </Text>
-            <View style={styles.statusBadge}>
-              <Text style={styles.statusBadgeText}>{t.statusPending}</Text>
-            </View>
-            <Text style={[styles.pendingMessage, language === 'ar' && styles.rtl]}>
-              {t.pendingMessage}
-            </Text>
           </ScrollView>
         </View>
       );
     }
 
-    // OTP Verification Screen
     return (
       <View style={styles.stepContainer}>
         <View style={styles.stepHeader}>
-          <View style={styles.verificationIconContainer}>
-            <MaterialIcons name="email" size={64} color="#3185FC" />
-          </View>
-          <Text style={[styles.stepTitle, language === 'ar' && styles.rtl]}>
-            {t.step3Title}
-          </Text>
-          <Text style={[styles.stepSubtitle, language === 'ar' && styles.rtl]}>
-            {t.step3Subtitle}
-          </Text>
-          {driverEmail && (
-            <Text style={[styles.emailText, language === 'ar' && styles.rtl]}>
-              {driverEmail}
-            </Text>
-          )}
+          <Text style={[styles.stepTitle, language === 'ar' && styles.rtlText]}>{t.step3Title}</Text>
+          <Text style={[styles.stepSubtitle, language === 'ar' && styles.rtlText]}>{t.step3Subtitle}</Text>
+          <Text style={styles.emailText}>{step1Data.email}</Text>
         </View>
 
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="always"
-          showsVerticalScrollIndicator={false}
-        >
+        <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="always">
           <View style={styles.codeContainer}>
-            <Text style={[styles.codeLabel, language === 'ar' && styles.rtl]}>
-              {t.enterCode}
-            </Text>
-            <View style={styles.codeInputsContainer}>
+            <Text style={[styles.codeLabel, language === 'ar' && styles.rtlText]}>{t.enterCode}</Text>
+            <View style={[styles.codeInputsContainer, language === 'ar' && styles.rtlRow]}>
               {step3Code.map((digit, index) => (
                 <TextInput
-                  key={index}
-                  ref={(ref) => (step3InputRefs.current[index] = ref)}
-                  style={[
-                    styles.codeInput,
-                    step3Error && styles.codeInputError,
-                    digit && !step3Error && styles.codeInputFilled,
-                  ]}
-                  value={digit}
-                  onChangeText={(value) => handleStep3CodeChange(index, value)}
-                  onKeyPress={({ nativeEvent }) =>
-                    handleStep3KeyPress(index, nativeEvent.key)
-                  }
-                  keyboardType="number-pad"
-                  maxLength={1}
-                  editable={!step3Loading}
-                  selectTextOnFocus
-                  autoFocus={index === 0}
+                  key={index} ref={el => step3InputRefs.current[index] = el}
+                  style={[styles.codeInput, digit && styles.codeInputFilled, step3Error && styles.codeInputError]}
+                  keyboardType="number-pad" maxLength={1} value={digit}
+                  onChangeText={text => handleStep3CodeChange(index, text)}
+                  onKeyPress={({ nativeEvent }) => handleStep3KeyPress(index, nativeEvent.key)}
                 />
               ))}
             </View>
-            {step3Error && <Text style={styles.errorText}>{step3Error}</Text>}
-          </View>
+            {step3Error && <Text style={[styles.errorText, { textAlign: 'center' }]}>{t.invalidCode}</Text>}
 
-          <TouchableOpacity
-            style={[
-              styles.verifyButton,
-              step3Loading && styles.verifyButtonDisabled,
-            ]}
-            onPress={() => handleStep3Verify()}
-            disabled={step3Loading || step3Code.some((digit) => !digit)}
-            activeOpacity={0.8}
-          >
-            {step3Loading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.verifyButtonText}>{t.verify}</Text>
-            )}
-          </TouchableOpacity>
-
-          <View style={styles.resendContainer}>
-            <Text style={styles.resendText}>
-              {language === 'ar' ? 'لم تستلم الرمز؟' : "Didn't receive the code?"}
-            </Text>
-            <TouchableOpacity
-              onPress={handleStep3Resend}
-              disabled={step3Resending || step3ResendCooldown > 0}
-              activeOpacity={0.7}
-            >
-              <Text
-                style={[
-                  styles.resendLink,
-                  (step3Resending || step3ResendCooldown > 0) && styles.resendLinkDisabled,
-                ]}
-              >
-                {step3Resending
-                  ? t.resending
-                  : step3ResendCooldown > 0
-                  ? `${language === 'ar' ? 'إعادة الإرسال' : 'Resend'} (${step3ResendCooldown}s)`
-                  : t.resend}
-              </Text>
-            </TouchableOpacity>
+            <View style={styles.resendContainer}>
+              <Text style={styles.resendText}>{language === 'ar' ? 'لم يصلك الرمز؟' : "Didn't receive the code?"}</Text>
+              <TouchableOpacity onPress={handleStep3Resend} disabled={step3Resending || step3ResendCooldown > 0}>
+                <Text style={[styles.resendLink, (step3Resending || step3ResendCooldown > 0) && styles.resendLinkDisabled]}>
+                  {step3Resending ? t.resending : step3ResendCooldown > 0 ? `${t.resend} (${step3ResendCooldown}s)` : t.resend}
+                </Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </ScrollView>
+
+        <TouchableOpacity
+          style={[styles.verifyButton, (step3Code.join('').length < 6 || step3Loading) && styles.verifyButtonDisabled]}
+          onPress={handleStep3Verify} disabled={step3Code.join('').length < 6 || step3Loading}
+        >
+          {step3Loading ? <ActivityIndicator color="#FFFFFF" /> : (
+            <>
+              <Text style={styles.verifyButtonText}>{t.verify}</Text>
+              <MaterialIcons name="verified" size={20} color="#FFFFFF" />
+            </>
+          )}
+        </TouchableOpacity>
       </View>
     );
   };
@@ -1208,52 +1007,28 @@ const DriverRegistrationFlow = ({ language = 'en', onBack, onSuccess }) => {
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.keyboardView}
-        keyboardVerticalOffset={0}
-        enabled={Platform.OS === 'ios'}
       >
-        {/* Header */}
-        <View style={styles.header}>
+        <View style={styles.navHeader}>
           <TouchableOpacity
             style={styles.backButton}
             onPress={onBack}
             activeOpacity={0.7}
-            disabled={step1Loading || step2Loading || step3Loading}
           >
-            <MaterialIcons name="arrow-back" size={24} color="#1A1A1A" />
+            <MaterialIcons name="arrow-back-ios" size={20} color="#1A1A1A" />
           </TouchableOpacity>
 
-          <View style={styles.languageContainer}>
-            <TouchableOpacity style={styles.languageButton} activeOpacity={0.7}>
-              <Text style={styles.languageIcon}>
-                {language === 'en' ? '🇬🇧' : '🇲🇦'}
-              </Text>
-            </TouchableOpacity>
-          </View>
+          <TouchableOpacity
+            style={styles.languagePill}
+            onPress={() => onLanguageChange && onLanguageChange(language === "en" ? "ar" : "en")}
+          >
+            <Text style={styles.languagePillText}>{language === "en" ? "العربية" : "English"}</Text>
+            <Text style={styles.languagePillFlag}>{language === "en" ? "🇲🇦" : "🇬🇧"}</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* Progress Bar */}
         <DriverRegistrationProgressBar currentStep={currentStep} totalSteps={3} language={language} />
 
-        {/* Step Content */}
-        <Animated.View
-          style={[
-            styles.stepWrapper,
-            {
-              opacity: slideAnim.interpolate({
-                inputRange: [0, 1],
-                outputRange: [0.5, 1],
-              }),
-              transform: [
-                {
-                  translateY: slideAnim.interpolate({
-                    inputRange: [0, 1],
-                    outputRange: [20, 0],
-                  }),
-                },
-              ],
-            },
-          ]}
-        >
+        <Animated.View style={{ flex: 1, opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
           {currentStep === 1 && renderStep1()}
           {currentStep === 2 && renderStep2()}
           {currentStep === 3 && renderStep3()}
@@ -1271,26 +1046,35 @@ const styles = StyleSheet.create({
   keyboardView: {
     flex: 1,
   },
-  header: {
+  navHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: Platform.OS === 'ios' ? 10 : 20,
-    paddingBottom: 10,
+    paddingHorizontal: 28,
+    paddingVertical: 16,
   },
   backButton: {
-    padding: 4,
-  },
-  languageContainer: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-  },
-  languageButton: {
     padding: 8,
+    marginLeft: -8,
   },
-  languageIcon: {
-    fontSize: 24,
+  languagePill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+  },
+  languagePillText: {
+    fontSize: 13,
+    color: '#475569',
+    fontFamily: UbuntuFonts.medium,
+  },
+  languagePillFlag: {
+    fontSize: 16,
   },
   stepWrapper: {
     flex: 1,
@@ -1299,89 +1083,84 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   stepHeader: {
-    paddingHorizontal: 24,
-    paddingTop: 20,
-    paddingBottom: 24,
+    paddingHorizontal: 28,
+    marginBottom: 32,
+    marginTop: 10,
   },
   stepTitle: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#3185FC',
+    fontSize: 28,
+    color: '#1A1A1A',
+    fontFamily: UbuntuFonts.bold,
+    letterSpacing: -0.5,
     marginBottom: 8,
   },
   stepSubtitle: {
-    fontSize: 16,
-    color: '#666666',
+    fontSize: 15,
+    color: '#64748B',
+    fontFamily: UbuntuFonts.regular,
     lineHeight: 22,
   },
-  rtl: {
-    textAlign: 'right',
-  },
   scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingBottom: 20,
+    paddingHorizontal: 28,
+    paddingBottom: 40,
   },
   formCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: 16,
-    padding: 20,
-    marginBottom: 20,
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    width: '100%',
   },
-  inputContainer: {
-    marginBottom: 24,
+  inputGroup: {
+    marginBottom: 20,
   },
   label: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: '#666666',
+    fontSize: 13,
+    color: '#64748B',
+    fontFamily: UbuntuFonts.medium,
     marginBottom: 8,
-    textTransform: 'uppercase',
-    letterSpacing: 0.5,
+    marginLeft: 4,
+  },
+  labelFocused: {
+    color: '#3185FC',
+  },
+  labelError: {
+    color: '#EF4444',
   },
   inputWrapper: {
     flexDirection: 'row',
     alignItems: 'center',
-    position: 'relative',
+    backgroundColor: '#F8FAFF',
+    borderWidth: 1.5,
+    borderColor: '#EBF2FF',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    height: 56,
+  },
+  inputWrapperFocused: {
+    borderColor: '#3185FC',
+    backgroundColor: '#FFFFFF',
+    shadowColor: "#3185FC",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 8,
+    elevation: 2,
+  },
+  inputWrapperError: {
+    borderColor: '#EF4444',
   },
   inputIcon: {
     marginRight: 12,
   },
   input: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 15,
     color: '#1A1A1A',
-    paddingVertical: 12,
-    paddingRight: 0,
-  },
-  inputError: {
-    color: '#EF4444',
-  },
-  underline: {
-    height: 2,
-    marginTop: 4,
-  },
-  underlineActive: {
-    backgroundColor: '#3185FC',
-  },
-  underlineInactive: {
-    backgroundColor: '#E0E0E0',
-  },
-  underlineError: {
-    backgroundColor: '#EF4444',
+    fontFamily: UbuntuFonts.medium,
+    height: '100%',
   },
   errorText: {
     fontSize: 12,
     color: '#EF4444',
-    marginTop: 4,
+    marginTop: 6,
+    marginLeft: 4,
+    fontFamily: UbuntuFonts.regular,
   },
   row: {
     flexDirection: 'row',
@@ -1391,65 +1170,71 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   locationContainer: {
-    marginBottom: 24,
+    marginBottom: 20,
   },
   locationButton: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
-    paddingHorizontal: 0,
+    backgroundColor: '#F8FAFF',
+    borderWidth: 1.5,
+    borderColor: '#EBF2FF',
+    borderRadius: 16,
+    paddingHorizontal: 16,
+    height: 56,
+    gap: 12,
+  },
+  locationButtonError: {
+    borderColor: '#EF4444',
   },
   locationButtonIcon: {
-    marginRight: 12,
+    //
   },
   locationButtonText: {
     flex: 1,
-    fontSize: 16,
+    fontSize: 15,
     color: '#1A1A1A',
+    fontFamily: UbuntuFonts.medium,
   },
   locationButtonTextPlaceholder: {
-    color: '#999999',
-  },
-  locationButtonError: {
-    // Error styling handled by underline
+    color: '#94A3B8',
   },
   navigationContainer: {
-    paddingHorizontal: 24,
-    paddingVertical: 20,
+    flexDirection: 'row',
+    padding: 24,
     borderTopWidth: 1,
-    borderTopColor: '#F3F4F6',
+    borderTopColor: '#F1F5F9',
     backgroundColor: '#FFFFFF',
   },
   nextButton: {
+    flex: 1,
+    backgroundColor: '#3185FC',
+    borderRadius: 16,
+    height: 56,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: '#3185FC',
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    borderRadius: 12,
-    shadowColor: '#3185FC',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    gap: 10,
+    shadowColor: "#3185FC",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
   },
   nextButtonDisabled: {
-    opacity: 0.6,
+    backgroundColor: '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   nextButtonText: {
     color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 16,
+    fontFamily: UbuntuFonts.bold,
   },
-  // Step 3 Styles
+  // Step 3
   verificationIconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     backgroundColor: '#F0F7FF',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1459,99 +1244,99 @@ const styles = StyleSheet.create({
   emailText: {
     fontSize: 16,
     color: '#3185FC',
-    fontWeight: '600',
+    fontFamily: UbuntuFonts.bold,
     textAlign: 'center',
     marginTop: 8,
   },
   codeContainer: {
     marginBottom: 32,
+    paddingHorizontal: 28,
   },
   codeLabel: {
     fontSize: 14,
-    fontWeight: '600',
-    color: '#666666',
-    marginBottom: 16,
+    fontFamily: UbuntuFonts.medium,
+    color: '#64748B',
+    marginBottom: 20,
     textAlign: 'center',
   },
   codeInputsContainer: {
     flexDirection: 'row',
     justifyContent: 'center',
-    gap: 12,
-    marginBottom: 16,
+    gap: 10,
   },
   codeInput: {
-    width: 50,
+    width: 48,
     height: 60,
-    borderWidth: 2,
-    borderColor: '#E0E0E0',
-    borderRadius: 12,
+    backgroundColor: '#F8FAFF',
+    borderWidth: 1.5,
+    borderColor: '#EBF2FF',
+    borderRadius: 14,
     fontSize: 24,
-    fontWeight: 'bold',
+    fontFamily: UbuntuFonts.bold,
     textAlign: 'center',
     color: '#1A1A1A',
-    backgroundColor: '#FFFFFF',
   },
   codeInputFilled: {
     borderColor: '#3185FC',
-    backgroundColor: '#F0F7FF',
+    backgroundColor: '#FFFFFF',
   },
   codeInputError: {
     borderColor: '#EF4444',
-    backgroundColor: '#FEF2F2',
   },
   verifyButton: {
     backgroundColor: '#3185FC',
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
+    borderRadius: 16,
+    height: 56,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 10,
+    shadowColor: "#3185FC",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
+    marginHorizontal: 28,
     marginBottom: 24,
-    shadowColor: '#3185FC',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
   },
   verifyButtonDisabled: {
-    opacity: 0.6,
+    backgroundColor: '#E2E8F0',
+    shadowOpacity: 0,
+    elevation: 0,
   },
   verifyButtonText: {
     color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
+    fontSize: 16,
+    fontFamily: UbuntuFonts.bold,
   },
   resendContainer: {
     alignItems: 'center',
-    gap: 8,
+    marginTop: 20,
   },
   resendText: {
     fontSize: 14,
-    color: '#666666',
+    color: '#64748B',
+    fontFamily: UbuntuFonts.regular,
   },
   resendLink: {
-    fontSize: 16,
+    fontSize: 15,
     color: '#3185FC',
-    fontWeight: '600',
-    textDecorationLine: 'underline',
+    fontFamily: UbuntuFonts.bold,
+    marginTop: 8,
   },
   resendLinkDisabled: {
-    color: '#9CA3AF',
-    textDecorationLine: 'none',
+    color: '#94A3B8',
   },
   // Pending Approval Styles
   pendingContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 60,
+    paddingVertical: 60,
   },
   pendingIconContainer: {
-    width: 160,
-    height: 160,
-    borderRadius: 80,
+    width: 140,
+    height: 140,
+    borderRadius: 70,
     backgroundColor: '#FEF3C7',
     alignItems: 'center',
     justifyContent: 'center',
@@ -1559,39 +1344,48 @@ const styles = StyleSheet.create({
   },
   pendingTitle: {
     fontSize: 32,
-    fontWeight: 'bold',
-    color: '#3185FC',
+    fontFamily: UbuntuFonts.bold,
+    color: '#1A1A1A',
     marginBottom: 12,
     textAlign: 'center',
   },
   pendingSubtitle: {
-    fontSize: 18,
-    color: '#666666',
+    fontSize: 16,
+    color: '#64748B',
+    fontFamily: UbuntuFonts.regular,
     marginBottom: 24,
     textAlign: 'center',
   },
   statusBadge: {
-    backgroundColor: '#FEF3C7',
+    backgroundColor: '#FFFBEB',
     paddingHorizontal: 20,
     paddingVertical: 8,
-    borderRadius: 20,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#FEF3C7',
     marginBottom: 24,
   },
   statusBadgeText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#F59E0B',
+    fontSize: 13,
+    fontFamily: UbuntuFonts.bold,
+    color: '#B45309',
     textTransform: 'uppercase',
     letterSpacing: 1,
   },
   pendingMessage: {
-    fontSize: 16,
-    color: '#666666',
+    fontSize: 15,
+    color: '#64748B',
     textAlign: 'center',
     lineHeight: 24,
+    fontFamily: UbuntuFonts.regular,
     paddingHorizontal: 40,
+  },
+  rtlRow: {
+    flexDirection: 'row-reverse',
+  },
+  rtlText: {
+    textAlign: 'right',
   },
 });
 
 export default DriverRegistrationFlow;
-

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
@@ -6,53 +6,80 @@ import {
   TouchableOpacity,
   Platform,
   ScrollView,
+  Animated,
+  Easing,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import { MaterialIcons } from '@expo/vector-icons';
+import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { UbuntuFonts } from "../shared/utils/fonts";
 
 const translations = {
   en: {
-    title: 'Select Your Role',
-    subtitle: 'Choose the role that best describes you',
+    title: 'Choose Your Role',
+    subtitle: 'Select the profile that fits your needs to get started.',
     driver: 'Driver',
-    driverDescription: 'Offer rides and earn money',
+    driverDescription: 'Share your rides, help students, and earn rewards.',
     student: 'Student',
-    studentDescription: 'Find rides and save money',
+    studentDescription: 'Find safe, reliable, and affordable campus rides.',
     continue: 'Continue',
+    languageName: "English",
+    languageFlag: "🇬🇧",
   },
   ar: {
     title: 'اختر دورك',
-    subtitle: 'اختر الدور الذي يصفك بشكل أفضل',
+    subtitle: 'اختر الملف الشخصي الذي يناسب احتياجاتك للبدء.',
     driver: 'سائق',
-    driverDescription: 'قدم الرحلات واكسب المال',
+    driverDescription: 'شارك رحلاتك، ساعد الطلاب، واكسب المكافآت.',
     student: 'طالب',
-    studentDescription: 'ابحث عن الرحلات ووفر المال',
+    studentDescription: 'ابحث عن رحلات جامعية آمنة وموثوقة وبأسعار معقولة.',
     continue: 'متابعة',
+    languageName: "العربية",
+    languageFlag: "🇲🇦",
   },
 };
 
-const SelectRoleScreen = ({ language = 'en', onBack, onRoleSelect }) => {
+const SelectRoleScreen = ({ language = 'en', onBack, onRoleSelect, onLanguageChange }) => {
   const [selectedRole, setSelectedRole] = useState(null);
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const slideAnim = useRef(new Animated.Value(20)).current;
+
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(fadeAnim, {
+        toValue: 1,
+        duration: 800,
+        useNativeDriver: true,
+      }),
+      Animated.timing(slideAnim, {
+        toValue: 0,
+        duration: 800,
+        easing: Easing.out(Easing.back(1.5)),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  }, []);
 
   const t = translations[language];
 
   const roles = [
     {
-      id: 'driver',
-      title: t.driver,
-      description: t.driverDescription,
-      icon: 'directions-car',
-      color: '#3185FC',
-      gradient: ['#3185FC', '#2563EB'],
-    },
-    {
       id: 'student',
       title: t.student,
       description: t.studentDescription,
-      icon: 'school',
+      icon: 'school-outline',
+      iconFamily: 'MaterialCommunityIcons',
+      color: '#3185FC',
+      bg: '#F8FAFF',
+    },
+    {
+      id: 'driver',
+      title: t.driver,
+      description: t.driverDescription,
+      icon: 'car-outline',
+      iconFamily: 'MaterialCommunityIcons',
       color: '#10B981',
-      gradient: ['#10B981', '#059669'],
+      bg: '#F0FDF4',
     },
   ];
 
@@ -62,117 +89,120 @@ const SelectRoleScreen = ({ language = 'en', onBack, onRoleSelect }) => {
     }
   };
 
+  const RoleCard = ({ role }) => {
+    const isSelected = selectedRole === role.id;
+    return (
+      <TouchableOpacity
+        key={role.id}
+        style={[
+          styles.roleCard,
+          isSelected && { borderColor: role.color, backgroundColor: role.bg },
+          isSelected && styles.roleCardActive
+        ]}
+        onPress={() => setSelectedRole(role.id)}
+        activeOpacity={0.8}
+      >
+        <View style={[styles.iconBox, { backgroundColor: isSelected ? role.color : '#F1F5F9' }]}>
+          {role.iconFamily === 'MaterialCommunityIcons' ? (
+            <MaterialCommunityIcons
+              name={role.icon}
+              size={32}
+              color={isSelected ? '#FFFFFF' : '#64748B'}
+            />
+          ) : (
+            <MaterialIcons
+              name={role.icon}
+              size={32}
+              color={isSelected ? '#FFFFFF' : '#64748B'}
+            />
+          )}
+        </View>
+        <View style={styles.roleInfo}>
+          <Text style={[
+            styles.roleTitle,
+            isSelected && { color: role.color },
+            language === 'ar' && styles.rtlText
+          ]}>
+            {role.title}
+          </Text>
+          <Text style={[
+            styles.roleDescription,
+            language === 'ar' && styles.rtlText
+          ]}>
+            {role.description}
+          </Text>
+        </View>
+        <View style={[
+          styles.radioButton,
+          isSelected && { borderColor: role.color }
+        ]}>
+          {isSelected && <View style={[styles.radioButtonInner, { backgroundColor: role.color }]} />}
+        </View>
+      </TouchableOpacity>
+    );
+  };
+
   return (
     <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
       <StatusBar style="dark" />
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Back Button */}
+      <View style={styles.navHeader}>
         <TouchableOpacity
           style={styles.backButton}
           onPress={onBack}
           activeOpacity={0.7}
         >
-          <MaterialIcons name="arrow-back" size={24} color="#1A1A1A" />
+          <MaterialIcons name="arrow-back-ios" size={20} color="#1A1A1A" />
         </TouchableOpacity>
 
-        {/* Language Switcher */}
-        <View style={styles.languageContainer}>
-          <TouchableOpacity
-            style={styles.languageButton}
-            activeOpacity={0.7}
-          >
-            <Text style={styles.languageIcon}>
-              {language === 'en' ? '🇬🇧' : '🇲🇦'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-
-        {/* Header */}
-        <View style={styles.header}>
-          <Text style={[styles.title, language === 'ar' && styles.rtl]}>
-            {t.title}
-          </Text>
-          <Text style={[styles.subtitle, language === 'ar' && styles.rtl]}>
-            {t.subtitle}
-          </Text>
-        </View>
-
-        {/* Role Cards */}
-        <View style={styles.rolesContainer}>
-          {roles.map((role) => {
-            const isSelected = selectedRole === role.id;
-            return (
-              <TouchableOpacity
-                key={role.id}
-                style={[
-                  styles.roleCard,
-                  isSelected && styles.roleCardSelected,
-                ]}
-                onPress={() => setSelectedRole(role.id)}
-                activeOpacity={0.8}
-              >
-                <View
-                  style={[
-                    styles.iconContainer,
-                    isSelected && { backgroundColor: role.color },
-                  ]}
-                >
-                  <MaterialIcons
-                    name={role.icon}
-                    size={48}
-                    color={isSelected ? '#FFFFFF' : role.color}
-                  />
-                </View>
-                <Text
-                  style={[
-                    styles.roleTitle,
-                    isSelected && styles.roleTitleSelected,
-                    language === 'ar' && styles.rtl,
-                  ]}
-                >
-                  {role.title}
-                </Text>
-                <Text
-                  style={[
-                    styles.roleDescription,
-                    language === 'ar' && styles.rtl,
-                  ]}
-                >
-                  {role.description}
-                </Text>
-                {isSelected && (
-                  <View style={styles.checkContainer}>
-                    <View style={[styles.checkCircle, { backgroundColor: role.color }]}>
-                      <MaterialIcons name="check" size={20} color="#FFFFFF" />
-                    </View>
-                  </View>
-                )}
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-
-        {/* Continue Button */}
         <TouchableOpacity
-          style={[
-            styles.continueButton,
-            !selectedRole && styles.continueButtonDisabled,
-          ]}
-          onPress={handleContinue}
-          disabled={!selectedRole}
+          style={styles.languagePill}
+          onPress={() => onLanguageChange && onLanguageChange(language === "en" ? "ar" : "en")}
           activeOpacity={0.8}
         >
-          <Text style={styles.continueButtonText}>{t.continue}</Text>
-          <MaterialIcons
-            name="arrow-forward"
-            size={20}
-            color="#FFFFFF"
-            style={styles.continueIcon}
-          />
+          <Text style={styles.languagePillText}>
+            {language === "en" ? "العربية" : "English"}
+          </Text>
+          <Text style={styles.languagePillFlag}>
+            {language === "en" ? "🇲🇦" : "🇬🇧"}
+          </Text>
         </TouchableOpacity>
+      </View>
+
+      <ScrollView
+        contentContainerStyle={styles.scrollContent}
+        showsVerticalScrollIndicator={false}
+      >
+        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+          <View style={styles.titleSection}>
+            <Text style={[styles.title, language === 'ar' && styles.rtlText]}>
+              {t.title}
+            </Text>
+            <Text style={[styles.subtitle, language === 'ar' && styles.rtlText]}>
+              {t.subtitle}
+            </Text>
+          </View>
+
+          <View style={styles.rolesContainer}>
+            {roles.map((role) => <RoleCard key={role.id} role={role} />)}
+          </View>
+
+          <TouchableOpacity
+            style={[
+              styles.continueButton,
+              !selectedRole && styles.continueButtonDisabled,
+            ]}
+            onPress={handleContinue}
+            disabled={!selectedRole}
+            activeOpacity={0.9}
+          >
+            <Text style={styles.continueButtonText}>{t.continue}</Text>
+            <MaterialIcons
+              name="arrow-forward"
+              size={20}
+              color="#FFFFFF"
+            />
+          </TouchableOpacity>
+        </Animated.View>
       </ScrollView>
     </SafeAreaView>
   );
@@ -183,133 +213,127 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
   },
-  scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingBottom: 40,
+  navHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingHorizontal: 28,
+    paddingVertical: 16,
   },
   backButton: {
-    marginTop: Platform.OS === 'ios' ? 10 : 20,
-    marginBottom: 10,
-    alignSelf: 'flex-start',
-  },
-  languageContainer: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginBottom: 20,
-  },
-  languageButton: {
     padding: 8,
+    marginLeft: -8,
   },
-  languageIcon: {
-    fontSize: 24,
+  languagePill: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F1F5F9",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 20,
+    gap: 6,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
   },
-  header: {
+  languagePillText: {
+    fontSize: 13,
+    color: "#475569",
+    fontFamily: UbuntuFonts.medium,
+  },
+  languagePillFlag: {
+    fontSize: 16,
+  },
+  scrollContent: {
+    paddingHorizontal: 28,
+    paddingBottom: 40,
+  },
+  titleSection: {
     marginBottom: 40,
-    marginTop: 20,
+    marginTop: 10,
   },
   title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#1A1A1A',
-    marginBottom: 12,
+    fontSize: 34,
+    color: "#1A1A1A",
+    fontFamily: UbuntuFonts.bold,
+    letterSpacing: -0.5,
+    marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,
-    color: '#666666',
-    lineHeight: 22,
-  },
-  rtl: {
-    textAlign: 'right',
+    color: "#64748B",
+    fontFamily: UbuntuFonts.regular,
+    lineHeight: 24,
   },
   rolesContainer: {
-    flex: 1,
     gap: 20,
-    marginBottom: 32,
+    marginBottom: 40,
   },
   roleCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 20,
+    borderRadius: 24,
     padding: 24,
-    borderWidth: 2,
-    borderColor: '#E5E7EB',
+    borderWidth: 1.5,
+    borderColor: '#EBF2FF',
+    flexDirection: 'row',
     alignItems: 'center',
-    position: 'relative',
-    shadowColor: '#000',
-    shadowOffset: {
-      width: 0,
-      height: 2,
-    },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
-    minHeight: 220,
-    justifyContent: 'center',
+    gap: 16,
   },
-  roleCardSelected: {
-    borderColor: '#3185FC',
-    backgroundColor: '#F0F7FF',
-    shadowColor: '#3185FC',
-    shadowOpacity: 0.2,
-    shadowRadius: 12,
-    elevation: 6,
+  roleCardActive: {
+    shadowColor: "#3185FC",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.1,
+    shadowRadius: 15,
+    elevation: 4,
   },
-  iconContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: '#F3F4F6',
+  iconBox: {
+    width: 64,
+    height: 64,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
-    marginBottom: 20,
-    borderWidth: 3,
-    borderColor: 'transparent',
+  },
+  roleInfo: {
+    flex: 1,
   },
   roleTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
+    fontSize: 20,
     color: '#1A1A1A',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  roleTitleSelected: {
-    color: '#3185FC',
+    fontFamily: UbuntuFonts.bold,
+    marginBottom: 4,
   },
   roleDescription: {
     fontSize: 14,
-    color: '#666666',
-    textAlign: 'center',
+    color: '#64748B',
+    fontFamily: UbuntuFonts.regular,
     lineHeight: 20,
   },
-  checkContainer: {
-    position: 'absolute',
-    top: 16,
-    right: 16,
-  },
-  checkCircle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: '#3185FC',
+  radioButton: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    borderWidth: 2,
+    borderColor: '#E2E8F0',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  radioButtonInner: {
+    width: 12,
+    height: 12,
+    borderRadius: 6,
   },
   continueButton: {
     backgroundColor: '#3185FC',
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#3185FC',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.3,
-    shadowRadius: 8,
-    elevation: 6,
+    borderRadius: 18,
+    height: 58,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 10,
+    shadowColor: "#3185FC",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 8,
   },
   continueButtonDisabled: {
     backgroundColor: '#D1D5DB',
@@ -319,12 +343,13 @@ const styles = StyleSheet.create({
   continueButtonText: {
     color: '#FFFFFF',
     fontSize: 18,
-    fontWeight: '600',
+    fontFamily: UbuntuFonts.bold,
   },
-  continueIcon: {
-    marginLeft: 8,
+  rtlText: {
+    textAlign: 'right',
   },
 });
 
 export default SelectRoleScreen;
+
 

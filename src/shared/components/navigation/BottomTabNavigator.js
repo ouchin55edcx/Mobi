@@ -6,12 +6,6 @@ import { MaterialIcons } from "@expo/vector-icons";
 const BottomTabNavigator = ({ activeTab, onTabChange, language = "en" }) => {
   const tabs = [
     {
-      id: "history",
-      label: language === "ar" ? "السجل" : "History",
-      icon: "history",
-      activeIcon: "history",
-    },
-    {
       id: "home",
       label: "Mobi",
       icon: "directions-bus",

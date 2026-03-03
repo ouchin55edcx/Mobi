@@ -27,6 +27,7 @@ const buildHtml = ({
   schoolLabel,
   pickupLabel,
   focusOnStudent,
+  fitPadding,
 }) => {
   const route = JSON.stringify(routeCoordinates || []);
   const home = JSON.stringify(homeLocation || null);
@@ -35,6 +36,9 @@ const buildHtml = ({
   const safeStudentLabel = JSON.stringify(studentLabel || "Student");
   const safeSchoolLabel = JSON.stringify(schoolLabel || "School");
   const safePickupLabel = JSON.stringify(pickupLabel || "Pickup");
+  const safeFitPadding = JSON.stringify(
+    fitPadding || { top: 80, right: 48, bottom: 160, left: 48 },
+  );
 
   return `<!DOCTYPE html>
 <html>
@@ -82,6 +86,27 @@ const buildHtml = ({
         filter: drop-shadow(0 2px 3px rgba(0,0,0,0.35));
         margin-top: 3px;
       }
+      .popup-label {
+        color: #ffffff;
+        font-size: 12px;
+        font-weight: 700;
+        line-height: 1;
+        border-radius: 999px;
+        padding: 8px 10px;
+        white-space: nowrap;
+      }
+      .popup-label.student { background: #10b981; }
+      .popup-label.school { background: #2563eb; }
+      .popup-label.pickup { background: #f97316; }
+      .mapboxgl-popup-content {
+        background: transparent;
+        box-shadow: none;
+        border-radius: 0;
+        padding: 0;
+      }
+      .mapboxgl-popup-tip {
+        border-top-color: rgba(15, 23, 42, 0.18) !important;
+      }
     </style>
   </head>
   <body>
@@ -97,6 +122,7 @@ const buildHtml = ({
       const studentLabel        = ${safeStudentLabel};
       const schoolLabel         = ${safeSchoolLabel};
       const pickupLabel         = ${safePickupLabel};
+      const fitPadding          = ${safeFitPadding};
 
       const center = pickupLocation || homeLocation || destinationLocation || { latitude: 0, longitude: 0 };
 
@@ -174,20 +200,30 @@ const buildHtml = ({
         }
 
         /* ── 3. Helper: add a bubble-dot marker ──────────────────────────── */
-        const addBubbleMarker = (point, type, label) => {
+        const createPopupHtml = (label, type) =>
+          '<div class="popup-label ' + type + '">' + label + '</div>';
+
+        const addBubbleMarker = (point, type, label, showPopup = false) => {
           if (!point) return;
           const wrap   = document.createElement("div");
           wrap.className = "pin-wrap";
-          const bubble = document.createElement("div");
-          bubble.className = "bubble " + type;
-          bubble.innerText = label;
           const dot    = document.createElement("div");
           dot.className = "marker-dot " + type;
-          wrap.appendChild(bubble);
           wrap.appendChild(dot);
-          new mapboxgl.Marker({ element: wrap, anchor: "bottom" })
-            .setLngLat([point.longitude, point.latitude])
-            .addTo(map);
+          wrap.style.cursor = "pointer";
+          const marker = new mapboxgl.Marker({ element: wrap, anchor: "bottom" })
+            .setLngLat([point.longitude, point.latitude]);
+          if (showPopup) {
+            marker.setPopup(
+              new mapboxgl.Popup({
+                closeButton: false,
+                closeOnClick: false,
+                offset: 22,
+              }).setHTML(createPopupHtml(label, type)),
+            );
+          }
+          marker.addTo(map);
+          if (showPopup && marker.getPopup()) marker.togglePopup();
           boundsPoints.push([point.longitude, point.latitude]);
         };
 
@@ -209,8 +245,8 @@ const buildHtml = ({
           boundsPoints.push([point.longitude, point.latitude]);
         };
 
-        addBubbleMarker(homeLocation, "student", studentLabel);
-        addBubbleMarker(destinationLocation, "school",  schoolLabel);
+        addBubbleMarker(homeLocation, "student", studentLabel, true);
+        addBubbleMarker(destinationLocation, "school", schoolLabel, true);
         addPickupMarker(pickupLocation, pickupLabel);
 
         /* ── 5. Fit camera to all points ─────────────────────────────────── */
@@ -219,7 +255,15 @@ const buildHtml = ({
             (b, p) => b.extend(p),
             new mapboxgl.LngLatBounds(boundsPoints[0], boundsPoints[0])
           );
-          map.fitBounds(bounds, { padding: 52, duration: 300 });
+          map.fitBounds(bounds, {
+            padding: {
+              top: Number(fitPadding.top) || 80,
+              right: Number(fitPadding.right) || 48,
+              bottom: Number(fitPadding.bottom) || 160,
+              left: Number(fitPadding.left) || 48,
+            },
+            duration: 300,
+          });
         }
       });
     </script>
@@ -240,6 +284,7 @@ const MapboxRoutePreview = ({
   schoolLabel = "School",
   pickupLabel = "Pickup",
   focusOnStudent = false,
+  fitPadding = null,
 }) => {
   const accessToken = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN;
 
@@ -258,6 +303,7 @@ const MapboxRoutePreview = ({
         schoolLabel,
         pickupLabel,
         focusOnStudent,
+        fitPadding,
       }),
     [
       accessToken,
@@ -272,6 +318,7 @@ const MapboxRoutePreview = ({
       schoolLabel,
       pickupLabel,
       focusOnStudent,
+      fitPadding,
     ],
   );
 

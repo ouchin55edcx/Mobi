@@ -14,6 +14,7 @@ const Header = ({
   isDemo = false,
   showNotifications = true,
   onNotificationPress,
+  onBack,
 }) => {
   const [unreadCount, setUnreadCount] = useState(0);
   const [showNotificationsModal, setShowNotificationsModal] = useState(false);
@@ -68,9 +69,16 @@ const Header = ({
       <View style={styles.header}>
         <View style={styles.headerContent}>
           <View style={styles.titleContainer}>
-            <Text style={[styles.title, language === 'ar' && styles.rtl]}>
-              {title}
-            </Text>
+            <View style={styles.titleRow}>
+              {onBack && (
+                <TouchableOpacity onPress={onBack} style={styles.backButton}>
+                  <MaterialIcons name={language === 'ar' ? "arrow-forward" : "arrow-back"} size={24} color="#3185FC" />
+                </TouchableOpacity>
+              )}
+              <Text style={[styles.title, language === 'ar' && styles.rtl]}>
+                {title}
+              </Text>
+            </View>
             {subtitle && (
               <Text style={[styles.subtitle, language === 'ar' && styles.rtl]}>
                 {subtitle}
@@ -137,11 +145,20 @@ const styles = StyleSheet.create({
     marginRight: 16,
   },
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: 'bold',
     color: '#3185FC',
-    marginBottom: 8,
     fontFamily: UbuntuFonts.bold,
+  },
+  titleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginBottom: 4,
+  },
+  backButton: {
+    padding: 4,
+    marginLeft: -4,
   },
   subtitle: {
     fontSize: 16,

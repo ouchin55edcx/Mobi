@@ -1,20 +1,17 @@
 /**
- * TripDetailsScreen.js  (Students)
+ * TripDetailsScreen.js (Redesigned - Minimal Clean UI/UX)
  *
- * Shows the journey timeline with THREE dynamically-computed times:
- *
- *   1. leaveHomeTime  → when student must leave home
- *   2. pickupTime     → when student must be at pickup station
- *   3. schoolTime     → target school arrival (≈ student's start_time)
- *
- * Timing formula (backward from school start):
- *   schoolTime    = tripData.startTime
- *   pickupTime    = schoolTime − driverEtaToSchool
- *   leaveHomeTime = pickupTime − walkTime − 2min buffer + orderOffset
+ * A refined, production-grade student trip tracking interface with:
+ * - Elegant card-based timeline
+ * - Subtle micro-interactions
+ * - High-contrast, readable typography
+ * - Generous whitespace
+ * - Intuitive information hierarchy
  */
 import React, { useEffect, useMemo, useState } from "react";
 import {
   ActivityIndicator,
+  Image,
   Linking,
   Platform,
   ScrollView,
@@ -25,157 +22,251 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { MaterialIcons } from "@expo/vector-icons";
 
 import MapboxRoutePreview from "../shared/components/common/MapboxRoutePreview";
 import { getDirectionsRoute } from "../shared/services/mapboxService";
-import { findOptimalPickupStation, formatWalkDistance, formatWalkTime } from "../shared/services/pickupStationService";
-import { computeTripTimes, getTimeBadge, BADGE_STYLE } from "../shared/services/tripTimingService";
+import {
+  findOptimalPickupStation,
+  formatWalkDistance,
+  formatWalkTime,
+} from "../shared/services/pickupStationService";
+import {
+  computeTripTimes,
+  getTimeBadge,
+} from "../shared/services/tripTimingService";
 import { UbuntuFonts } from "../shared/utils/fonts";
 
-/* ─────────────────────────────── constants ─────────────────────────────── */
-const C = {
-  primary: "#2196F3",
-  success: "#4CAF50",
-  warning: "#FF9800",
-  danger: "#F44336",
-  orange: "#F97316",
-  gray: "#9E9E9E",
-  lightGray: "#F5F5F5",
-  white: "#FFFFFF",
-  bg: "#F8F9FB",
-  text: "#212121",
-  subtext: "#757575",
-  border: "#EEEEEE",
-  pickupBg: "#FFF7ED",
-  pickupBorder: "#FDBA74",
-  alertBg: "#F1F8FF",
-  alertBorder: "#2196F3",
+/* ─────────────────────────────── Color Palette ────────────────────────────── */
+const colors = {
+  background: "#FAFBFC",
+  surface: "#FFFFFF",
+  surfaceSecondary: "#F8FAFC",
+  text: "#1A202C",
+  textSecondary: "#718096",
+  textTertiary: "#A0AEC0",
+  border: "#E2E8F0",
+  primary: "#2563EB",
+  primaryLight: "#DBEAFE",
+  success: "#10B981",
+  successLight: "#ECFDF5",
+  warning: "#F59E0B",
+  warningLight: "#FFFBEB",
+  danger: "#EF4444",
+  dangerLight: "#FEF2F2",
+
+  // Timeline badges
+  badges: {
+    SOON: { bg: "#F0F9FF", text: "#0369A1" },
+    NOW: { bg: "#ECFDF5", text: "#047857" },
+    PASSED: { bg: "#F3E8FF", text: "#7E22CE" },
+  },
 };
 
-const COPY = {
+/* ────────────────────────────── Text Content ────────────────────────────── */
+const translations = {
   en: {
-    title: "Trip Details",
-    eta: "ETA",
-    distance: "DISTANCE",
+    back: "Back",
+    eta: "Travel Time",
+    distance: "Distance",
+    pickupPoint: "Pickup Point",
+    walkDistance: "Walk Distance",
+    walkTime: "Walk Time",
+    pickupLocation: "Pickup Location",
     driver: "Driver",
-    timeline: "Journey Timeline",
-    call: "Call",
-    message: "Message",
-    startLive: "Start Live Tracking",
+    captain: "Captain",
+    driverStatus: "Driver Status",
     online: "Online",
     offline: "Offline",
-    home: "Home",
+    callDriver: "Call",
+    messageDriver: "Message",
+    trustedCaptain: "Verified captain",
+    rating: "Rating",
+    carModel: "Car",
+    plateNumber: "Plate",
+    tripActions: "Trip Actions",
+    confirmTrip: "Confirm Trip",
+    startTrip: "Start Trip",
+    trackTrip: "Track Trip",
+    cancelTrip: "Cancel Trip",
+    pickupUnavailable: "Pickup location details will appear soon",
+    returnHome: "Return Home",
+    busToSchool: "Bus to School",
+    timeline: "Journey Timeline",
     leaveHome: "Leave Home",
+    home: "Your Location",
     pickup: "Pickup Station",
-    reachPickup: "Be Here",
+    waitForPickup: "Be Ready Here",
     school: "School",
-    finalDest: "Final destination",
-    walkToStation: "Walk to station",
-    loading: "Resolving route…",
-    noPhone: "Phone unavailable",
-    pickupCard: "Your Pickup Point",
-    walkDist: "Walk distance",
-    walkTime: "Walk time",
-    outOfRange: "⚠ Beyond 500 m",
-    withinRange: "✓ On driver's route",
-    order: "Pickup #",
-    schoolTarget: "Target arrival",
+    schoolArrival: "Expected Arrival",
+    startTime: "Class Starts",
+    walkToStation: "Walk to Pickup",
+    loading: "Loading route...",
+    noPhone: "Not available",
+    inRangeTag: "✓ On Route",
+    outOfRangeTag: "⚠ 500m+ away",
+    pickupOrder: "Your Stop #",
   },
   ar: {
-    title: "تفاصيل الرحلة",
-    eta: "وقت الوصول",
+    back: "رجوع",
+    eta: "وقت السفر",
     distance: "المسافة",
+    pickupPoint: "نقطة الالتقاط",
+    walkDistance: "مسافة المشي",
+    walkTime: "وقت المشي",
+    pickupLocation: "موقع الالتقاط",
     driver: "السائق",
-    timeline: "مسار الرحلة",
-    call: "اتصال",
-    message: "رسالة",
-    startLive: "بدء التتبع المباشر",
+    captain: "الكابتن",
+    driverStatus: "حالة السائق",
     online: "متصل",
     offline: "غير متصل",
-    home: "المنزل",
-    leaveHome: "مغادرة المنزل",
-    pickup: "نقطة الالتقاط",
-    reachPickup: "تواجد هنا",
+    callDriver: "اتصال",
+    messageDriver: "رسالة",
+    trustedCaptain: "كابتن موثوق",
+    rating: "التقييم",
+    carModel: "المركبة",
+    plateNumber: "اللوحة",
+    tripActions: "إجراءات الرحلة",
+    confirmTrip: "تأكيد الرحلة",
+    startTrip: "بدء الرحلة",
+    trackTrip: "تتبع الرحلة",
+    cancelTrip: "إلغاء الرحلة",
+    pickupUnavailable: "ستظهر تفاصيل موقع الالتقاط قريباً",
+    returnHome: "العودة للرئيسية",
+    busToSchool: "الحافلة إلى المدرسة",
+    timeline: "خط الرحلة",
+    leaveHome: "اترك المنزل",
+    home: "موقعك",
+    pickup: "محطة الالتقاط",
+    waitForPickup: "كن مستعداً هنا",
     school: "المدرسة",
-    finalDest: "الوجهة النهائية",
-    walkToStation: "المشي للنقطة",
-    loading: "جاري تحميل المسار…",
-    noPhone: "رقم غير متوفر",
-    pickupCard: "نقطة الالتقاط الخاصة بك",
-    walkDist: "مسافة المشي",
-    walkTime: "وقت المشي",
-    outOfRange: "⚠ أبعد من 500م",
-    withinRange: "✓ على مسار السائق",
-    order: "ترتيب الالتقاط #",
-    schoolTarget: "وقت الوصول المستهدف",
+    schoolArrival: "الوصول المتوقع",
+    startTime: "بدء الدرس",
+    walkToStation: "المشي إلى الالتقاط",
+    loading: "جاري تحميل المسار...",
+    noPhone: "غير متوفر",
+    inRangeTag: "✓ على الطريق",
+    outOfRangeTag: "⚠ 500م+ بعيداً",
+    pickupOrder: "محطتك #",
   },
 };
 
-/* ─────────────────────────────── helpers ───────────────────────────────── */
+/* ─────────────────────────────── Helpers ────────────────────────────────── */
 const isValidCoord = (p) =>
-  p && Number.isFinite(Number(p.latitude)) && Number.isFinite(Number(p.longitude));
+  p &&
+  Number.isFinite(Number(p.latitude)) &&
+  Number.isFinite(Number(p.longitude));
 
 const normalizeCoord = (p, fallback) =>
   isValidCoord(p)
     ? { latitude: Number(p.latitude), longitude: Number(p.longitude) }
     : fallback;
 
-/* ═══════════════════════════════ component ════════════════════════════════ */
+const formatTimeCompact = (date) => {
+  if (!date) return "—";
+  return date.toLocaleTimeString("en-US", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+};
+
+/* ═════════════════════════════ Main Component ════════════════════════════ */
 const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
-  const t = COPY[language] || COPY.en;
+  const t = translations[language] || translations.en;
   const isRTL = language === "ar";
 
-  /* ── sanitise coordinates ──────────────────────────────────────────── */
+  /* ── Coordinate Normalization ──────────────────────────────────────── */
   const studentLoc = useMemo(
-    () => normalizeCoord(tripData?.homeLocation, { latitude: 33.5731, longitude: -7.5898 }),
+    () =>
+      normalizeCoord(tripData?.homeLocation, {
+        latitude: 33.5731,
+        longitude: -7.5898,
+      }),
     [tripData?.homeLocation],
   );
+
   const schoolLoc = useMemo(
-    () => normalizeCoord(tripData?.destinationLocation, { latitude: 33.58, longitude: -7.592 }),
+    () =>
+      normalizeCoord(tripData?.destinationLocation, {
+        latitude: 33.58,
+        longitude: -7.592,
+      }),
     [tripData?.destinationLocation],
   );
+
+  /* ── Data Extraction ────────────────────────────────────────────────── */
   const driverName = tripData?.driverName || "Captain Ahmed";
   const driverPhone = tripData?.driverPhone || null;
+  const driverAvatar =
+    tripData?.driverAvatar ||
+    tripData?.driverPhoto ||
+    tripData?.drivers?.avatar_url ||
+    null;
+  const driverRating = Number.isFinite(Number(tripData?.driverRating))
+    ? Number(tripData.driverRating)
+    : 4.8;
+  const carModel =
+    tripData?.carModel || tripData?.busModel || tripData?.buses?.model || "Van";
+  const plateNumber =
+    tripData?.plateNumber ||
+    tripData?.busPlate ||
+    tripData?.buses?.plate_number;
   const isOnline = ["IN_PROGRESS", "STARTED"].includes(tripData?.status);
-  const schoolName = tripData?.schoolName || tripData?.destinationName || t.school;
-  const studentOrder = Number.isFinite(tripData?.studentOrder) ? tripData.studentOrder : 1;
+  const schoolName =
+    tripData?.schoolName || tripData?.destinationName || t.school;
+  const studentOrder = Number.isFinite(tripData?.studentOrder)
+    ? tripData.studentOrder
+    : 1;
 
-  /* ── route resolution ──────────────────────────────────────────────── */
+  /* ── Route State ────────────────────────────────────────────────────── */
   const [routeCoords, setRouteCoords] = useState([]);
-  const [distanceKm, setDistanceKm] = useState(tripData?.totalDistanceKm || 2.5);
-  const [etaMinutes, setEtaMinutes] = useState(tripData?.estimatedArrivalMinutes || 10);
-  const [etaToSchoolSecs, setEtaToSchoolSecs] = useState(null);  // driver pickup→school
+  const [distanceKm, setDistanceKm] = useState(
+    tripData?.totalDistanceKm || 2.5,
+  );
+  const [etaMinutes, setEtaMinutes] = useState(
+    tripData?.estimatedArrivalMinutes || 10,
+  );
+  const [etaToSchoolSecs, setEtaToSchoolSecs] = useState(null);
   const [isResolving, setIsResolving] = useState(false);
+  const [mapExpanded, setMapExpanded] = useState(false);
 
+  /* ── Route Resolution ──────────────────────────────────────────────── */
   useEffect(() => {
     let active = true;
     const resolve = async () => {
       if (!isValidCoord(studentLoc) || !isValidCoord(schoolLoc)) return;
       setIsResolving(true);
       try {
-        /* Full route student-home → school (for map display) */
-        const route = await getDirectionsRoute({ origin: studentLoc, destination: schoolLoc });
+        const route = await getDirectionsRoute({
+          origin: studentLoc,
+          destination: schoolLoc,
+        });
         if (!active) return;
         if (route?.coordinates?.length) {
           setRouteCoords(route.coordinates);
           setDistanceKm(route.distanceMeters / 1000);
           setEtaMinutes(Math.max(1, Math.round(route.durationSeconds / 60)));
         }
-      } catch (_) { /* silent */ }
-      finally { if (active) setIsResolving(false); }
+      } catch (_) {
+        /* silent fail */
+      } finally {
+        if (active) setIsResolving(false);
+      }
     };
     resolve();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [studentLoc, schoolLoc]);
 
-  /* ── pickup station (projected on route) ──────────────────────────── */
+  /* ── Pickup Station ────────────────────────────────────────────────── */
   const pickupStation = useMemo(() => {
     if (routeCoords.length < 2) return null;
     return findOptimalPickupStation(studentLoc, routeCoords);
   }, [routeCoords, studentLoc]);
 
-  /* ── driver ETA from pickup point to school ───────────────────────── */
+  /* ── Driver ETA to School ──────────────────────────────────────────── */
   useEffect(() => {
     if (!pickupStation?.pickupPoint || !isValidCoord(schoolLoc)) return;
     let active = true;
@@ -189,19 +280,23 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
         if (active && leg?.durationSeconds > 0) {
           setEtaToSchoolSecs(leg.durationSeconds);
         }
-      } catch (_) { /* silent */ }
+      } catch (_) {
+        /* silent fail */
+      }
     };
     resolve();
-    return () => { active = false; };
+    return () => {
+      active = false;
+    };
   }, [pickupStation, schoolLoc]);
 
-  /* ── timing computation (re-runs whenever inputs change) ──────────── */
+  /* ── Timing Computation ────────────────────────────────────────────── */
   const timing = useMemo(() => {
     return computeTripTimes({
       startTime: tripData?.startTime || tripData?.start_time || null,
       walkDistMeters: pickupStation?.walkDistMeters ?? 400,
       driverEtaToSchoolSecs: etaToSchoolSecs,
-      pickupToSchoolDistMeters: distanceKm * 1_000 * 0.6, // rough pickup→school portion
+      pickupToSchoolDistMeters: distanceKm * 1_000 * 0.6,
       studentOrder,
     });
   }, [
@@ -213,22 +308,33 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
     studentOrder,
   ]);
 
-  /* ── badge states based on real clock ─────────────────────────────── */
+  /* ── Badge States ──────────────────────────────────────────────────── */
   const homeBadge = getTimeBadge(timing.leaveHomeTime);
   const pickupBadge = getTimeBadge(timing.pickupTime);
   const schoolBadge = getTimeBadge(timing.schoolTime);
+  const busEtaMinutes = useMemo(() => {
+    if (!etaToSchoolSecs) return null;
+    return Math.max(1, Math.round(etaToSchoolSecs / 60));
+  }, [etaToSchoolSecs]);
+  const pickupAddress = useMemo(() => {
+    if (tripData?.pickupAddress) return tripData.pickupAddress;
+    if (tripData?.pickupName) return tripData.pickupName;
+    return t.pickupUnavailable;
+  }, [t.pickupUnavailable, tripData?.pickupAddress, tripData?.pickupName]);
 
-  /* ── contact ───────────────────────────────────────────────────────── */
+  /* ── Contact Handlers ──────────────────────────────────────────────── */
   const handleCall = () => driverPhone && Linking.openURL(`tel:${driverPhone}`);
-  const handleMessage = () => driverPhone && Linking.openURL(`sms:${driverPhone}`);
-
-  /* ═══════════════════════════════ render ═══════════════════════════════ */
+  const handleMessage = () =>
+    driverPhone && Linking.openURL(`sms:${driverPhone}`);
+  /* ═════════════════════════════ Render ════════════════════════════════ */
   return (
     <SafeAreaView style={styles.container} edges={["top", "bottom"]}>
-      <StatusBar style="dark" />
+      <StatusBar barStyle="dark-content" backgroundColor={colors.background} />
 
-      {/* ── MAP ─────────────────────────────────────────────────────── */}
-      <View style={styles.mapStage}>
+      {/* ────── MAP SECTION ──────────────────────────────────────── */}
+      <View
+        style={[styles.mapContainer, mapExpanded && styles.mapContainerFull]}
+      >
         <MapboxRoutePreview
           style={styles.map}
           homeLocation={studentLoc}
@@ -240,387 +346,1020 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
           studentLabel={t.home}
           schoolLabel={schoolName}
           pickupLabel={t.pickup}
+          fitPadding={{ top: 90, right: 48, bottom: 140, left: 48 }}
         />
 
-        {/* floating header */}
-        <View style={styles.headerOverlay}>
-          <TouchableOpacity onPress={onBack} style={styles.backArea}>
-            <View style={styles.backBtn}>
-              <MaterialIcons name={isRTL ? "chevron-right" : "chevron-left"} size={26} color={C.text} />
-            </View>
+        {/* Header with Return Home + Travel Time */}
+        <View style={styles.mapHeader}>
+          <TouchableOpacity
+            onPress={onBack}
+            style={[styles.returnHomeButton, isRTL && styles.rowReverse]}
+            activeOpacity={0.6}
+          >
+            <MaterialIcons
+              name={isRTL ? "chevron-right" : "chevron-left"}
+              size={20}
+              color={colors.text}
+            />
+            <Text style={styles.returnHomeText}>{t.returnHome}</Text>
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>{t.title}</Text>
-          <View style={{ width: 40 }} />
+          <View style={[styles.mapHeaderStats, isRTL && styles.rowReverse]}>
+            <View
+              style={[styles.mapHeaderStatChip, isRTL && styles.rowReverse]}
+            >
+              <View style={styles.mapHeaderStatIcon}>
+                <MaterialIcons name="access-time" size={14} color="#FFFFFF" />
+              </View>
+              <View>
+                <Text style={styles.mapHeaderStatLabel}>{t.eta}</Text>
+                <Text style={styles.mapHeaderStatValue}>{etaMinutes} min</Text>
+              </View>
+            </View>
+          </View>
         </View>
 
+        {/* Left-Middle Distance Chip */}
+        <View style={[styles.distanceChip, isRTL && styles.distanceChipRtl]}>
+          <View style={styles.mapHeaderStatIcon}>
+            <MaterialIcons name="straighten" size={14} color="#FFFFFF" />
+          </View>
+          <View>
+            <Text style={styles.mapHeaderStatLabel}>{t.distance}</Text>
+            <Text style={styles.mapHeaderStatValue}>
+              {distanceKm.toFixed(1)} km
+            </Text>
+          </View>
+        </View>
+
+        {/* Loading Indicator */}
         {isResolving && (
-          <View style={styles.syncChip}>
-            <ActivityIndicator size="small" color={C.primary} />
-            <Text style={styles.syncText}>{t.loading}</Text>
+          <View style={styles.loadingBadge}>
+            <ActivityIndicator size="small" color={colors.primary} />
+            <Text style={styles.loadingText}>{t.loading}</Text>
           </View>
         )}
       </View>
 
-      {/* ── BOTTOM SHEET ────────────────────────────────────────────── */}
+      {/* ────── BOTTOM SHEET ──────────────────────────────────── */}
       <View style={styles.bottomSheet}>
-        <View style={styles.handleArea}>
+        {/* Handle */}
+        <TouchableOpacity
+          onPress={() => setMapExpanded(!mapExpanded)}
+          activeOpacity={0.8}
+          style={styles.handleWrapper}
+        >
           <View style={styles.handle} />
-        </View>
+        </TouchableOpacity>
 
-        <ScrollView contentContainerStyle={styles.scroll} showsVerticalScrollIndicator={false}>
+        <ScrollView
+          style={styles.scrollContainer}
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.scrollContent}
+        >
+          {/* ────── DRIVER CARD ──────────────────────────────── */}
+          <DriverCard
+            name={driverName}
+            isOnline={isOnline}
+            avatarUri={driverAvatar}
+            rating={driverRating}
+            carModel={carModel}
+            plateNumber={plateNumber}
+            onCall={handleCall}
+            onMessage={handleMessage}
+            hasPhone={!!driverPhone}
+            translations={t}
+            isRTL={isRTL}
+          />
 
-          {/* ETA / Distance pills */}
-          <View style={styles.statsRow}>
-            <View style={styles.statCard}>
-              <View style={[styles.iconCircle, { backgroundColor: "#E3F2FD" }]}>
-                <MaterialIcons name="access-time" size={20} color={C.primary} />
-              </View>
-              <View>
-                <Text style={styles.statLabel}>{t.eta}</Text>
-                <View style={styles.statValueRow}>
-                  <Text style={styles.statNum}>{etaMinutes}</Text>
-                  <Text style={styles.statUnit}>min</Text>
-                </View>
-              </View>
-            </View>
-
-            <View style={styles.statCard}>
-              <View style={[styles.iconCircle, { backgroundColor: "#E8F5E9" }]}>
-                <MaterialCommunityIcons name="ruler" size={20} color={C.success} />
-              </View>
-              <View>
-                <Text style={styles.statLabel}>{t.distance}</Text>
-                <View style={styles.statValueRow}>
-                  <Text style={styles.statNum}>{distanceKm.toFixed(1)}</Text>
-                  <Text style={styles.statUnit}>km</Text>
-                </View>
-              </View>
-            </View>
-          </View>
-
-          {/* ── Pickup Station card ─────────────────────────────────── */}
+          {/* ────── PICKUP STATION CARD ──────────────────────── */}
           {pickupStation && (
-            <View style={[styles.card, styles.pickupCard]}>
-              <View style={styles.pickupCardHeader}>
-                <View style={styles.pickupIconWrap}>
-                  <MaterialIcons name="location-on" size={22} color={C.orange} />
-                </View>
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.cardTitle, { color: C.orange, marginBottom: 2 }]}>
-                    {t.pickupCard}
-                  </Text>
-                  <Text style={[
-                    styles.rangeTag,
-                    { color: pickupStation.withinConstraint ? C.success : C.warning },
-                  ]}>
-                    {pickupStation.withinConstraint ? t.withinRange : t.outOfRange}
-                  </Text>
-                </View>
-                {studentOrder > 1 && (
-                  <View style={styles.orderBadge}>
-                    <Text style={styles.orderBadgeTxt}>{t.order}{studentOrder}</Text>
-                  </View>
-                )}
-              </View>
-
-              <View style={styles.pickupStatsRow}>
-                <View style={styles.pickupStat}>
-                  <MaterialIcons name="directions-walk" size={18} color={C.orange} />
-                  <View>
-                    <Text style={styles.pickupStatLabel}>{t.walkDist}</Text>
-                    <Text style={styles.pickupStatValue}>
-                      {formatWalkDistance(pickupStation.walkDistMeters)}
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.statDivider} />
-                <View style={styles.pickupStat}>
-                  <MaterialIcons name="timer" size={18} color={C.orange} />
-                  <View>
-                    <Text style={styles.pickupStatLabel}>{t.walkTime}</Text>
-                    <Text style={styles.pickupStatValue}>
-                      {formatWalkTime(timing.walkTimeMinutes)}
-                    </Text>
-                  </View>
-                </View>
-                <View style={styles.statDivider} />
-                <View style={styles.pickupStat}>
-                  <MaterialIcons name="school" size={18} color={C.primary} />
-                  <View>
-                    <Text style={styles.pickupStatLabel}>{t.schoolTarget}</Text>
-                    <Text style={[styles.pickupStatValue, { color: C.primary }]}>
-                      {timing.formatted.schoolTime}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-            </View>
+            <PickupCard
+              station={pickupStation}
+              timing={timing}
+              address={pickupAddress}
+              translations={t}
+              isRTL={isRTL}
+              studentOrder={studentOrder}
+            />
           )}
+          {/* ────── JOURNEY TIMELINE ──────────────────────────── */}
+          <View style={styles.timelineWrapper}>
+            <Text style={[styles.timelineSectionTitle, isRTL && styles.rtl]}>
+              {t.timeline}
+            </Text>
 
-          {/* ── Driver card ─────────────────────────────────────────── */}
-          <View style={styles.card}>
-            <Text style={[styles.cardTitle, isRTL && styles.rtl]}>{t.driver}</Text>
-            <View style={[styles.row, { gap: 12, marginBottom: 14 }, isRTL && styles.rowRev]}>
-              <View style={styles.driverAvatar}>
-                <MaterialIcons name="person" size={24} color={C.white} />
-              </View>
-              <View style={{ flex: 1 }}>
-                <Text style={[styles.driverName, isRTL && styles.rtl]}>{driverName}</Text>
-                <View style={[styles.row, isRTL && styles.rowRev]}>
-                  <View style={[styles.dot, { backgroundColor: isOnline ? C.success : C.gray }]} />
-                  <Text style={[styles.statusTxt, { color: isOnline ? C.success : C.gray }]}>
-                    {isOnline ? t.online : t.offline}
-                  </Text>
-                </View>
-              </View>
-            </View>
-            <View style={[styles.row, { gap: 12 }, isRTL && styles.rowRev]}>
-              <TouchableOpacity
-                style={[styles.contactBtn, !driverPhone && styles.disabledBtn]}
-                onPress={handleCall}
-                disabled={!driverPhone}
-              >
-                <MaterialIcons name="call" size={18} color={driverPhone ? C.primary : C.gray} />
-                <Text style={[styles.contactTxt, !driverPhone && { color: C.gray }]}>
-                  {driverPhone ? t.call : t.noPhone}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.contactBtn, !driverPhone && styles.disabledBtn]}
-                onPress={handleMessage}
-                disabled={!driverPhone}
-              >
-                <MaterialIcons name="message" size={18} color={driverPhone ? C.primary : C.gray} />
-                <Text style={[styles.contactTxt, !driverPhone && { color: C.gray }]}>
-                  {driverPhone ? t.message : t.noPhone}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-
-          {/* ── Journey Timeline ─────────────────────────────────────── */}
-          <View style={styles.card}>
-            <Text style={[styles.cardTitle, isRTL && styles.rtl]}>{t.timeline}</Text>
-
-            {/* 1 – Leave Home */}
-            <TLRow
-              icon="home" iconBg={BADGE_STYLE[homeBadge].color}
+            <TimelineStop
+              icon="home"
+              title={t.home}
+              subtitle={t.leaveHome}
               time={timing.formatted.leaveHomeTime}
               badge={homeBadge}
-              title={t.home} sub={t.leaveHome}
-              hasLine isRTL={isRTL}
+              isFirst
+              hasNext
+              isRTL={isRTL}
             />
+            {pickupStation && (
+              <TimelineTravelHint
+                icon="directions-walk"
+                text={`${t.walkToStation} • ${formatWalkDistance(
+                  pickupStation.walkDistMeters,
+                )} • ${formatWalkTime(timing.walkTimeMinutes)}`}
+                isRTL={isRTL}
+              />
+            )}
 
-            {/* 2 – Pickup Station */}
-            <TLRow
-              icon="location-on" iconBg={C.primary}
+            <TimelineStop
+              icon="location-on"
+              title={t.pickup}
+              subtitle={t.waitForPickup}
               time={timing.formatted.pickupTime}
               badge={pickupBadge}
-              title={t.pickup} sub={t.reachPickup}
-              hasLine isRTL={isRTL}
-            >
-              {pickupStation && (
-                <View style={[styles.inlineAlert, isRTL && styles.rowRev]}>
-                  <MaterialIcons name="directions-walk" size={16} color={C.primary} />
-                  <Text style={[styles.inlineAlertTxt, isRTL && styles.rtl]}>
-                    {t.walkToStation}:{" "}
-                    <Text style={{ fontFamily: UbuntuFonts.bold }}>
-                      {formatWalkDistance(pickupStation.walkDistMeters)} · {formatWalkTime(timing.walkTimeMinutes)}
-                    </Text>
-                  </Text>
-                </View>
-              )}
-            </TLRow>
+              isFirst={false}
+              hasNext
+              isRTL={isRTL}
+            />
+            <TimelineTravelHint
+              icon="directions-bus"
+              text={
+                busEtaMinutes
+                  ? `${t.busToSchool} • ${busEtaMinutes} min`
+                  : t.busToSchool
+              }
+              isRTL={isRTL}
+            />
 
-            {/* 3 – School */}
-            <TLRow
-              icon="school" iconBg={BADGE_STYLE[schoolBadge].color}
+            <TimelineStop
+              icon="school"
+              title={schoolName}
+              subtitle={t.schoolArrival}
               time={timing.formatted.schoolTime}
               badge={schoolBadge}
-              title={schoolName} sub={t.finalDest}
-              hasLine={false} isRTL={isRTL}
+              isFirst={false}
+              hasNext={false}
+              isRTL={isRTL}
             />
           </View>
-
         </ScrollView>
-      </View>
-
-      {/* ── FOOTER ──────────────────────────────────────────────────── */}
-      <View style={styles.footer}>
-        <TouchableOpacity style={[styles.mainBtn, isRTL && styles.rowRev]} activeOpacity={0.85}>
-          <Text style={styles.mainBtnTxt}>{t.startLive}</Text>
-          <MaterialIcons name={isRTL ? "arrow-back" : "arrow-forward"} size={22} color={C.white} />
-        </TouchableOpacity>
       </View>
     </SafeAreaView>
   );
 };
 
-/* ──────────────────── Timeline Row sub-component ───────────────────────── */
-const TLRow = ({ icon, iconBg, time, badge, title, sub, hasLine, isRTL, children }) => {
-  const bs = BADGE_STYLE[badge] || BADGE_STYLE.SOON;
+/* ──────────────────── DriverCard Sub-Component ──────────────────────── */
+const DriverCard = ({
+  name,
+  isOnline,
+  avatarUri,
+  rating,
+  carModel,
+  plateNumber,
+  onCall,
+  onMessage,
+  hasPhone,
+  translations,
+  isRTL,
+}) => {
+  const filledStars = Math.round(Math.max(0, Math.min(5, rating)));
+
   return (
-    <View style={[styles.tlItem, isRTL && styles.rowRev]}>
-      <View style={styles.tlLeft}>
-        <View style={[styles.tlIconCircle, { backgroundColor: iconBg }]}>
-          <MaterialIcons name={icon} size={18} color={C.white} />
+    <View style={[styles.card, styles.driverCard]}>
+      <View style={[styles.driverTopRow, isRTL && styles.rowReverse]}>
+        <View style={styles.driverAvatarWrapper}>
+          {avatarUri ? (
+            <Image
+              source={{ uri: avatarUri }}
+              style={styles.driverAvatarImage}
+            />
+          ) : (
+            <View style={styles.driverAvatarFallback}>
+              <MaterialIcons name="person" size={24} color={colors.surface} />
+            </View>
+          )}
+          <View
+            style={[
+              styles.onlineDot,
+              {
+                backgroundColor: isOnline
+                  ? colors.success
+                  : colors.textTertiary,
+              },
+            ]}
+          />
         </View>
-        {hasLine && <View style={[styles.tlLine, { backgroundColor: iconBg, opacity: 0.35 }]} />}
-      </View>
-      <View style={[styles.tlRight, isRTL && { paddingLeft: 0, paddingRight: 8 }]}>
-        <View style={[styles.row, { justifyContent: "space-between" }, isRTL && styles.rowRev]}>
-          <Text style={styles.tlTime}>{time}</Text>
-          <View style={[styles.badge, { backgroundColor: bs.bg }]}>
-            <Text style={[styles.badgeTxt, { color: bs.color }]}>{badge}</Text>
+
+        <View style={styles.driverInfo}>
+          <View style={[styles.driverTitleRow, isRTL && styles.rowReverse]}>
+            <Text style={[styles.cardLabel, isRTL && styles.rtl]}>
+              {translations.captain}
+            </Text>
+            <View
+              style={[
+                styles.trustBadge,
+                isRTL && { flexDirection: "row-reverse" },
+              ]}
+            >
+              <MaterialIcons name="verified" size={12} color={colors.primary} />
+              <Text style={styles.trustBadgeText}>
+                {translations.trustedCaptain}
+              </Text>
+            </View>
+          </View>
+          <Text style={[styles.driverName, isRTL && styles.rtl]}>{name}</Text>
+          <View style={[styles.ratingRow, isRTL && styles.rowReverse]}>
+            <View
+              style={[
+                styles.starRow,
+                isRTL && { flexDirection: "row-reverse" },
+              ]}
+            >
+              {Array.from({ length: 5 }).map((_, index) => (
+                <MaterialIcons
+                  key={`star-${index + 1}`}
+                  name={index < filledStars ? "star" : "star-border"}
+                  size={14}
+                  color="#F59E0B"
+                />
+              ))}
+            </View>
+            <Text style={styles.ratingText}>{rating.toFixed(1)}</Text>
+            <Text style={styles.ratingLabel}>{translations.rating}</Text>
           </View>
         </View>
-        <Text style={[styles.tlTitle, isRTL && styles.rtl]}>{title}</Text>
-        <Text style={[styles.tlSub, isRTL && styles.rtl]}>{sub}</Text>
-        {children}
+      </View>
+
+      <View style={[styles.driverMetaRow, isRTL && styles.rowReverse]}>
+        <View style={[styles.driverMetaItem, isRTL && styles.rowReverse]}>
+          <MaterialIcons
+            name="directions-car"
+            size={15}
+            color={colors.primary}
+          />
+          <Text style={styles.driverMetaText} numberOfLines={1}>
+            {translations.carModel}: {carModel}
+          </Text>
+        </View>
+        <View style={[styles.driverMetaItem, isRTL && styles.rowReverse]}>
+          <MaterialIcons name="push-pin" size={15} color={colors.primary} />
+          <Text style={styles.driverMetaText} numberOfLines={1}>
+            {translations.plateNumber}: {plateNumber || "—"}
+          </Text>
+        </View>
+      </View>
+
+      <View style={styles.contactActionsRow}>
+        <TouchableOpacity
+          style={[
+            styles.contactPrimaryButton,
+            !hasPhone && styles.actionButtonDisabled,
+          ]}
+          onPress={onCall}
+          disabled={!hasPhone}
+          activeOpacity={0.8}
+        >
+          <MaterialIcons name="call" size={18} color={colors.surface} />
+          <Text style={styles.contactPrimaryText}>
+            {translations.callDriver}
+          </Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[
+            styles.contactSecondaryButton,
+            !hasPhone && styles.actionButtonDisabled,
+          ]}
+          onPress={onMessage}
+          disabled={!hasPhone}
+          activeOpacity={0.8}
+        >
+          <MaterialIcons
+            name="message"
+            size={18}
+            color={hasPhone ? colors.primary : colors.textTertiary}
+          />
+        </TouchableOpacity>
       </View>
     </View>
   );
 };
 
-/* ───────────────────────────────── styles ──────────────────────────────── */
+/* ──────────────────── PickupCard Sub-Component ──────────────────────── */
+const PickupCard = ({
+  station,
+  timing,
+  address,
+  translations,
+  isRTL,
+  studentOrder,
+}) => (
+  <View style={[styles.card, styles.pickupCardBorder]}>
+    <View
+      style={[
+        styles.pickupCardHeader,
+        isRTL && { flexDirection: "row-reverse" },
+      ]}
+    >
+      <View style={styles.pickupIcon}>
+        <MaterialIcons name="location-on" size={20} color={colors.primary} />
+      </View>
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.cardTitle, isRTL && styles.rtl]}>
+          {translations.pickupLocation}
+        </Text>
+        <Text style={[styles.pickupSubtitle, isRTL && styles.rtl]}>
+          {translations.pickupOrder} {studentOrder}
+        </Text>
+      </View>
+    </View>
+    <View style={styles.pickupAddressBlock}>
+      <Text
+        style={[styles.pickupAddressText, isRTL && styles.rtl]}
+        numberOfLines={2}
+      >
+        {address}
+      </Text>
+    </View>
+
+    <View
+      style={[styles.pickupStatsRow, isRTL && { flexDirection: "row-reverse" }]}
+    >
+      <View style={[styles.pickupInlineStat, isRTL && styles.rowReverse]}>
+        <MaterialIcons
+          name="directions-walk"
+          size={14}
+          color={colors.primary}
+        />
+        <Text style={styles.pickupInlineText}>
+          {formatWalkTime(timing.walkTimeMinutes)}
+        </Text>
+      </View>
+      <View style={[styles.pickupInlineStat, isRTL && styles.rowReverse]}>
+        <MaterialIcons name="near-me" size={14} color={colors.primary} />
+        <Text style={styles.pickupInlineText}>
+          {formatWalkDistance(station.walkDistMeters)}
+        </Text>
+      </View>
+      <View
+        style={[
+          styles.pickupRangeTag,
+          !station.withinConstraint && styles.pickupRangeTagWarning,
+        ]}
+      >
+        <Text
+          style={[
+            styles.pickupRangeText,
+            !station.withinConstraint && { color: colors.warning },
+          ]}
+        >
+          {formatWalkDistance(station.walkDistMeters)}
+        </Text>
+      </View>
+    </View>
+  </View>
+);
+
+/* ──────────────────── TimelineStop Sub-Component ──────────────────── */
+const TimelineStop = ({
+  icon,
+  title,
+  subtitle,
+  time,
+  badge,
+  isFirst,
+  hasNext,
+  isRTL,
+  detail,
+}) => {
+  const badgeColors = colors.badges[badge] || colors.badges.SOON;
+
+  return (
+    <View style={styles.timelineItem}>
+      {/* Left column: Icon and line */}
+      <View style={styles.timelineLeft}>
+        <View
+          style={[
+            styles.timelineIcon,
+            badge === "NOW" && styles.timelineIconActive,
+          ]}
+        >
+          <MaterialIcons name={icon} size={18} color={colors.surface} />
+        </View>
+        {hasNext && <View style={styles.timelineLine} />}
+      </View>
+
+      {/* Right column: Content */}
+      <View
+        style={[
+          styles.timelineRight,
+          isRTL && { paddingRight: 12, paddingLeft: 0 },
+        ]}
+      >
+        <View
+          style={[
+            styles.timelineHeader,
+            isRTL && { flexDirection: "row-reverse" },
+          ]}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.timelineTime, isRTL && styles.rtl]}>
+              {time}
+            </Text>
+            <Text style={[styles.timelineStopTitle, isRTL && styles.rtl]}>
+              {title}
+            </Text>
+            <Text style={[styles.timelineSubtitle, isRTL && styles.rtl]}>
+              {subtitle}
+            </Text>
+          </View>
+          <View style={[styles.badgeBox, { backgroundColor: badgeColors.bg }]}>
+            <Text style={[styles.badgeText, { color: badgeColors.text }]}>
+              {badge}
+            </Text>
+          </View>
+        </View>
+        {detail}
+      </View>
+    </View>
+  );
+};
+
+/* ──────────────────── TimelineTravelHint Sub-Component ──────────────────── */
+const TimelineTravelHint = ({ icon, text, isRTL }) => (
+  <View style={styles.timelineTravelRow}>
+    <View style={styles.timelineLeft}>
+      <View style={styles.timelineTravelDot} />
+    </View>
+    <View
+      style={[
+        styles.timelineTravelRight,
+        isRTL && { paddingRight: 12, paddingLeft: 0 },
+      ]}
+    >
+      <View style={[styles.timelineTravelPill, isRTL && styles.rowReverse]}>
+        <MaterialIcons name={icon} size={14} color={colors.primary} />
+        <Text style={[styles.timelineTravelText, isRTL && styles.rtl]}>
+          {text}
+        </Text>
+      </View>
+    </View>
+  </View>
+);
+
+/* ═════════════════════════════ Styles ════════════════════════════════ */
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: C.bg },
-  mapStage: { height: 300, width: "100%" },
-  map: { flex: 1 },
+  container: {
+    flex: 1,
+    backgroundColor: colors.background,
+  },
 
-  headerOverlay: {
+  /* ──── MAP SECTION ──── */
+  mapContainer: {
+    height: "60%",
+    position: "relative",
+  },
+  mapContainerFull: {
+    height: "75%",
+  },
+  map: {
+    flex: 1,
+  },
+  mapHeader: {
     position: "absolute",
-    top: Platform.OS === "ios" ? 10 : 20,
-    left: 16, right: 16,
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    backgroundColor: "rgba(255,255,255,0.93)",
-    borderRadius: 16,
-    paddingHorizontal: 8, paddingVertical: 8,
-    borderWidth: 1, borderColor: "rgba(238,238,238,0.9)",
-    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1, shadowRadius: 4, elevation: 3,
+    top: Platform.OS === "ios" ? 12 : 16,
+    left: 16,
+    right: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
   },
-  backArea: { padding: 4 },
-  backBtn: {
-    width: 32, height: 32, borderRadius: 16,
-    alignItems: "center", justifyContent: "center",
-    backgroundColor: "#F0F4F8",
+  headerTitle: {
+    fontSize: 16,
+    fontFamily: UbuntuFonts.bold,
+    color: colors.text,
+    flex: 1,
+    textAlign: "center",
   },
-  headerTitle: { fontSize: 16, fontFamily: UbuntuFonts.bold, color: C.text },
-
-  syncChip: {
-    position: "absolute", top: 80, alignSelf: "center",
-    flexDirection: "row", alignItems: "center", gap: 8,
-    backgroundColor: "rgba(255,255,255,0.96)",
-    borderRadius: 999, paddingHorizontal: 14, paddingVertical: 8,
+  returnHomeButton: {
+    minHeight: 44,
+    borderRadius: 999,
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    gap: 6,
+    alignItems: "center",
+    justifyContent: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
     elevation: 3,
   },
-  syncText: { fontFamily: UbuntuFonts.medium, fontSize: 12, color: C.primary },
+  loadingBadge: {
+    position: "absolute",
+    top: 126,
+    alignSelf: "center",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(255, 255, 255, 0.97)",
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  loadingText: {
+    fontSize: 12,
+    fontFamily: UbuntuFonts.medium,
+    color: colors.primary,
+  },
 
+  /* ──── MAP HEADER STAT ──── */
+  mapHeaderStats: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  mapHeaderStatChip: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(15, 23, 42, 0.9)",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.14,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  mapHeaderStatIcon: {
+    width: 24,
+    height: 24,
+    borderRadius: 999,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  mapHeaderStatLabel: {
+    fontSize: 9,
+    fontFamily: UbuntuFonts.semiBold,
+    color: "rgba(255, 255, 255, 0.8)",
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+  },
+  mapHeaderStatValue: {
+    fontSize: 12,
+    fontFamily: UbuntuFonts.bold,
+    color: "#FFFFFF",
+    marginTop: 1,
+  },
+  distanceChip: {
+    position: "absolute",
+    top: "50%",
+    left: 14,
+    transform: [{ translateY: -24 }],
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    backgroundColor: "rgba(15, 23, 42, 0.9)",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.14,
+    shadowRadius: 6,
+    elevation: 4,
+  },
+  distanceChipRtl: {
+    left: undefined,
+    right: 14,
+  },
+  returnHomeText: {
+    fontSize: 13,
+    fontFamily: UbuntuFonts.bold,
+    color: colors.text,
+  },
+
+  /* ──── BOTTOM SHEET ──── */
   bottomSheet: {
-    flex: 1, backgroundColor: C.bg,
-    borderTopLeftRadius: 24, borderTopRightRadius: 24,
-    marginTop: -20, overflow: "hidden",
-    shadowColor: "#000", shadowOffset: { width: 0, height: -4 },
-    shadowOpacity: 0.08, shadowRadius: 8, elevation: 10,
+    flex: 1,
+    backgroundColor: colors.surface,
+    borderTopLeftRadius: 32,
+    borderTopRightRadius: 32,
+    marginTop: -32,
+    overflow: "hidden",
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: -8 },
+    shadowOpacity: 0.08,
+    shadowRadius: 16,
+    elevation: 20,
+    zIndex: 2,
   },
-  handleArea: { alignItems: "center", paddingTop: 10, paddingBottom: 4 },
-  handle: { width: 48, height: 5, borderRadius: 3, backgroundColor: "#E0E0E0" },
-  scroll: { padding: 16, paddingBottom: 32 },
-
-  statsRow: { flexDirection: "row", gap: 12, marginBottom: 16 },
-  statCard: {
-    flex: 1, backgroundColor: C.white, borderRadius: 16, padding: 14,
-    flexDirection: "row", alignItems: "center", gap: 12,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05, shadowRadius: 5, elevation: 2,
+  handleWrapper: {
+    paddingTop: 12,
+    paddingBottom: 8,
+    alignItems: "center",
   },
-  iconCircle: { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center" },
-  statLabel: { fontSize: 10, color: C.gray, fontFamily: UbuntuFonts.semiBold, letterSpacing: 0.5 },
-  statValueRow: { flexDirection: "row", alignItems: "baseline", gap: 3 },
-  statNum: { fontSize: 18, fontFamily: UbuntuFonts.bold, color: C.text },
-  statUnit: { fontSize: 12, fontFamily: UbuntuFonts.regular, color: C.gray },
+  handle: {
+    width: 44,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: colors.border,
+  },
+  scrollContainer: {
+    flex: 1,
+  },
+  scrollContent: {
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 32,
+  },
 
+  /* ──── CARDS ──── */
   card: {
-    backgroundColor: C.white, borderRadius: 20, padding: 18, marginBottom: 16,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05, shadowRadius: 5, elevation: 2,
+    backgroundColor: colors.surface,
+    borderRadius: 18,
+    padding: 16,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: colors.border,
+    shadowColor: "#0F172A",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 2,
   },
-  pickupCard: { borderWidth: 1, borderColor: C.pickupBorder, backgroundColor: C.pickupBg },
+  cardContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+    marginBottom: 14,
+  },
+  rowReverse: {
+    flexDirection: "row-reverse",
+  },
+  cardTitle: {
+    fontSize: 15,
+    fontFamily: UbuntuFonts.bold,
+    color: colors.text,
+  },
+  cardLabel: {
+    fontSize: 11,
+    fontFamily: UbuntuFonts.semiBold,
+    color: colors.textSecondary,
+    textTransform: "uppercase",
+    letterSpacing: 0.4,
+  },
 
-  pickupCardHeader: { flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 14 },
-  pickupIconWrap: {
-    width: 36, height: 36, borderRadius: 18,
-    backgroundColor: "#FFF0E0", alignItems: "center", justifyContent: "center",
+  /* ──── DRIVER CARD ──── */
+  driverCard: {
+    borderColor: "#DBEAFE",
   },
-  rangeTag: { fontSize: 11, fontFamily: UbuntuFonts.semiBold, marginTop: 2 },
-  orderBadge: {
-    backgroundColor: "#E3F2FD", borderRadius: 99,
-    paddingHorizontal: 8, paddingVertical: 3,
+  driverTopRow: {
+    flexDirection: "row",
+    gap: 12,
   },
-  orderBadgeTxt: { fontSize: 11, fontFamily: UbuntuFonts.bold, color: C.primary },
+  driverAvatarWrapper: {
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    overflow: "hidden",
+    position: "relative",
+  },
+  driverAvatarImage: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 28,
+  },
+  driverAvatarFallback: {
+    width: "100%",
+    height: "100%",
+    borderRadius: 28,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  onlineDot: {
+    position: "absolute",
+    width: 12,
+    height: 12,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: colors.surface,
+    right: 1,
+    bottom: 1,
+  },
+  driverInfo: {
+    flex: 1,
+  },
+  driverTitleRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 6,
+  },
+  trustBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    backgroundColor: colors.primaryLight,
+    borderRadius: 999,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+  },
+  trustBadgeText: {
+    fontSize: 10,
+    fontFamily: UbuntuFonts.semiBold,
+    color: colors.primary,
+  },
+  driverName: {
+    fontSize: 18,
+    fontFamily: UbuntuFonts.bold,
+    color: colors.text,
+    marginBottom: 4,
+  },
+  ratingRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  starRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 1,
+  },
+  ratingText: {
+    fontSize: 13,
+    fontFamily: UbuntuFonts.bold,
+    color: colors.text,
+  },
+  ratingLabel: {
+    fontSize: 11,
+    fontFamily: UbuntuFonts.medium,
+    color: colors.textSecondary,
+  },
+  driverMetaRow: {
+    flexDirection: "row",
+    gap: 8,
+    marginTop: 14,
+  },
+  driverMetaItem: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.surfaceSecondary,
+    borderRadius: 12,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+  },
+  driverMetaText: {
+    flex: 1,
+    fontSize: 11,
+    fontFamily: UbuntuFonts.medium,
+    color: colors.text,
+  },
+  contactActionsRow: {
+    flexDirection: "row",
+    marginTop: 14,
+    gap: 10,
+  },
+  contactPrimaryButton: {
+    flex: 1,
+    minHeight: 48,
+    borderRadius: 999,
+    backgroundColor: colors.primary,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 8,
+  },
+  contactPrimaryText: {
+    fontSize: 14,
+    fontFamily: UbuntuFonts.bold,
+    color: colors.surface,
+  },
+  contactSecondaryButton: {
+    width: 52,
+    minHeight: 48,
+    borderRadius: 999,
+    backgroundColor: colors.primaryLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  actionButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  actionButtonDisabled: {
+    opacity: 0.45,
+  },
 
+  /* ──── PICKUP CARD ──── */
+  pickupCardBorder: {
+    borderColor: "#DBEAFE",
+    backgroundColor: "#F8FBFF",
+    borderRadius: 24,
+  },
+  pickupCardHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 10,
+    marginBottom: 10,
+  },
+  pickupIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: colors.primaryLight,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  pickupSubtitle: {
+    fontSize: 11,
+    color: colors.textSecondary,
+    fontFamily: UbuntuFonts.medium,
+    marginTop: 2,
+  },
+  pickupAddressBlock: {
+    borderRadius: 18,
+    backgroundColor: colors.surface,
+    borderWidth: 1,
+    borderColor: colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 10,
+  },
+  pickupAddressText: {
+    fontSize: 14,
+    fontFamily: UbuntuFonts.bold,
+    color: colors.text,
+  },
   pickupStatsRow: {
-    flexDirection: "row", alignItems: "center",
-    backgroundColor: C.white, borderRadius: 12,
-    paddingVertical: 12, paddingHorizontal: 10,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.04, shadowRadius: 3, elevation: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    gap: 8,
+    backgroundColor: colors.surface,
+    borderRadius: 18,
+    paddingVertical: 10,
+    paddingHorizontal: 10,
+    borderWidth: 1,
+    borderColor: colors.border,
   },
-  pickupStat: { flex: 1, flexDirection: "row", alignItems: "center", gap: 7 },
-  statDivider: { width: 1, height: 36, backgroundColor: C.border },
-  pickupStatLabel: { fontSize: 9, color: C.gray, fontFamily: UbuntuFonts.medium },
-  pickupStatValue: { fontSize: 13, fontFamily: UbuntuFonts.bold, color: C.text },
+  pickupInlineStat: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 5,
+  },
+  pickupInlineText: {
+    fontSize: 12,
+    fontFamily: UbuntuFonts.semiBold,
+    color: colors.text,
+  },
+  pickupRangeTag: {
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: colors.successLight,
+  },
+  pickupRangeTagWarning: {
+    backgroundColor: colors.warningLight,
+  },
+  pickupRangeText: {
+    fontSize: 11,
+    fontFamily: UbuntuFonts.bold,
+    color: colors.success,
+  },
 
-  cardTitle: { fontSize: 15, fontFamily: UbuntuFonts.bold, color: C.text, marginBottom: 14 },
-  driverAvatar: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: C.primary, alignItems: "center", justifyContent: "center",
+  /* ──── TIMELINE ──── */
+  timelineWrapper: {
+    marginTop: 4,
   },
-  driverName: { fontSize: 15, fontFamily: UbuntuFonts.bold, color: C.text, marginBottom: 2 },
-  statusTxt: { fontSize: 12, fontFamily: UbuntuFonts.medium },
-  dot: { width: 8, height: 8, borderRadius: 4 },
-  contactBtn: {
-    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 6, backgroundColor: C.lightGray, paddingVertical: 11, borderRadius: 12,
+  timelineSectionTitle: {
+    fontSize: 14,
+    fontFamily: UbuntuFonts.bold,
+    color: colors.text,
+    marginBottom: 14,
   },
-  contactTxt: { fontSize: 13, fontFamily: UbuntuFonts.semiBold, color: C.primary },
-  disabledBtn: { opacity: 0.5 },
+  timelineItem: {
+    flexDirection: "row",
+    minHeight: 90,
+  },
+  timelineLeft: {
+    width: 40,
+    alignItems: "center",
+    paddingTop: 8,
+  },
+  timelineIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 10,
+    backgroundColor: colors.textSecondary,
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 1,
+  },
+  timelineIconActive: {
+    backgroundColor: colors.success,
+  },
+  timelineLine: {
+    width: 2,
+    flex: 1,
+    backgroundColor: colors.border,
+    marginTop: 4,
+  },
+  timelineRight: {
+    flex: 1,
+    paddingLeft: 12,
+    paddingBottom: 14,
+  },
+  timelineHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "flex-start",
+    marginBottom: 6,
+  },
+  timelineTime: {
+    fontSize: 15,
+    fontFamily: UbuntuFonts.bold,
+    color: colors.text,
+    marginBottom: 2,
+  },
+  timelineStopTitle: {
+    fontSize: 13,
+    fontFamily: UbuntuFonts.bold,
+    color: colors.text,
+    marginBottom: 2,
+  },
+  timelineSubtitle: {
+    fontSize: 11,
+    fontFamily: UbuntuFonts.medium,
+    color: colors.textSecondary,
+  },
+  timelineDetail: {
+    fontSize: 11,
+    fontFamily: UbuntuFonts.medium,
+    color: colors.primary,
+    marginTop: 6,
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: colors.border,
+  },
+  timelineTravelRow: {
+    flexDirection: "row",
+    marginTop: -4,
+    marginBottom: 8,
+  },
+  timelineTravelDot: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: colors.primaryLight,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    marginTop: 10,
+  },
+  timelineTravelRight: {
+    flex: 1,
+    paddingLeft: 12,
+  },
+  timelineTravelPill: {
+    alignSelf: "flex-start",
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: colors.surfaceSecondary,
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+  },
+  timelineTravelText: {
+    fontSize: 11,
+    fontFamily: UbuntuFonts.semiBold,
+    color: colors.textSecondary,
+  },
+  badgeBox: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+  },
+  badgeText: {
+    fontSize: 10,
+    fontFamily: UbuntuFonts.bold,
+    textTransform: "uppercase",
+    letterSpacing: 0.3,
+  },
 
-  tlItem: { flexDirection: "row", minHeight: 80 },
-  tlLeft: { width: 38, alignItems: "center" },
-  tlIconCircle: {
-    width: 30, height: 30, borderRadius: 15,
-    alignItems: "center", justifyContent: "center", zIndex: 1,
+  /* ──── RTL SUPPORT ──── */
+  rtl: {
+    textAlign: "right",
   },
-  tlLine: { width: 2, flex: 1, marginTop: -4, marginBottom: -4 },
-  tlRight: { flex: 1, paddingBottom: 20, paddingLeft: 10 },
-  tlTime: { fontSize: 16, fontFamily: UbuntuFonts.bold, color: C.text },
-  tlTitle: { fontSize: 13, fontFamily: UbuntuFonts.bold, color: C.text, marginTop: 2 },
-  tlSub: { fontSize: 11, fontFamily: UbuntuFonts.medium, color: C.gray, marginBottom: 2 },
-  badge: { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 6 },
-  badgeTxt: { fontSize: 10, fontFamily: UbuntuFonts.bold },
-
-  inlineAlert: {
-    flexDirection: "row", alignItems: "center", gap: 8,
-    backgroundColor: C.alertBg, borderWidth: 1, borderColor: C.alertBorder,
-    borderRadius: 10, padding: 9, marginTop: 8, borderLeftWidth: 4,
-  },
-  inlineAlertTxt: { fontSize: 11, fontFamily: UbuntuFonts.medium, color: "#1565C0", flex: 1 },
-
-  footer: { padding: 16, backgroundColor: C.white, borderTopWidth: 1, borderTopColor: C.border },
-  mainBtn: {
-    backgroundColor: C.primary,
-    flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 10, paddingVertical: 15, borderRadius: 16,
-    shadowColor: C.primary,
-    shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.3, shadowRadius: 8, elevation: 4,
-  },
-  mainBtnTxt: { fontSize: 16, fontFamily: UbuntuFonts.bold, color: C.white },
-
-  row: { flexDirection: "row", alignItems: "center" },
-  rowRev: { flexDirection: "row-reverse" },
-  rtl: { textAlign: "right" },
 });
 
 export default TripDetailsScreen;
