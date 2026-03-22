@@ -22,13 +22,13 @@ import { StatusBar } from "expo-status-bar";
 import { MaterialIcons } from "@expo/vector-icons";
 import MapView, { Marker, Polyline, UrlTile } from "react-native-maps";
 import * as Location from "expo-location";
-import { UbuntuFonts } from "../shared/utils/fonts";
-import { getDirectionsRoute } from "../shared/services/mapboxService";
+import { UbuntuFonts } from "../../shared/utils/fonts";
+import { getDirectionsRoute } from "../../shared/services/mapboxService";
 import {
   getDriverAssignedTrips,
   buildAndPersistTripRoute,
-} from "../shared/services/groupingService";
-import { mockTrip } from "../shared/mock/mockDriverData";
+} from "../../shared/services/groupingService";
+import { mockTrip } from "../../mocks/mockDriverData";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 const SHEET_COLLAPSED_RATIO = 0.4;

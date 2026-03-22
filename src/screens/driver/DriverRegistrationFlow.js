@@ -12,7 +12,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { MaterialIcons } from "@expo/vector-icons";
-import { UbuntuFonts } from "../shared/utils/fonts";
+import { UbuntuFonts } from "../../shared/utils/fonts";
 
 const translations = {
   en: {

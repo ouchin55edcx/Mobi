@@ -16,13 +16,13 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { MaterialIcons } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import Header from "../shared/components/common/Header";
-import MapboxRoutePreview from "../shared/components/common/MapboxRoutePreview";
+import Header from "../../shared/components/common/Header";
+import MapboxRoutePreview from "../../shared/components/common/MapboxRoutePreview";
 import {
   getStudentById,
   updateStudent,
-} from "../shared/services/studentService";
-import { DEMO_STUDENT } from "../shared/data/demoData";
+} from "../../shared/services/studentService";
+import { DEMO_STUDENT } from "../../shared/data/demoData";
 
 const translations = {
   en: {

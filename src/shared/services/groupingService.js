@@ -1,4 +1,4 @@
-import { supabase } from "../lib/supabase";
+import { supabase } from "../../lib/supabase";
 import { createNotification } from "./notificationService";
 import { getDirectionsRoute, getEtaSeconds } from "./mapboxService";
 import { buildStudentGroups } from "./studentGroupingService";

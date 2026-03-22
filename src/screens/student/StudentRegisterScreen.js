@@ -16,13 +16,13 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
-import { useStudent } from '../shared/hooks/useStudent';
-import { getValidationError, validateEmail, validatePhone, validateCIN, validateFullname, validateCoordinates } from '../shared/utils/validation';
-import { UbuntuFonts } from "../shared/utils/fonts";
-import SchoolPicker from '../shared/components/student/SchoolPicker';
-import MapLocationPicker from '../shared/components/common/MapLocationPicker';
-import SchoolMapCard from '../shared/components/common/SchoolMapCard';
-import { getSchoolById } from '../shared/services/schoolService';
+import { useStudent } from '../../shared/hooks/useStudent';
+import { getValidationError, validateEmail, validatePhone, validateCIN, validateFullname, validateCoordinates } from '../../shared/utils/validation';
+import { UbuntuFonts } from "../../shared/utils/fonts";
+import SchoolPicker from '../../shared/components/student/SchoolPicker';
+import MapLocationPicker from '../../shared/components/common/MapLocationPicker';
+import SchoolMapCard from '../../shared/components/common/SchoolMapCard';
+import { getSchoolById } from '../../shared/services/schoolService';
 
 const translations = {
   en: {

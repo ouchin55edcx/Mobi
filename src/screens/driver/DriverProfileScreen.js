@@ -13,8 +13,8 @@ import {
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
 import { MaterialIcons } from "@expo/vector-icons";
-import Header from "../shared/components/common/Header";
-import DemoBadge from "../shared/components/common/DemoBadge";
+import Header from "../../shared/components/common/Header";
+import DemoBadge from "../../shared/components/common/DemoBadge";
 
 const translations = {
   en: {

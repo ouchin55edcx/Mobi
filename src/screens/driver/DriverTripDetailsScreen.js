@@ -16,7 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
-import { UbuntuFonts } from '../shared/utils/fonts';
+import { UbuntuFonts } from '../../shared/utils/fonts';
 
 const { width: SW, height: SH } = Dimensions.get('window');
 

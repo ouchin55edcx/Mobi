@@ -3,23 +3,23 @@ import { Alert, StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useFonts } from "expo-font";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import SplashScreen from "./src/public/SplashScreen";
-import OnboardingScreen from "./src/public/OnboardingScreen";
-import LoginScreen from "./src/auth/LoginScreen";
-import SelectRoleScreen from "./src/auth/SelectRoleScreen";
-import StudentRegisterScreen from "./src/student/StudentRegisterScreen";
-import EmailVerificationScreen from "./src/auth/EmailVerificationScreen";
-import StudentHomeScreen from "./src/student/StudentHomeScreen";
-import ProfileScreen from "./src/student/ProfileScreen";
-import DriverRegisterScreen from "./src/driver/DriverRegistrationFlow";
-import DriverVehicleScreen from "./src/driver/DriverVehicleScreen";
-import PendingApprovalScreen from "./src/driver/PendingApprovalScreen";
-import DriverHomeScreen from "./src/driver/DriverHomeScreen";
-import DriverProfileScreen from "./src/driver/DriverProfileScreen";
-import TripLiveViewScreen from "./src/driver/TripLiveViewScreen";
-import DriverTripDetailsScreen from "./src/driver/DriverTripDetailsScreen";
-import TripDetailsScreen from "./src/student/TripDetailsScreen";
-import mockDriverScenario from "./src/shared/mock/mockDriverData";
+import SplashScreen from "./src/screens/public/SplashScreen";
+import OnboardingScreen from "./src/screens/public/OnboardingScreen";
+import LoginScreen from "./src/screens/auth/LoginScreen";
+import SelectRoleScreen from "./src/screens/auth/SelectRoleScreen";
+import StudentRegisterScreen from "./src/screens/student/StudentRegisterScreen";
+import EmailVerificationScreen from "./src/screens/auth/EmailVerificationScreen";
+import StudentHomeScreen from "./src/screens/student/StudentHomeScreen";
+import ProfileScreen from "./src/screens/student/ProfileScreen";
+import DriverRegisterScreen from "./src/screens/driver/DriverRegistrationFlow";
+import DriverVehicleScreen from "./src/screens/driver/DriverVehicleScreen";
+import PendingApprovalScreen from "./src/screens/driver/PendingApprovalScreen";
+import DriverHomeScreen from "./src/screens/driver/DriverHomeScreen";
+import DriverProfileScreen from "./src/screens/driver/DriverProfileScreen";
+import TripLiveViewScreen from "./src/screens/driver/TripLiveViewScreen";
+import DriverTripDetailsScreen from "./src/screens/driver/DriverTripDetailsScreen";
+import TripDetailsScreen from "./src/screens/student/TripDetailsScreen";
+import mockDriverScenario from "./src/mocks/mockDriverData";
 import { DEMO_STUDENT, DEMO_DRIVER } from "./src/shared/data/demoData";
 import {
   getSession,
@@ -60,22 +60,22 @@ export default function App() {
 
   // Load Ubuntu fonts
   const [fontsLoaded, fontError] = useFonts({
-    "UbuntuSans-Thin": require("./src/shared/assets/fonts/UbuntuSans-Thin.ttf"),
-    "UbuntuSans-ThinItalic": require("./src/shared/assets/fonts/UbuntuSans-ThinItalic.ttf"),
-    "UbuntuSans-ExtraLight": require("./src/shared/assets/fonts/UbuntuSans-ExtraLight.ttf"),
-    "UbuntuSans-ExtraLightItalic": require("./src/shared/assets/fonts/UbuntuSans-ExtraLightItalic.ttf"),
-    "UbuntuSans-Light": require("./src/shared/assets/fonts/UbuntuSans-Light.ttf"),
-    "UbuntuSans-LightItalic": require("./src/shared/assets/fonts/UbuntuSans-LightItalic.ttf"),
-    "UbuntuSans-Regular": require("./src/shared/assets/fonts/UbuntuSans-Regular.ttf"),
-    "UbuntuSans-Italic": require("./src/shared/assets/fonts/UbuntuSans-Italic.ttf"),
-    "UbuntuSans-Medium": require("./src/shared/assets/fonts/UbuntuSans-Medium.ttf"),
-    "UbuntuSans-MediumItalic": require("./src/shared/assets/fonts/UbuntuSans-MediumItalic.ttf"),
-    "UbuntuSans-SemiBold": require("./src/shared/assets/fonts/UbuntuSans-SemiBold.ttf"),
-    "UbuntuSans-SemiBoldItalic": require("./src/shared/assets/fonts/UbuntuSans-SemiBoldItalic.ttf"),
-    "UbuntuSans-Bold": require("./src/shared/assets/fonts/UbuntuSans-Bold.ttf"),
-    "UbuntuSans-BoldItalic": require("./src/shared/assets/fonts/UbuntuSans-BoldItalic.ttf"),
-    "UbuntuSans-ExtraBold": require("./src/shared/assets/fonts/UbuntuSans-ExtraBold.ttf"),
-    "UbuntuSans-ExtraBoldItalic": require("./src/shared/assets/fonts/UbuntuSans-ExtraBoldItalic.ttf"),
+    "UbuntuSans-Thin": require("./src/assets/fonts/UbuntuSans-Thin.ttf"),
+    "UbuntuSans-ThinItalic": require("./src/assets/fonts/UbuntuSans-ThinItalic.ttf"),
+    "UbuntuSans-ExtraLight": require("./src/assets/fonts/UbuntuSans-ExtraLight.ttf"),
+    "UbuntuSans-ExtraLightItalic": require("./src/assets/fonts/UbuntuSans-ExtraLightItalic.ttf"),
+    "UbuntuSans-Light": require("./src/assets/fonts/UbuntuSans-Light.ttf"),
+    "UbuntuSans-LightItalic": require("./src/assets/fonts/UbuntuSans-LightItalic.ttf"),
+    "UbuntuSans-Regular": require("./src/assets/fonts/UbuntuSans-Regular.ttf"),
+    "UbuntuSans-Italic": require("./src/assets/fonts/UbuntuSans-Italic.ttf"),
+    "UbuntuSans-Medium": require("./src/assets/fonts/UbuntuSans-Medium.ttf"),
+    "UbuntuSans-MediumItalic": require("./src/assets/fonts/UbuntuSans-MediumItalic.ttf"),
+    "UbuntuSans-SemiBold": require("./src/assets/fonts/UbuntuSans-SemiBold.ttf"),
+    "UbuntuSans-SemiBoldItalic": require("./src/assets/fonts/UbuntuSans-SemiBoldItalic.ttf"),
+    "UbuntuSans-Bold": require("./src/assets/fonts/UbuntuSans-Bold.ttf"),
+    "UbuntuSans-BoldItalic": require("./src/assets/fonts/UbuntuSans-BoldItalic.ttf"),
+    "UbuntuSans-ExtraBold": require("./src/assets/fonts/UbuntuSans-ExtraBold.ttf"),
+    "UbuntuSans-ExtraBoldItalic": require("./src/assets/fonts/UbuntuSans-ExtraBoldItalic.ttf"),
   });
 
   useEffect(() => {

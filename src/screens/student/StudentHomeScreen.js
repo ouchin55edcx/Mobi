@@ -22,17 +22,17 @@ import { MaterialIcons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
-import MapboxRoutePreview from "../shared/components/common/MapboxRoutePreview";
-import { DEMO_SCHOOL, DEMO_STUDENT } from "../shared/data/demoData";
-import { UbuntuFonts } from "../shared/utils/fonts";
-import { getDirectionsRoute } from "../shared/services/mapboxService";
-import { getSchoolById } from "../shared/services/schoolService";
-import { getStudentById } from "../shared/services/studentService";
+import MapboxRoutePreview from "../../shared/components/common/MapboxRoutePreview";
+import { DEMO_SCHOOL, DEMO_STUDENT } from "../../shared/data/demoData";
+import { UbuntuFonts } from "../../shared/utils/fonts";
+import { getDirectionsRoute } from "../../shared/services/mapboxService";
+import { getSchoolById } from "../../shared/services/schoolService";
+import { getStudentById } from "../../shared/services/studentService";
 import {
   cancelStudentPendingTrip,
   getStudentCurrentTrip,
   requestStudentTripDetailsState,
-} from "../shared/services/groupingService";
+} from "../../shared/services/groupingService";
 
 const PRIMARY_BLUE = "#3185FC";
 const NEUTRAL_900 = "#1A1A1A";

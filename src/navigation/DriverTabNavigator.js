@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { View, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import DriverHomeScreen from "../../../driver/DriverHomeScreen";
-import DriverHistoryScreen from "../../../driver/DriverHistoryScreen";
-import DriverProfileScreen from "../../../driver/DriverProfileScreen";
+import DriverHomeScreen from "../screens/driver/DriverHomeScreen";
+import DriverHistoryScreen from "../screens/driver/DriverHistoryScreen";
+import DriverProfileScreen from "../screens/driver/DriverProfileScreen";
 import BottomTabNavigator from './BottomTabNavigator';
 
 const DriverTabNavigator = ({

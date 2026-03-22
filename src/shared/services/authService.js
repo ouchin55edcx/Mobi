@@ -1,4 +1,4 @@
-import { supabase } from "../lib/supabase";
+import { supabase } from "../../lib/supabase";
 import { getStudentByEmail } from "./studentService";
 import { getDriverByEmail } from "./driverService";
 import AsyncStorage from "@react-native-async-storage/async-storage";

@@ -13,9 +13,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import { MaterialIcons } from '@expo/vector-icons';
-import { supabase } from '../shared/lib/supabase';
-import { subscribeToDriverApproval, checkDriverStatus } from '../shared/services/driverApprovalService';
-import { getDriverById } from '../shared/services/driverService';
+import { supabase } from '../../lib/supabase';
+import { subscribeToDriverApproval, checkDriverStatus } from '../../shared/services/driverApprovalService';
+import { getDriverById } from '../../shared/services/driverService';
 
 const translations = {
   en: {

@@ -15,9 +15,9 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { MaterialIcons, Ionicons } from "@expo/vector-icons";
 import MapView, { Marker, Callout, Polyline, UrlTile } from "react-native-maps";
-import { UbuntuFonts } from "../shared/utils/fonts";
-import { getDirectionsRoute, getOptimizedRoute } from "../shared/services/mapboxService";
-import { mockTrip } from "../shared/mock/mockDriverData";
+import { UbuntuFonts } from "../../shared/utils/fonts";
+import { getDirectionsRoute, getOptimizedRoute } from "../../shared/services/mapboxService";
+import { mockTrip } from "../../mocks/mockDriverData";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 

@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { View, StyleSheet } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import StudentHomeScreen from "../../../student/StudentHomeScreen";
-import ProfileScreen from "../../../student/ProfileScreen";
+import StudentHomeScreen from "../screens/student/StudentHomeScreen";
+import ProfileScreen from "../screens/student/ProfileScreen";
 import BottomTabNavigator from "./BottomTabNavigator";
 
 const StudentTabNavigator = ({

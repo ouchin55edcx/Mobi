@@ -18,7 +18,7 @@ import {
   createVerificationCode,
   verifyCode,
   resendVerificationCode,
-} from '../shared/services/verificationService';
+} from '../../shared/services/verificationService';
 
 const translations = {
   en: {

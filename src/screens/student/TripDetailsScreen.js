@@ -24,20 +24,20 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { MaterialIcons } from "@expo/vector-icons";
 
-import MapboxRoutePreview from "../shared/components/common/MapboxRoutePreview";
-import { DEMO_STUDENT } from "../shared/data/demoData";
-import { supabase } from "../shared/lib/supabase";
-import { getDirectionsRoute } from "../shared/services/mapboxService";
+import MapboxRoutePreview from "../../shared/components/common/MapboxRoutePreview";
+import { DEMO_STUDENT } from "../../shared/data/demoData";
+import { supabase } from "../../lib/supabase";
+import { getDirectionsRoute } from "../../shared/services/mapboxService";
 import {
   findOptimalPickupStation,
   formatWalkDistance,
   formatWalkTime,
-} from "../shared/services/pickupStationService";
+} from "../../shared/services/pickupStationService";
 import {
   computeTripTimes,
   getTimeBadge,
-} from "../shared/services/tripTimingService";
-import { UbuntuFonts } from "../shared/utils/fonts";
+} from "../../shared/services/tripTimingService";
+import { UbuntuFonts } from "../../shared/utils/fonts";
 
 /* ─────────────────────────────── Color Palette ────────────────────────────── */
 const colors = {
