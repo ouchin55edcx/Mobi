@@ -25,6 +25,8 @@ import { StatusBar } from "expo-status-bar";
 import { MaterialIcons } from "@expo/vector-icons";
 
 import MapboxRoutePreview from "../shared/components/common/MapboxRoutePreview";
+import { DEMO_STUDENT } from "../shared/data/demoData";
+import { supabase } from "../shared/lib/supabase";
 import { getDirectionsRoute } from "../shared/services/mapboxService";
 import {
   findOptimalPickupStation,
@@ -175,6 +177,9 @@ const formatTimeCompact = (date) => {
 const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
   const t = translations[language] || translations.en;
   const isRTL = language === "ar";
+  const [activeTab, setActiveTab] = useState("aller");
+  const [driverLiveLocation, setDriverLiveLocation] = useState(null);
+  const [demoLive, setDemoLive] = useState(false);
 
   /* ── Coordinate Normalization ──────────────────────────────────────── */
   const studentLoc = useMemo(
@@ -218,6 +223,31 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
   const studentOrder = Number.isFinite(tripData?.studentOrder)
     ? tripData.studentOrder
     : 1;
+  const isDemo =
+    tripData?.isDemo === true || tripData?.studentId === DEMO_STUDENT.id;
+  const liveTripId = tripData?.tripId || tripData?.trip_id || tripData?.id;
+  const isLive =
+    ["IN_PROGRESS", "STARTED", "trip_started"].includes(tripData?.status) ||
+    demoLive;
+  const initialDriverLiveLocation = useMemo(() => {
+    const source = tripData?.liveLocation || tripData?.live_location || null;
+    if (
+      Number.isFinite(Number(source?.latitude)) &&
+      Number.isFinite(Number(source?.longitude))
+    ) {
+      return {
+        latitude: Number(source.latitude),
+        longitude: Number(source.longitude),
+      };
+    }
+    return null;
+  }, [tripData?.liveLocation, tripData?.live_location]);
+  const isRetour = activeTab === "retour";
+  const originLoc = isRetour ? schoolLoc : studentLoc;
+  const destLoc = isRetour ? studentLoc : schoolLoc;
+  const originLabel = isRetour ? schoolName : t.home;
+  const destLabel = isRetour ? t.home : schoolName;
+  const pickupLabel = t.pickup;
 
   /* ── Route State ────────────────────────────────────────────────────── */
   const [routeCoords, setRouteCoords] = useState([]);
@@ -228,19 +258,120 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
     tripData?.estimatedArrivalMinutes || 10,
   );
   const [etaToSchoolSecs, setEtaToSchoolSecs] = useState(null);
+  const [liveEtaMinutes, setLiveEtaMinutes] = useState(null);
   const [isResolving, setIsResolving] = useState(false);
   const [mapExpanded, setMapExpanded] = useState(false);
+
+  useEffect(() => {
+    if (!isDemo) return undefined;
+
+    const timer = setTimeout(() => {
+      setDemoLive(true);
+    }, 5000);
+
+    return () => clearTimeout(timer);
+  }, [isDemo]);
+
+  useEffect(() => {
+    setDriverLiveLocation(initialDriverLiveLocation);
+  }, [initialDriverLiveLocation]);
+
+  useEffect(() => {
+    if (!isLive || driverLiveLocation) return;
+
+    const studentLat = studentLoc?.latitude ?? 33.5731;
+    const studentLng = studentLoc?.longitude ?? -7.5898;
+
+    setDriverLiveLocation({
+      latitude: studentLat + 0.004,
+      longitude: studentLng + 0.003,
+    });
+  }, [isLive, driverLiveLocation, studentLoc]);
+
+  useEffect(() => {
+    if (!isLive || !liveTripId) return undefined;
+
+    let mounted = true;
+
+    const loadDriverLocation = async () => {
+      const { data } = await supabase
+        .from("transport_trips")
+        .select("live_location")
+        .eq("id", liveTripId)
+        .maybeSingle();
+
+      if (
+        mounted &&
+        Number.isFinite(Number(data?.live_location?.latitude)) &&
+        Number.isFinite(Number(data?.live_location?.longitude))
+      ) {
+        setDriverLiveLocation({
+          latitude: Number(data.live_location.latitude),
+          longitude: Number(data.live_location.longitude),
+        });
+      }
+    };
+
+    loadDriverLocation();
+
+    const channel = supabase
+      .channel(`driver-loc-${liveTripId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "transport_trips",
+          filter: `id=eq.${liveTripId}`,
+        },
+        (payload) => {
+          const location = payload?.new?.live_location;
+          if (
+            Number.isFinite(Number(location?.latitude)) &&
+            Number.isFinite(Number(location?.longitude))
+          ) {
+            setDriverLiveLocation({
+              latitude: Number(location.latitude),
+              longitude: Number(location.longitude),
+            });
+          }
+        },
+      )
+      .subscribe();
+
+    return () => {
+      mounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, [isLive, liveTripId]);
 
   /* ── Route Resolution ──────────────────────────────────────────────── */
   useEffect(() => {
     let active = true;
     const resolve = async () => {
-      if (!isValidCoord(studentLoc) || !isValidCoord(schoolLoc)) return;
+      if (!isValidCoord(originLoc) || !isValidCoord(destLoc)) return;
       setIsResolving(true);
       try {
+        if (isLive && driverLiveLocation) {
+          const liveRoute = await getDirectionsRoute({
+            origin: driverLiveLocation,
+            waypoints: [originLoc],
+            destination: destLoc,
+          });
+          if (!active) return;
+          if (liveRoute?.coordinates?.length) {
+            setRouteCoords(liveRoute.coordinates);
+            setDistanceKm(liveRoute.distanceMeters / 1000);
+            setEtaMinutes(
+              Math.max(1, Math.round(liveRoute.durationSeconds / 60)),
+            );
+          }
+          return;
+        }
+
         const route = await getDirectionsRoute({
-          origin: studentLoc,
-          destination: schoolLoc,
+          origin: originLoc,
+          destination: destLoc,
         });
         if (!active) return;
         if (route?.coordinates?.length) {
@@ -258,13 +389,21 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
     return () => {
       active = false;
     };
-  }, [studentLoc, schoolLoc]);
+  }, [originLoc, destLoc, activeTab, driverLiveLocation, isLive]);
+
+  useEffect(() => {
+    setRouteCoords([]);
+    setDistanceKm(tripData?.totalDistanceKm || 2.5);
+    setEtaMinutes(tripData?.estimatedArrivalMinutes || 10);
+    setEtaToSchoolSecs(null);
+    setLiveEtaMinutes(null);
+  }, [activeTab, tripData?.estimatedArrivalMinutes, tripData?.totalDistanceKm]);
 
   /* ── Pickup Station ────────────────────────────────────────────────── */
   const pickupStation = useMemo(() => {
     if (routeCoords.length < 2) return null;
-    return findOptimalPickupStation(studentLoc, routeCoords);
-  }, [routeCoords, studentLoc]);
+    return findOptimalPickupStation(originLoc, routeCoords);
+  }, [routeCoords, originLoc]);
 
   /* ── Driver ETA to School ──────────────────────────────────────────── */
   useEffect(() => {
@@ -289,6 +428,34 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
       active = false;
     };
   }, [pickupStation, schoolLoc]);
+
+  useEffect(() => {
+    let active = true;
+
+    const resolveLiveEta = async () => {
+      if (!isLive || !driverLiveLocation || !isValidCoord(originLoc)) {
+        if (active) setLiveEtaMinutes(null);
+        return;
+      }
+
+      try {
+        const route = await getDirectionsRoute({
+          origin: driverLiveLocation,
+          destination: originLoc,
+        });
+        if (!active) return;
+        setLiveEtaMinutes(Math.max(1, Math.round(route.durationSeconds / 60)));
+      } catch (_error) {
+        if (active) setLiveEtaMinutes(null);
+      }
+    };
+
+    resolveLiveEta();
+
+    return () => {
+      active = false;
+    };
+  }, [driverLiveLocation, isLive, originLoc]);
 
   /* ── Timing Computation ────────────────────────────────────────────── */
   const timing = useMemo(() => {
@@ -337,15 +504,19 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
       >
         <MapboxRoutePreview
           style={styles.map}
-          homeLocation={studentLoc}
-          destinationLocation={schoolLoc}
+          homeLocation={originLoc}
+          destinationLocation={destLoc}
           pickupLocation={pickupStation?.pickupPoint ?? null}
           routeCoordinates={routeCoords}
+          driverLocation={isLive ? driverLiveLocation : null}
+          driverLabel={
+            isLive ? (language === "ar" ? "السائق" : "Driver") : undefined
+          }
           interactive
           showRoute
-          studentLabel={t.home}
-          schoolLabel={schoolName}
-          pickupLabel={t.pickup}
+          studentLabel={originLabel}
+          schoolLabel={destLabel}
+          pickupLabel={pickupLabel}
           fitPadding={{ top: 90, right: 48, bottom: 140, left: 48 }}
         />
 
@@ -372,9 +543,19 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
               </View>
               <View>
                 <Text style={styles.mapHeaderStatLabel}>{t.eta}</Text>
-                <Text style={styles.mapHeaderStatValue}>{etaMinutes} min</Text>
+                <Text style={styles.mapHeaderStatValue}>
+                  {isLive && liveEtaMinutes ? liveEtaMinutes : etaMinutes} min
+                </Text>
               </View>
             </View>
+            {isLive && (
+              <View style={styles.liveBadge}>
+                <View style={styles.liveDot} />
+                <Text style={styles.liveText}>
+                  {language === "ar" ? "مباشر" : "LIVE"}
+                </Text>
+              </View>
+            )}
           </View>
         </View>
 
@@ -410,6 +591,60 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
         >
           <View style={styles.handle} />
         </TouchableOpacity>
+
+        <View style={styles.tabBar}>
+          <TouchableOpacity
+            style={[
+              styles.tabBtn,
+              activeTab === "aller" && styles.tabBtnActive,
+            ]}
+            onPress={() => setActiveTab("aller")}
+            activeOpacity={0.8}
+          >
+            <Text
+              style={[
+                styles.tabTxt,
+                activeTab === "aller" && styles.tabTxtActive,
+              ]}
+            >
+              ذهاب
+            </Text>
+            <Text
+              style={[
+                styles.tabSubTxt,
+                activeTab === "aller" && styles.tabSubTxtActive,
+              ]}
+            >
+              🏠 ← 🏫
+            </Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            style={[
+              styles.tabBtn,
+              activeTab === "retour" && styles.tabBtnActive,
+            ]}
+            onPress={() => setActiveTab("retour")}
+            activeOpacity={0.8}
+          >
+            <Text
+              style={[
+                styles.tabTxt,
+                activeTab === "retour" && styles.tabTxtActive,
+              ]}
+            >
+              إياب
+            </Text>
+            <Text
+              style={[
+                styles.tabSubTxt,
+                activeTab === "retour" && styles.tabSubTxtActive,
+              ]}
+            >
+              🏫 ← 🏠
+            </Text>
+          </TouchableOpacity>
+        </View>
 
         <ScrollView
           style={styles.scrollContainer}
@@ -449,8 +684,8 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
             </Text>
 
             <TimelineStop
-              icon="home"
-              title={t.home}
+              icon={isRetour ? "school" : "home"}
+              title={isRetour ? schoolName : t.home}
               subtitle={t.leaveHome}
               time={timing.formatted.leaveHomeTime}
               badge={homeBadge}
@@ -489,8 +724,8 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
             />
 
             <TimelineStop
-              icon="school"
-              title={schoolName}
+              icon={isRetour ? "home" : "school"}
+              title={isRetour ? t.home : schoolName}
               subtitle={t.schoolArrival}
               time={timing.formatted.schoolTime}
               badge={schoolBadge}
@@ -881,6 +1116,27 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
+  liveBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#0F172A",
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: "#EF4444",
+  },
+  liveText: {
+    color: "#FFFFFF",
+    fontSize: 11,
+    fontFamily: UbuntuFonts.bold,
+    letterSpacing: 1,
+  },
   mapHeaderStatChip: {
     flexDirection: "row",
     alignItems: "center",
@@ -977,6 +1233,46 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingTop: 8,
     paddingBottom: 32,
+  },
+  tabBar: {
+    flexDirection: "row",
+    marginHorizontal: 16,
+    marginBottom: 12,
+    borderRadius: 14,
+    backgroundColor: colors.surfaceSecondary,
+    padding: 4,
+    borderWidth: 1,
+    borderColor: colors.border,
+  },
+  tabBtn: {
+    flex: 1,
+    alignItems: "center",
+    paddingVertical: 8,
+    borderRadius: 10,
+    gap: 2,
+  },
+  tabBtnActive: {
+    backgroundColor: colors.primary,
+    shadowColor: colors.primary,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  tabTxt: {
+    fontSize: 13,
+    fontFamily: UbuntuFonts.bold,
+    color: colors.textSecondary,
+  },
+  tabTxtActive: {
+    color: "#FFFFFF",
+  },
+  tabSubTxt: {
+    fontSize: 10,
+    color: colors.textTertiary,
+  },
+  tabSubTxtActive: {
+    color: "rgba(255,255,255,0.75)",
   },
 
   /* ──── CARDS ──── */

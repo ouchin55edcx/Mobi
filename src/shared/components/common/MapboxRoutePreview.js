@@ -4,8 +4,8 @@
  * Renders a Mapbox GL map inside a WebView.
  * Supports:
  *  – driver route polyline
- *  – student home marker (green)
- *  – school/destination marker (blue)
+ *  – student home marker
+ *  – school/destination marker
  *  – pickup station marker (orange pin, dashed walk-line from student to pickup)
  */
 import React, { useMemo } from "react";
@@ -20,12 +20,14 @@ const buildHtml = ({
   homeLocation,
   destinationLocation,
   pickupLocation,
+  driverLocation,
   zoom,
   interactive,
   showRoute,
   studentLabel,
   schoolLabel,
   pickupLabel,
+  driverLabel,
   focusOnStudent,
   fitPadding,
 }) => {
@@ -33,9 +35,11 @@ const buildHtml = ({
   const home = JSON.stringify(homeLocation || null);
   const destination = JSON.stringify(destinationLocation || null);
   const pickup = JSON.stringify(pickupLocation || null);
+  const driver = JSON.stringify(driverLocation || null);
   const safeStudentLabel = JSON.stringify(studentLabel || "Student");
   const safeSchoolLabel = JSON.stringify(schoolLabel || "School");
   const safePickupLabel = JSON.stringify(pickupLabel || "Pickup");
+  const safeDriverLabel = JSON.stringify(driverLabel || "Driver");
   const safeFitPadding = JSON.stringify(
     fitPadding || { top: 80, right: 48, bottom: 160, left: 48 },
   );
@@ -54,6 +58,87 @@ const buildHtml = ({
         flex-direction: column;
         align-items: center;
       }
+      .marker-wrap {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .marker-core {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #ffffff;
+        border: 3px solid #ffffff;
+        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.28);
+      }
+      .marker-label {
+        color: #ffffff;
+        font-size: 11px;
+        font-weight: 700;
+        line-height: 1.2;
+        padding: 4px 10px;
+        border-radius: 20px;
+        margin-top: 4px;
+        text-align: center;
+        white-space: nowrap;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.18);
+      }
+      .marker-stem {
+        width: 2px;
+        height: 8px;
+        margin-top: 2px;
+        border-radius: 999px;
+      }
+      .student-wrap .marker-core,
+      .school-wrap .marker-core {
+        width: 44px;
+        height: 44px;
+        border-radius: 22px;
+        font-size: 20px;
+      }
+      .student-wrap .marker-label,
+      .school-wrap .marker-label {
+        max-width: 120px;
+      }
+      .student-wrap .marker-core,
+      .student-wrap .marker-label,
+      .student-wrap .marker-stem {
+        background: #16A34A;
+      }
+      .school-wrap .marker-core,
+      .school-wrap .marker-label,
+      .school-wrap .marker-stem {
+        background: #7C3AED;
+      }
+      .driver-wrap {
+        position: relative;
+        gap: 4px;
+      }
+      .driver-pulse {
+        position: absolute;
+        width: 64px;
+        height: 64px;
+        border-radius: 32px;
+        top: -8px;
+        background: rgba(49, 133, 252, 0.2);
+        animation: driverPulse 1.8s ease-out infinite;
+      }
+      .driver-core {
+        position: relative;
+        z-index: 1;
+        width: 48px;
+        height: 48px;
+        border-radius: 24px;
+        background: #1D4ED8;
+        font-size: 22px;
+        box-shadow: 0 4px 12px rgba(29, 78, 216, 0.4);
+      }
+      .driver-label {
+        position: relative;
+        z-index: 1;
+        background: #1D4ED8;
+        letter-spacing: 0.3px;
+      }
       .bubble {
         color: #ffffff;
         font-size: 11px;
@@ -65,17 +150,6 @@ const buildHtml = ({
         white-space: nowrap;
         box-shadow: 0 2px 6px rgba(0,0,0,0.2);
       }
-      .marker-dot {
-        width: 14px;
-        height: 14px;
-        border-radius: 999px;
-        border: 3px solid #fff;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.3);
-      }
-      .student  .bubble     { background: #10b981; }
-      .student  .marker-dot { background: #10b981; }
-      .school   .bubble     { background: #2563eb; }
-      .school   .marker-dot { background: #2563eb; }
       .pickup   .bubble     { background: #f97316; }
       .pickup-pin {
         width: 0;
@@ -96,8 +170,9 @@ const buildHtml = ({
         white-space: nowrap;
       }
       .popup-label.student { background: #10b981; }
-      .popup-label.school { background: #2563eb; }
+      .popup-label.school { background: #7C3AED; }
       .popup-label.pickup { background: #f97316; }
+      .popup-label.driver { background: #1D4ED8; }
       .mapboxgl-popup-content {
         background: transparent;
         box-shadow: none;
@@ -106,6 +181,16 @@ const buildHtml = ({
       }
       .mapboxgl-popup-tip {
         border-top-color: rgba(15, 23, 42, 0.18) !important;
+      }
+      @keyframes driverPulse {
+        0% {
+          transform: scale(0.72);
+          opacity: 0.75;
+        }
+        100% {
+          transform: scale(1.1);
+          opacity: 0;
+        }
       }
     </style>
   </head>
@@ -119,12 +204,14 @@ const buildHtml = ({
       const homeLocation        = ${home};
       const destinationLocation = ${destination};
       const pickupLocation      = ${pickup};
+      const driverLocation      = ${driver};
       const studentLabel        = ${safeStudentLabel};
       const schoolLabel         = ${safeSchoolLabel};
       const pickupLabel         = ${safePickupLabel};
+      const driverLabel         = ${safeDriverLabel};
       const fitPadding          = ${safeFitPadding};
 
-      const center = pickupLocation || homeLocation || destinationLocation || { latitude: 0, longitude: 0 };
+      const center = driverLocation || pickupLocation || homeLocation || destinationLocation || { latitude: 0, longitude: 0 };
 
       const map = new mapboxgl.Map({
         container: "map",
@@ -199,31 +286,63 @@ const buildHtml = ({
           });
         }
 
-        /* ── 3. Helper: add a bubble-dot marker ──────────────────────────── */
+        /* ── 3. Helpers: add high-contrast markers ───────────────────────── */
         const createPopupHtml = (label, type) =>
           '<div class="popup-label ' + type + '">' + label + '</div>';
 
-        const addBubbleMarker = (point, type, label, showPopup = false) => {
+        const addStudentOrSchoolMarker = (point, type, label, icon) => {
           if (!point) return;
-          const wrap   = document.createElement("div");
-          wrap.className = "pin-wrap";
-          const dot    = document.createElement("div");
-          dot.className = "marker-dot " + type;
-          wrap.appendChild(dot);
+          const wrap = document.createElement("div");
+          wrap.className = 'marker-wrap ' + type + '-wrap';
+
+          const core = document.createElement("div");
+          core.className = "marker-core";
+          core.textContent = icon;
+
+          const badge = document.createElement("div");
+          badge.className = "marker-label";
+          badge.textContent = label;
+
+          const stem = document.createElement("div");
+          stem.className = "marker-stem";
+
+          wrap.appendChild(core);
+          wrap.appendChild(badge);
+          wrap.appendChild(stem);
           wrap.style.cursor = "pointer";
-          const marker = new mapboxgl.Marker({ element: wrap, anchor: "bottom" })
-            .setLngLat([point.longitude, point.latitude]);
-          if (showPopup) {
-            marker.setPopup(
-              new mapboxgl.Popup({
-                closeButton: false,
-                closeOnClick: false,
-                offset: 22,
-              }).setHTML(createPopupHtml(label, type)),
-            );
-          }
-          marker.addTo(map);
-          if (showPopup && marker.getPopup()) marker.togglePopup();
+
+          new mapboxgl.Marker({ element: wrap, anchor: "bottom" })
+            .setLngLat([point.longitude, point.latitude])
+            .addTo(map);
+
+          boundsPoints.push([point.longitude, point.latitude]);
+        };
+
+        const addDriverMarker = (point, label) => {
+          if (!point) return;
+          const wrap = document.createElement("div");
+          wrap.className = "marker-wrap driver-wrap";
+
+          const pulse = document.createElement("div");
+          pulse.className = "driver-pulse";
+
+          const core = document.createElement("div");
+          core.className = "marker-core driver-core";
+          core.textContent = "🚌";
+
+          const badge = document.createElement("div");
+          badge.className = "marker-label driver-label";
+          badge.textContent = label;
+
+          wrap.appendChild(pulse);
+          wrap.appendChild(core);
+          wrap.appendChild(badge);
+          wrap.style.cursor = "pointer";
+
+          new mapboxgl.Marker({ element: wrap, anchor: "bottom" })
+            .setLngLat([point.longitude, point.latitude])
+            .addTo(map);
+
           boundsPoints.push([point.longitude, point.latitude]);
         };
 
@@ -245,8 +364,9 @@ const buildHtml = ({
           boundsPoints.push([point.longitude, point.latitude]);
         };
 
-        addBubbleMarker(homeLocation, "student", studentLabel, true);
-        addBubbleMarker(destinationLocation, "school", schoolLabel, true);
+        addStudentOrSchoolMarker(homeLocation, "student", studentLabel, "🏠");
+        addStudentOrSchoolMarker(destinationLocation, "school", schoolLabel, "🏫");
+        addDriverMarker(driverLocation, driverLabel);
         addPickupMarker(pickupLocation, pickupLabel);
 
         /* ── 5. Fit camera to all points ─────────────────────────────────── */
@@ -276,6 +396,7 @@ const MapboxRoutePreview = ({
   homeLocation,
   destinationLocation,
   pickupLocation = null,
+  driverLocation = null,
   routeCoordinates = [],
   zoom = 14,
   interactive = false,
@@ -283,6 +404,7 @@ const MapboxRoutePreview = ({
   studentLabel = "Student",
   schoolLabel = "School",
   pickupLabel = "Pickup",
+  driverLabel = "Driver",
   focusOnStudent = false,
   fitPadding = null,
 }) => {
@@ -296,12 +418,14 @@ const MapboxRoutePreview = ({
         homeLocation,
         destinationLocation,
         pickupLocation,
+        driverLocation,
         zoom,
         interactive,
         showRoute,
         studentLabel,
         schoolLabel,
         pickupLabel,
+        driverLabel,
         focusOnStudent,
         fitPadding,
       }),
@@ -311,12 +435,14 @@ const MapboxRoutePreview = ({
       homeLocation,
       destinationLocation,
       pickupLocation,
+      driverLocation,
       zoom,
       interactive,
       showRoute,
       studentLabel,
       schoolLabel,
       pickupLabel,
+      driverLabel,
       focusOnStudent,
       fitPadding,
     ],

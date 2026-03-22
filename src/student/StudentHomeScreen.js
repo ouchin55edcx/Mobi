@@ -18,7 +18,7 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { MaterialIcons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
@@ -115,7 +115,6 @@ const StudentHomeScreen = ({
   isDemo = false,
   language = "en",
   onNavigateToTripDetails,
-  onNavigateToLiveTrip,
   onNavigateToProfile,
 }) => {
   const { height: screenHeight } = useWindowDimensions();
@@ -358,7 +357,6 @@ const StudentHomeScreen = ({
         language === "ar"
           ? "سائقك في الطريق إليك"
           : "Your driver is on the way",
-      action: onNavigateToLiveTrip,
     });
 
     return items;
@@ -488,43 +486,79 @@ const StudentHomeScreen = ({
       >
         <View style={styles.actionPanel}>
           <View style={styles.inputRow}>
-            {/* Start Time Input */}
+            {/* Departure Card */}
             <TouchableOpacity
-              style={styles.timeInput}
+              style={styles.tripCard}
               onPress={() => setShowStartTimePicker(true)}
               activeOpacity={0.7}
             >
-              <MaterialCommunityIcons
-                name="clock-start"
-                size={20}
-                color={PRIMARY_BLUE}
-              />
-              <View style={styles.inputLabels}>
-                <Text style={styles.inputLabel}>{t.startTime}</Text>
-                <Text style={styles.inputValue}>
-                  {startTime ? formatTime(startTime) : t.selectTime}
-                </Text>
+              <View style={styles.tripCardLeft}>
+                <View
+                  style={[styles.tripCardIcon, { backgroundColor: "#EEF4FF" }]}
+                >
+                  <MaterialIcons
+                    name="arrow-forward"
+                    size={18}
+                    color={PRIMARY_BLUE}
+                  />
+                </View>
+                <View style={styles.tripCardText}>
+                  <Text style={styles.tripCardTitle}>
+                    {language === "ar" ? "الذهاب" : "Departure"}
+                  </Text>
+                  <Text style={styles.tripCardSubtitle}>
+                    {language === "ar" ? "متى تغادر؟" : "When do you leave?"}
+                  </Text>
+                </View>
               </View>
+              <MaterialIcons
+                name="chevron-right"
+                size={20}
+                color={NEUTRAL_500}
+              />
             </TouchableOpacity>
 
-            {/* Arrival Time Input */}
+            <View style={styles.tripCardTimeRow}>
+              <MaterialIcons name="access-time" size={16} color={NEUTRAL_500} />
+              <Text style={styles.tripCardTimeText}>
+                {startTime ? formatTime(startTime) : "08:00"}
+              </Text>
+            </View>
+
+            {/* Return Card */}
             <TouchableOpacity
-              style={styles.timeInput}
+              style={[styles.tripCard, { marginTop: 12 }]}
               onPress={() => setShowEndTimePicker(true)}
               activeOpacity={0.7}
             >
-              <MaterialCommunityIcons
-                name="clock-check-outline"
-                size={20}
-                color={PRIMARY_BLUE}
-              />
-              <View style={styles.inputLabels}>
-                <Text style={styles.inputLabel}>{t.arrivalTime}</Text>
-                <Text style={styles.inputValue}>
-                  {endTime ? formatTime(endTime) : t.selectTime}
-                </Text>
+              <View style={styles.tripCardLeft}>
+                <View
+                  style={[styles.tripCardIcon, { backgroundColor: "#F0FDF4" }]}
+                >
+                  <MaterialIcons name="arrow-back" size={18} color="#10B981" />
+                </View>
+                <View style={styles.tripCardText}>
+                  <Text style={styles.tripCardTitle}>
+                    {language === "ar" ? "الإياب" : "Return"}
+                  </Text>
+                  <Text style={styles.tripCardSubtitle}>
+                    {language === "ar" ? "متى تعود؟" : "When do you return?"}
+                  </Text>
+                </View>
               </View>
+              <MaterialIcons
+                name="chevron-right"
+                size={20}
+                color={NEUTRAL_500}
+              />
             </TouchableOpacity>
+
+            <View style={styles.tripCardTimeRow}>
+              <MaterialIcons name="access-time" size={16} color={NEUTRAL_500} />
+              <Text style={styles.tripCardTimeText}>
+                {endTime ? formatTime(endTime) : "16:00"}
+              </Text>
+            </View>
           </View>
 
           {/* GO Button */}
@@ -746,34 +780,63 @@ const styles = StyleSheet.create({
   },
   inputRow: {
     flexDirection: "column",
-    gap: 12,
-    marginBottom: 20,
+    gap: 0,
+    marginBottom: 16,
   },
-  timeInput: {
+  tripCard: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: BACKGROUND_LIGHT,
-    padding: 12,
-    borderRadius: 20,
+    justifyContent: "space-between",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 14,
     borderWidth: 1,
-    borderColor: "#EBF2FF",
-    gap: 10,
+    borderColor: "#E2E8F0",
+    shadowColor: "#1A1A1A",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06,
+    shadowRadius: 6,
+    elevation: 2,
   },
-  inputLabels: {
+  tripCardLeft: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
     flex: 1,
   },
-  inputLabel: {
-    fontSize: 11,
-    color: NEUTRAL_500,
-    fontFamily: UbuntuFonts.medium,
-    textTransform: "uppercase",
-    letterSpacing: 0.5,
+  tripCardIcon: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  inputValue: {
-    fontSize: 15,
-    color: NEUTRAL_900,
+  tripCardText: {
+    flex: 1,
+  },
+  tripCardTitle: {
+    fontSize: 14,
     fontFamily: UbuntuFonts.bold,
+    color: NEUTRAL_900,
+  },
+  tripCardSubtitle: {
+    fontSize: 12,
+    fontFamily: UbuntuFonts.medium,
+    color: NEUTRAL_500,
     marginTop: 2,
+  },
+  tripCardTimeRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 4,
+  },
+  tripCardTimeText: {
+    fontSize: 13,
+    fontFamily: UbuntuFonts.bold,
+    color: NEUTRAL_900,
   },
   goButton: {
     backgroundColor: PRIMARY_BLUE,

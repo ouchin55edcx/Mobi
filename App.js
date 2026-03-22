@@ -11,14 +11,14 @@ import StudentRegisterScreen from "./src/student/StudentRegisterScreen";
 import EmailVerificationScreen from "./src/auth/EmailVerificationScreen";
 import StudentHomeScreen from "./src/student/StudentHomeScreen";
 import ProfileScreen from "./src/student/ProfileScreen";
-import DriverRegistrationFlow from "./src/driver/DriverRegistrationFlow";
+import DriverRegisterScreen from "./src/driver/DriverRegistrationFlow";
+import DriverVehicleScreen from "./src/driver/DriverVehicleScreen";
 import PendingApprovalScreen from "./src/driver/PendingApprovalScreen";
 import DriverHomeScreen from "./src/driver/DriverHomeScreen";
 import DriverProfileScreen from "./src/driver/DriverProfileScreen";
 import TripLiveViewScreen from "./src/driver/TripLiveViewScreen";
 import DriverTripDetailsScreen from "./src/driver/DriverTripDetailsScreen";
 import TripDetailsScreen from "./src/student/TripDetailsScreen";
-import StudentTripLiveViewScreen from "./src/student/StudentTripLiveViewScreen";
 import mockDriverScenario from "./src/shared/mock/mockDriverData";
 import { DEMO_STUDENT, DEMO_DRIVER } from "./src/shared/data/demoData";
 import {
@@ -51,6 +51,7 @@ export default function App() {
   const [isDemoMode, setIsDemoMode] = useState(false);
   const [studentData, setStudentData] = useState(null);
   const [driverData, setDriverData] = useState(null);
+  const [driverRegisterParams, setDriverRegisterParams] = useState(null);
   const [tripLiveViewData, setTripLiveViewData] = useState(null);
   const [tripDetailsData, setTripDetailsData] = useState(null);
   const [studentTripDetailsData, setStudentTripDetailsData] = useState(null);
@@ -278,6 +279,7 @@ export default function App() {
 
     setStudentData(null);
     setDriverData(null);
+    setDriverRegisterParams(null);
     setTripLiveViewData(null);
     setTripDetailsData(null);
     setStudentTripDetailsData(null);
@@ -311,6 +313,7 @@ export default function App() {
       email: DEMO_DRIVER.email || "driver.demo@mobi.app",
       isDemo: true,
     });
+    setDriverRegisterParams(null);
     setCurrentScreen("driverHome");
   };
 
@@ -451,7 +454,6 @@ export default function App() {
             setStudentTripDetailsData(tripData);
             setCurrentScreen("studentTripDetails");
           }}
-          onNavigateToLiveTrip={() => setCurrentScreen("studentLiveTrip")}
           onNavigateToProfile={() => setCurrentScreen("studentProfile")}
         />
       );
@@ -487,23 +489,40 @@ export default function App() {
       );
     }
 
-    // Driver Registration Flow (Unified Multi-Step)
     if (currentScreen === "driverRegister") {
       return (
-        <DriverRegistrationFlow
+        <DriverRegisterScreen
           language={language}
           onLanguageChange={setLanguage}
           onBack={() => setCurrentScreen("selectRole")}
+          navigation={{
+            navigate: (routeName, params) => {
+              if (routeName === "DriverVehicleRegister") {
+                setDriverRegisterParams(params);
+                setCurrentScreen("DriverVehicleRegister");
+              }
+            },
+          }}
+        />
+      );
+    }
+
+    if (currentScreen === "DriverVehicleRegister") {
+      if (!driverRegisterParams) {
+        setCurrentScreen("driverRegister");
+        return null;
+      }
+
+      return (
+        <DriverVehicleScreen
+          language={language}
+          onLanguageChange={setLanguage}
+          route={{ params: driverRegisterParams }}
+          onBack={() => setCurrentScreen("driverRegister")}
           onSuccess={(data) => {
-            console.log("Driver registration completed:", data);
-            // After verification, navigate to pending approval
-            // The flow handles verification internally, so we need to track when it's done
-            // For now, we'll use the pendingApproval screen separately
-            // The unified flow shows pending state internally, but we can also use the dedicated screen
-            if (data && data.driverId) {
-              setDriverData({ driverId: data.driverId, email: data.email });
-              setCurrentScreen("pendingApproval");
-            }
+            setDriverData({ driverId: data.driverId, email: data.email });
+            setDriverRegisterParams(null);
+            setCurrentScreen("pendingApproval");
           }}
         />
       );
@@ -641,17 +660,6 @@ export default function App() {
             setTripLiveViewData(null);
             setCurrentScreen("driverHome");
           }}
-        />
-      );
-    }
-
-    if (currentScreen === "studentLiveTrip") {
-      return (
-        <StudentTripLiveViewScreen
-          studentId={studentData?.studentId}
-          language={language}
-          isDemo={studentData?.isDemo || false}
-          onBack={() => setCurrentScreen("studentHome")}
         />
       );
     }
