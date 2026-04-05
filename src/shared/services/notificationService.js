@@ -44,7 +44,7 @@ export const createNotification = async (notificationData) => {
       .single();
 
     if (error) {
-      console.warn('Supabase not available, creating notification locally');
+      // warning: console.warn('Supabase not available, creating notification locally');
 
       const localNotification = {
         id: generateUUID(),
@@ -97,7 +97,7 @@ export const getStudentNotifications = async (studentId, options = {}) => {
     const { data, error } = await query;
 
     if (error) {
-      console.warn('Supabase not available, fetching notifications locally');
+      // warning: console.warn('Supabase not available, fetching notifications locally');
       const studentNotifsStr = await AsyncStorage.getItem(`student_notifications_${studentId}`);
       if (!studentNotifsStr) return { data: [], error: null };
 

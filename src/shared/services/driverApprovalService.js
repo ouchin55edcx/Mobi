@@ -52,7 +52,7 @@ export const checkDriverStatus = async (driverId) => {
       .single();
 
     if (error) {
-      console.warn('Supabase not available, checking driver status locally');
+      // warning: console.warn('Supabase not available, checking driver status locally');
       const d = await AsyncStorage.getItem(`driver_${driverId}`);
       if (d) return { data: JSON.parse(d).status, error: null };
       return { data: 'PENDING', error: null };

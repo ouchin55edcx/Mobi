@@ -29,6 +29,8 @@ import {
   buildAndPersistTripRoute,
 } from "../../shared/services/groupingService";
 import { mockTrip } from "../../mocks/mockDriverData";
+import { supabase } from "../../lib/supabase";
+import Constants from "expo-constants";
 
 const { height: SCREEN_HEIGHT } = Dimensions.get("window");
 const SHEET_COLLAPSED_RATIO = 0.4;
@@ -201,6 +203,7 @@ const LoadingSkeleton = () => {
 const DriverHomeScreen = ({
   driverId,
   isDemo = false,
+  language = "en",
   onSkipToProfile,
   onTripPress,
 }) => {
@@ -208,6 +211,7 @@ const DriverHomeScreen = ({
   const liveLocationSubscription = useRef(null);
   const lastRouteRebuildAt = useRef(0);
   const sheetOffsetRef = useRef(SHEET_COLLAPSED_Y);
+  const isRTL = language === "ar";
 
   const sheetExpandedOffset = 0;
   const sheetCollapsedOffset = SHEET_COLLAPSED_Y;
@@ -227,8 +231,11 @@ const DriverHomeScreen = ({
   const [isSheetExpanded, setIsSheetExpanded] = useState(false);
   const [currentStudentId, setCurrentStudentId] = useState(null);
   const [mapRegionDelta, setMapRegionDelta] = useState(0.02);
+  const [activeTripId, setActiveTripId] = useState(null);
 
-  const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN;
+  const mapboxToken =
+    Constants.expoConfig?.extra?.mapboxToken ??
+    process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN;
 
   const schoolLocation = trip?.destinationLocation;
   const schoolName = trip?.destination || "School";
@@ -470,6 +477,9 @@ const DriverHomeScreen = ({
 
       if (isDemo) {
         selectedTrip = mockTrip;
+      } else if (!driverId) {
+        setLoadingTrip(false);
+        return;
       } else {
         const { data } = await getDriverAssignedTrips(driverId);
         selectedTrip = data?.[0] || null;
@@ -517,6 +527,84 @@ const DriverHomeScreen = ({
     loadTrip();
     return () => stopLiveTracking();
   }, [loadTrip, stopLiveTracking]);
+
+  // Detect active trip on mount
+  useEffect(() => {
+    const checkActiveTrip = async () => {
+      if (isDemo || !driverId) return;
+      const { data } = await supabase
+        .from("trips")
+        .select("id, status")
+        .eq("driver_id", driverId)
+        .eq("status", "IN_PROGRESS")
+        .single();
+      if (data) setActiveTripId(data.id);
+    };
+    checkActiveTrip();
+  }, [driverId, isDemo]);
+
+  // Start location tracking when trip is active
+  useEffect(() => {
+    if (!activeTripId) return;
+    if (isDemo) return;
+
+    let subscription = null;
+
+    const startTracking = async () => {
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== "granted") return;
+
+      subscription = await Location.watchPositionAsync(
+        {
+          accuracy: Location.Accuracy.High,
+          timeInterval: 5000,
+          distanceInterval: 10,
+        },
+        async (position) => {
+          const { latitude, longitude } = position.coords;
+          await supabase
+            .from("trips")
+            .update({
+              current_location: { latitude, longitude },
+              updated_at: new Date().toISOString(),
+            })
+            .eq("id", activeTripId);
+        },
+      );
+    };
+
+    startTracking();
+
+    return () => {
+      if (subscription) subscription.remove();
+    };
+  }, [activeTripId, isDemo]);
+
+  // Subscribe to trip status changes to stop tracking when trip ends
+  useEffect(() => {
+    if (!activeTripId) return;
+    if (isDemo) return;
+
+    const channel = supabase
+      .channel(`trip-status-${activeTripId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "trips",
+          filter: `id=eq.${activeTripId}`,
+        },
+        (payload) => {
+          if (payload.new.status === "COMPLETED") {
+            setActiveTripId(null);
+          }
+        },
+      )
+      .subscribe();
+
+    return () => supabase.removeChannel(channel);
+  }, [activeTripId, isDemo]);
 
   useEffect(() => {
     if (!trip || missingCoordinates || route) return;
@@ -1427,6 +1515,9 @@ const styles = StyleSheet.create({
     textAlign: "center",
     fontFamily: UbuntuFonts.regular,
     fontSize: 13,
+  },
+  rtlText: {
+    textAlign: "right",
   },
 });
 

@@ -43,7 +43,7 @@ export const createDriver = async (driverData) => {
       .single();
 
     if (error) {
-      console.warn('Supabase not available, creating driver locally');
+      // warning: console.warn('Supabase not available, creating driver locally');
 
       const localDriver = {
         id: generateUUID(),
@@ -64,7 +64,7 @@ export const createDriver = async (driverData) => {
 
     return { data, error: null };
   } catch (error) {
-    console.warn('Exception creating driver, saving locally:', error);
+    // warning: console.warn('Exception creating driver, saving locally:', error);
     const localDriver = {
       id: generateUUID(),
       fullname: driverData.fullname,
@@ -95,7 +95,7 @@ export const getDriverById = async (driverId) => {
       .single();
 
     if (error) {
-      console.warn('Supabase not available, fetching driver locally');
+      // warning: console.warn('Supabase not available, fetching driver locally');
       const d = await AsyncStorage.getItem(`driver_${driverId}`);
       if (d) return { data: JSON.parse(d), error: null };
       return { data: null, error };
@@ -155,7 +155,7 @@ export const getDriverByEmail = async (email) => {
       .single();
 
     if (error) {
-      console.warn('Supabase not available, fetching driver locally by email');
+      // warning: console.warn('Supabase not available, fetching driver locally by email');
       const id = await AsyncStorage.getItem(`driver_email_${email}`);
       if (id) {
         const d = await AsyncStorage.getItem(`driver_${id}`);

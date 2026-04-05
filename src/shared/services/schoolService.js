@@ -80,7 +80,7 @@ export const getAllSchools = async (activeOnly = true) => {
     const { data, error } = await query.order('name', { ascending: true });
 
     if (error) {
-      console.warn('Supabase not available, using static schools data');
+      // warning: console.warn('Supabase not available, using static schools data');
       // Fallback to static data
       const filteredData = activeOnly
         ? STATIC_SCHOOLS.filter(school => school.is_active)
@@ -90,7 +90,7 @@ export const getAllSchools = async (activeOnly = true) => {
 
     return { data, error: null };
   } catch (error) {
-    console.warn('Exception fetching schools, using static data:', error);
+    // warning: console.warn('Exception fetching schools, using static data:', error);
     // Fallback to static data
     const filteredData = activeOnly
       ? STATIC_SCHOOLS.filter(school => school.is_active)
@@ -113,7 +113,7 @@ export const getSchoolById = async (schoolId) => {
       .single();
 
     if (error) {
-      console.warn('Supabase not available, using static schools data');
+      // warning: console.warn('Supabase not available, using static schools data');
       // Fallback to static data
       const school = STATIC_SCHOOLS.find(s => s.id === schoolId);
       return school
@@ -123,7 +123,7 @@ export const getSchoolById = async (schoolId) => {
 
     return { data, error: null };
   } catch (error) {
-    console.warn('Exception fetching school, using static data:', error);
+    // warning: console.warn('Exception fetching school, using static data:', error);
     // Fallback to static data
     const school = STATIC_SCHOOLS.find(s => s.id === schoolId);
     return school
@@ -157,7 +157,7 @@ export const getSchoolWithStudents = async (schoolId) => {
       .single();
 
     if (error) {
-      console.warn('Supabase not available, using static school data for details');
+      // warning: console.warn('Supabase not available, using static school data for details');
       const school = STATIC_SCHOOLS.find(s => s.id === schoolId);
       if (school) {
         return { data: { ...school, students: [] }, error: null };

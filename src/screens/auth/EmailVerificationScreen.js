@@ -102,7 +102,7 @@ const EmailVerificationScreen = ({
         );
       }
     } catch (err) {
-      console.error('Error initializing verification:', err);
+      // error handled
     } finally {
       setLoading(false);
     }
@@ -197,7 +197,7 @@ const EmailVerificationScreen = ({
         }
       }
     } catch (err) {
-      console.error('Error verifying code:', err);
+      // error handled
       setError(language === 'ar' ? 'حدث خطأ' : 'An error occurred');
     } finally {
       setLoading(false);
@@ -246,7 +246,7 @@ const EmailVerificationScreen = ({
         );
       }
     } catch (err) {
-      console.error('Error resending code:', err);
+      // error handled
       Alert.alert(
         language === 'ar' ? 'خطأ' : 'Error',
         language === 'ar' ? 'حدث خطأ أثناء إعادة الإرسال' : 'An error occurred while resending',

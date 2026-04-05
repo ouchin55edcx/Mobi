@@ -77,7 +77,7 @@ export const createVerificationCode = async (userId, email, userType = 'student'
       .single();
 
     if (error) {
-      console.warn('Supabase not available, storing verification code locally');
+      // warning: console.warn('Supabase not available, storing verification code locally');
 
       // Fallback: Store in AsyncStorage
       const localVerification = {
@@ -91,14 +91,14 @@ export const createVerificationCode = async (userId, email, userType = 'student'
         JSON.stringify(localVerification)
       );
 
-      console.log('Verification code stored locally:', code);
+      // debug: console.log('Verification code stored locally:', code);
       return { data: localVerification, error: null };
     }
 
-    console.log('Verification code (Supabase):', code);
+    // debug: console.log('Verification code (Supabase):', code);
     return { data: { code, ...data }, error: null };
   } catch (error) {
-    console.warn('Exception creating verification code, storing locally:', error);
+    // warning: console.warn('Exception creating verification code, storing locally:', error);
 
     const code = generateVerificationCode();
     const expiresAt = new Date();
@@ -212,7 +212,7 @@ export const verifyCode = async (userId, code, userType = 'student') => {
 
     return { success: true, error: null };
   } catch (error) {
-    console.error('Exception verifying code:', error);
+    // error: console.error('Exception verifying code:', error);
     return { success: false, error };
   }
 };

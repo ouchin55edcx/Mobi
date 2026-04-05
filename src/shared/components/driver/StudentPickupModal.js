@@ -44,7 +44,7 @@ const StudentPickupModal = ({
       onCall(phone);
     } else {
       Linking.openURL(`tel:${phone}`).catch((err) => {
-        console.error('Error opening phone:', err);
+        // error handled
       });
     }
   };

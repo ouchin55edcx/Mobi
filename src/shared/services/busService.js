@@ -51,7 +51,7 @@ export const createBus = async (busData) => {
       .single();
 
     if (error) {
-      console.warn('Supabase not available, creating bus locally');
+      // warning: console.warn('Supabase not available, creating bus locally');
       const localBus = {
         id: generateUUID(),
         ...busData,
@@ -64,7 +64,7 @@ export const createBus = async (busData) => {
 
     return { data, error: null };
   } catch (error) {
-    console.warn('Exception during createBus, saving locally:', error);
+    // warning: console.warn('Exception during createBus, saving locally:', error);
     return { data: null, error: null };
   }
 };
@@ -83,7 +83,7 @@ export const getBusByDriverId = async (driverId) => {
       .single();
 
     if (error) {
-      console.warn('Supabase not available, fetching bus locally');
+      // warning: console.warn('Supabase not available, fetching bus locally');
       const busId = await AsyncStorage.getItem(`driver_bus_${driverId}`);
       if (busId) {
         const b = await AsyncStorage.getItem(`bus_${busId}`);

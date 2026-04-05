@@ -232,7 +232,7 @@ const ProfileScreen = ({
       const { data, error } = await getStudentById(studentId);
 
       if (error) {
-        console.error("Error loading student:", error);
+        // error handled
         Alert.alert(t.error, t.errorMessage, [{ text: t.ok }]);
       } else if (data) {
         setStudent(data);
@@ -244,7 +244,7 @@ const ProfileScreen = ({
         });
       }
     } catch (err) {
-      console.error("Exception loading student:", err);
+      // error handled
       Alert.alert(t.error, t.errorMessage, [{ text: t.ok }]);
     } finally {
       setLoading(false);
@@ -308,7 +308,7 @@ const ProfileScreen = ({
       });
 
       if (error) {
-        console.error("Error updating student:", error);
+        // error handled
         Alert.alert(t.error, t.errorMessage, [{ text: t.ok }]);
       } else {
         const nextLocks = {
@@ -329,7 +329,7 @@ const ProfileScreen = ({
         Alert.alert(t.saved, "", [{ text: t.ok }]);
       }
     } catch (err) {
-      console.error("Exception updating student:", err);
+      // error handled
       Alert.alert(t.error, t.errorMessage, [{ text: t.ok }]);
     } finally {
       setSaving(false);

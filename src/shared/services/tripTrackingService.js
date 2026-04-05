@@ -109,7 +109,7 @@ export const getTripWithDriver = async (tripId) => {
       .single();
 
     if (error) {
-      console.warn('Supabase not available, fetching trip with driver locally');
+      // warning: console.warn('Supabase not available, fetching trip with driver locally');
       const t = await AsyncStorage.getItem(`trip_${tripId}`);
       if (t) {
         const trip = JSON.parse(t);
@@ -121,7 +121,7 @@ export const getTripWithDriver = async (tripId) => {
     }
     return { data, error: null };
   } catch (error) {
-    console.error('Error fetching trip with driver:', error);
+    // error: console.error('Error fetching trip with driver:', error);
     return { data: null, error: null };
   }
 };
@@ -142,7 +142,7 @@ export const updateTripStatus = async (tripId, status) => {
       .single();
 
     if (error) {
-      console.warn('Supabase not available, updating trip status locally');
+      // warning: console.warn('Supabase not available, updating trip status locally');
       const t = await AsyncStorage.getItem(`trip_${tripId}`);
       if (t) {
         const trip = JSON.parse(t);
@@ -154,7 +154,7 @@ export const updateTripStatus = async (tripId, status) => {
     }
     return { data, error: null };
   } catch (error) {
-    console.error('Error updating trip status:', error);
+    // error: console.error('Error updating trip status:', error);
     return { data: null, error: null };
   }
 };
@@ -173,7 +173,7 @@ export const getDriverLocation = async (driverId) => {
       .single();
 
     if (error) {
-      console.warn('Supabase not available, fetching driver location locally');
+      // warning: console.warn('Supabase not available, fetching driver location locally');
       const d = await AsyncStorage.getItem(`driver_${driverId}`);
       if (d) {
         const driver = JSON.parse(d);
@@ -183,7 +183,7 @@ export const getDriverLocation = async (driverId) => {
     }
     return { data, error: null };
   } catch (error) {
-    console.error('Error fetching driver location:', error);
+    // error: console.error('Error fetching driver location:', error);
     return { data: null, error: null };
   }
 };
@@ -279,7 +279,7 @@ export const getDriverTripsWithStudents = async (driverId, options = {}) => {
 
     return { data: Object.values(groupedTrips), error: null };
   } catch (error) {
-    console.error('Error fetching driver trips with students:', error);
+    // error: console.error('Error fetching driver trips with students:', error);
     return { data: [], error: null };
   }
 };
@@ -313,7 +313,7 @@ export const getBookingsForTimeSlot = async (startTime, endTime, destination = n
     if (error) return { data: [], error: null };
     return { data, error: null };
   } catch (error) {
-    console.error('Error fetching bookings for time slot:', error);
+    // error: console.error('Error fetching bookings for time slot:', error);
     return { data: [], error: null };
   }
 };

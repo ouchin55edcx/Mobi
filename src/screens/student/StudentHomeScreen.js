@@ -119,6 +119,7 @@ const StudentHomeScreen = ({
 }) => {
   const { height: screenHeight } = useWindowDimensions();
   const t = translations[language] || translations.en;
+  const isRTL = language === "ar";
 
   // States
   const [studentData, setStudentData] = useState(isDemo ? DEMO_STUDENT : null);
@@ -183,7 +184,7 @@ const StudentHomeScreen = ({
           }
         }
       } catch (e) {
-        console.error(e);
+        // error handled
       }
     };
     loadData();
@@ -207,7 +208,7 @@ const StudentHomeScreen = ({
           longitude: position.coords.longitude,
         });
       } catch (e) {
-        console.error(e);
+        // error handled
       }
     };
     resolveLocation();
@@ -433,11 +434,18 @@ const StudentHomeScreen = ({
 
         {showNotifications && (
           <View style={styles.notificationDropdown}>
-            <Text style={styles.notificationDropdownTitle}>
+            <Text
+              style={[
+                styles.notificationDropdownTitle,
+                isRTL && styles.rtlText,
+              ]}
+            >
               {t.notifications}
             </Text>
             {notifications.length === 0 ? (
-              <Text style={styles.notificationEmptyText}>
+              <Text
+                style={[styles.notificationEmptyText, isRTL && styles.rtlText]}
+              >
                 {t.noNotifications}
               </Text>
             ) : (
@@ -455,11 +463,21 @@ const StudentHomeScreen = ({
                 >
                   <View style={styles.notificationDot} />
                   <View style={styles.notificationContent}>
-                    <Text style={styles.notificationItemTitle}>
+                    <Text
+                      style={[
+                        styles.notificationItemTitle,
+                        isRTL && styles.rtlText,
+                      ]}
+                    >
                       {item.title}
                     </Text>
                     {!!item.detail && (
-                      <Text style={styles.notificationItemDetail}>
+                      <Text
+                        style={[
+                          styles.notificationItemDetail,
+                          isRTL && styles.rtlText,
+                        ]}
+                      >
                         {item.detail}
                       </Text>
                     )}
@@ -503,16 +521,18 @@ const StudentHomeScreen = ({
                   />
                 </View>
                 <View style={styles.tripCardText}>
-                  <Text style={styles.tripCardTitle}>
+                  <Text style={[styles.tripCardTitle, isRTL && styles.rtlText]}>
                     {language === "ar" ? "الذهاب" : "Departure"}
                   </Text>
-                  <Text style={styles.tripCardSubtitle}>
+                  <Text
+                    style={[styles.tripCardSubtitle, isRTL && styles.rtlText]}
+                  >
                     {language === "ar" ? "متى تغادر؟" : "When do you leave?"}
                   </Text>
                 </View>
               </View>
               <MaterialIcons
-                name="chevron-right"
+                name={isRTL ? "chevron-left" : "chevron-right"}
                 size={20}
                 color={NEUTRAL_500}
               />
@@ -538,16 +558,18 @@ const StudentHomeScreen = ({
                   <MaterialIcons name="arrow-back" size={18} color="#10B981" />
                 </View>
                 <View style={styles.tripCardText}>
-                  <Text style={styles.tripCardTitle}>
+                  <Text style={[styles.tripCardTitle, isRTL && styles.rtlText]}>
                     {language === "ar" ? "الإياب" : "Return"}
                   </Text>
-                  <Text style={styles.tripCardSubtitle}>
+                  <Text
+                    style={[styles.tripCardSubtitle, isRTL && styles.rtlText]}
+                  >
                     {language === "ar" ? "متى تعود؟" : "When do you return?"}
                   </Text>
                 </View>
               </View>
               <MaterialIcons
-                name="chevron-right"
+                name={isRTL ? "chevron-left" : "chevron-right"}
                 size={20}
                 color={NEUTRAL_500}
               />
@@ -860,6 +882,9 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontFamily: UbuntuFonts.bold,
     letterSpacing: 1,
+  },
+  rtlText: {
+    textAlign: "right",
   },
 });
 

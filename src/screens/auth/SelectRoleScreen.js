@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -8,38 +8,49 @@ import {
   ScrollView,
   Animated,
   Easing,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
-import { MaterialIcons, MaterialCommunityIcons } from '@expo/vector-icons';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
+import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { UbuntuFonts } from "../../shared/utils/fonts";
 
 const translations = {
   en: {
-    title: 'Choose Your Role',
-    subtitle: 'Select the profile that fits your needs to get started.',
-    driver: 'Driver',
-    driverDescription: 'Share your rides, help students, and earn rewards.',
-    student: 'Student',
-    studentDescription: 'Find safe, reliable, and affordable campus rides.',
-    continue: 'Continue',
+    title: "Choose Your Role",
+    subtitle: "Select the profile that fits your needs to get started.",
+    driver: "Driver",
+    driverDescription: "Share your rides, help students, and earn rewards.",
+    student: "Student",
+    studentDescription: "Find safe, reliable, and affordable campus rides.",
+    continue: "Continue",
+    tryDemo: "Try Demo",
+    demoStudent: "Demo Student",
+    demoDriver: "Demo Driver",
     languageName: "English",
     languageFlag: "🇬🇧",
   },
   ar: {
-    title: 'اختر دورك',
-    subtitle: 'اختر الملف الشخصي الذي يناسب احتياجاتك للبدء.',
-    driver: 'سائق',
-    driverDescription: 'شارك رحلاتك، ساعد الطلاب، واكسب المكافآت.',
-    student: 'طالب',
-    studentDescription: 'ابحث عن رحلات جامعية آمنة وموثوقة وبأسعار معقولة.',
-    continue: 'متابعة',
+    title: "اختر دورك",
+    subtitle: "اختر الملف الشخصي الذي يناسب احتياجاتك للبدء.",
+    driver: "سائق",
+    driverDescription: "شارك رحلاتك، ساعد الطلاب، واكسب المكافآت.",
+    student: "طالب",
+    studentDescription: "ابحث عن رحلات جامعية آمنة وموثوقة وبأسعار معقولة.",
+    continue: "متابعة",
+    tryDemo: "تجربة العرض",
+    demoStudent: "تجربة كطالب",
+    demoDriver: "تجربة كسائق",
     languageName: "العربية",
     languageFlag: "🇲🇦",
   },
 };
 
-const SelectRoleScreen = ({ language = 'en', onBack, onRoleSelect, onLanguageChange }) => {
+const SelectRoleScreen = ({
+  language = "en",
+  onBack,
+  onRoleSelect,
+  onLanguageChange,
+}) => {
   const [selectedRole, setSelectedRole] = useState(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(20)).current;
@@ -64,22 +75,22 @@ const SelectRoleScreen = ({ language = 'en', onBack, onRoleSelect, onLanguageCha
 
   const roles = [
     {
-      id: 'student',
+      id: "student",
       title: t.student,
       description: t.studentDescription,
-      icon: 'school-outline',
-      iconFamily: 'MaterialCommunityIcons',
-      color: '#3185FC',
-      bg: '#F8FAFF',
+      icon: "school-outline",
+      iconFamily: "MaterialCommunityIcons",
+      color: "#3185FC",
+      bg: "#F8FAFF",
     },
     {
-      id: 'driver',
+      id: "driver",
       title: t.driver,
       description: t.driverDescription,
-      icon: 'car-outline',
-      iconFamily: 'MaterialCommunityIcons',
-      color: '#10B981',
-      bg: '#F0FDF4',
+      icon: "car-outline",
+      iconFamily: "MaterialCommunityIcons",
+      color: "#10B981",
+      bg: "#F0FDF4",
     },
   ];
 
@@ -97,53 +108,68 @@ const SelectRoleScreen = ({ language = 'en', onBack, onRoleSelect, onLanguageCha
         style={[
           styles.roleCard,
           isSelected && { borderColor: role.color, backgroundColor: role.bg },
-          isSelected && styles.roleCardActive
+          isSelected && styles.roleCardActive,
         ]}
         onPress={() => setSelectedRole(role.id)}
         activeOpacity={0.8}
       >
-        <View style={[styles.iconBox, { backgroundColor: isSelected ? role.color : '#F1F5F9' }]}>
-          {role.iconFamily === 'MaterialCommunityIcons' ? (
+        <View
+          style={[
+            styles.iconBox,
+            { backgroundColor: isSelected ? role.color : "#F1F5F9" },
+          ]}
+        >
+          {role.iconFamily === "MaterialCommunityIcons" ? (
             <MaterialCommunityIcons
               name={role.icon}
               size={32}
-              color={isSelected ? '#FFFFFF' : '#64748B'}
+              color={isSelected ? "#FFFFFF" : "#64748B"}
             />
           ) : (
             <MaterialIcons
               name={role.icon}
               size={32}
-              color={isSelected ? '#FFFFFF' : '#64748B'}
+              color={isSelected ? "#FFFFFF" : "#64748B"}
             />
           )}
         </View>
         <View style={styles.roleInfo}>
-          <Text style={[
-            styles.roleTitle,
-            isSelected && { color: role.color },
-            language === 'ar' && styles.rtlText
-          ]}>
+          <Text
+            style={[
+              styles.roleTitle,
+              isSelected && { color: role.color },
+              language === "ar" && styles.rtlText,
+            ]}
+          >
             {role.title}
           </Text>
-          <Text style={[
-            styles.roleDescription,
-            language === 'ar' && styles.rtlText
-          ]}>
+          <Text
+            style={[
+              styles.roleDescription,
+              language === "ar" && styles.rtlText,
+            ]}
+          >
             {role.description}
           </Text>
         </View>
-        <View style={[
-          styles.radioButton,
-          isSelected && { borderColor: role.color }
-        ]}>
-          {isSelected && <View style={[styles.radioButtonInner, { backgroundColor: role.color }]} />}
+        <View
+          style={[
+            styles.radioButton,
+            isSelected && { borderColor: role.color },
+          ]}
+        >
+          {isSelected && (
+            <View
+              style={[styles.radioButtonInner, { backgroundColor: role.color }]}
+            />
+          )}
         </View>
       </TouchableOpacity>
     );
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <StatusBar style="dark" />
       <View style={styles.navHeader}>
         <TouchableOpacity
@@ -156,7 +182,10 @@ const SelectRoleScreen = ({ language = 'en', onBack, onRoleSelect, onLanguageCha
 
         <TouchableOpacity
           style={styles.languagePill}
-          onPress={() => onLanguageChange && onLanguageChange(language === "en" ? "ar" : "en")}
+          onPress={() =>
+            onLanguageChange &&
+            onLanguageChange(language === "en" ? "ar" : "en")
+          }
           activeOpacity={0.8}
         >
           <Text style={styles.languagePillText}>
@@ -172,18 +201,24 @@ const SelectRoleScreen = ({ language = 'en', onBack, onRoleSelect, onLanguageCha
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <Animated.View style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}>
+        <Animated.View
+          style={{ opacity: fadeAnim, transform: [{ translateY: slideAnim }] }}
+        >
           <View style={styles.titleSection}>
-            <Text style={[styles.title, language === 'ar' && styles.rtlText]}>
+            <Text style={[styles.title, language === "ar" && styles.rtlText]}>
               {t.title}
             </Text>
-            <Text style={[styles.subtitle, language === 'ar' && styles.rtlText]}>
+            <Text
+              style={[styles.subtitle, language === "ar" && styles.rtlText]}
+            >
               {t.subtitle}
             </Text>
           </View>
 
           <View style={styles.rolesContainer}>
-            {roles.map((role) => <RoleCard key={role.id} role={role} />)}
+            {roles.map((role) => (
+              <RoleCard key={role.id} role={role} />
+            ))}
           </View>
 
           <TouchableOpacity
@@ -196,11 +231,49 @@ const SelectRoleScreen = ({ language = 'en', onBack, onRoleSelect, onLanguageCha
             activeOpacity={0.9}
           >
             <Text style={styles.continueButtonText}>{t.continue}</Text>
-            <MaterialIcons
-              name="arrow-forward"
-              size={20}
-              color="#FFFFFF"
-            />
+            <MaterialIcons name="arrow-forward" size={20} color="#FFFFFF" />
+          </TouchableOpacity>
+
+          {/* Demo separator */}
+          <View style={styles.demoSeparator}>
+            <View style={styles.demoLine} />
+            <Text
+              style={[
+                styles.demoSeparatorText,
+                language === "ar" && styles.rtlText,
+              ]}
+            >
+              {t.tryDemo}
+            </Text>
+            <View style={styles.demoLine} />
+          </View>
+
+          {/* Demo Student */}
+          <TouchableOpacity
+            style={styles.demoBtn}
+            onPress={() => onRoleSelect && onRoleSelect("student", true)}
+            activeOpacity={0.7}
+          >
+            <MaterialCommunityIcons name="school" size={18} color="#3185FC" />
+            <Text
+              style={[styles.demoBtnText, language === "ar" && styles.rtlText]}
+            >
+              {t.demoStudent}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Demo Driver */}
+          <TouchableOpacity
+            style={styles.demoBtn}
+            onPress={() => onRoleSelect && onRoleSelect("driver", true)}
+            activeOpacity={0.7}
+          >
+            <MaterialCommunityIcons name="car" size={18} color="#10B981" />
+            <Text
+              style={[styles.demoBtnText, language === "ar" && styles.rtlText]}
+            >
+              {t.demoDriver}
+            </Text>
           </TouchableOpacity>
         </Animated.View>
       </ScrollView>
@@ -211,7 +284,7 @@ const SelectRoleScreen = ({ language = 'en', onBack, onRoleSelect, onLanguageCha
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
   },
   navHeader: {
     flexDirection: "row",
@@ -269,13 +342,13 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   roleCard: {
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
     borderRadius: 24,
     padding: 24,
     borderWidth: 1.5,
-    borderColor: '#EBF2FF',
-    flexDirection: 'row',
-    alignItems: 'center',
+    borderColor: "#EBF2FF",
+    flexDirection: "row",
+    alignItems: "center",
     gap: 16,
   },
   roleCardActive: {
@@ -289,21 +362,21 @@ const styles = StyleSheet.create({
     width: 64,
     height: 64,
     borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
   },
   roleInfo: {
     flex: 1,
   },
   roleTitle: {
     fontSize: 20,
-    color: '#1A1A1A',
+    color: "#1A1A1A",
     fontFamily: UbuntuFonts.bold,
     marginBottom: 4,
   },
   roleDescription: {
     fontSize: 14,
-    color: '#64748B',
+    color: "#64748B",
     fontFamily: UbuntuFonts.regular,
     lineHeight: 20,
   },
@@ -312,9 +385,9 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 12,
     borderWidth: 2,
-    borderColor: '#E2E8F0',
-    alignItems: 'center',
-    justifyContent: 'center',
+    borderColor: "#E2E8F0",
+    alignItems: "center",
+    justifyContent: "center",
   },
   radioButtonInner: {
     width: 12,
@@ -322,7 +395,7 @@ const styles = StyleSheet.create({
     borderRadius: 6,
   },
   continueButton: {
-    backgroundColor: '#3185FC',
+    backgroundColor: "#3185FC",
     borderRadius: 18,
     height: 58,
     flexDirection: "row",
@@ -336,20 +409,51 @@ const styles = StyleSheet.create({
     elevation: 8,
   },
   continueButtonDisabled: {
-    backgroundColor: '#D1D5DB',
+    backgroundColor: "#D1D5DB",
     shadowOpacity: 0,
     elevation: 0,
   },
   continueButtonText: {
-    color: '#FFFFFF',
+    color: "#FFFFFF",
     fontSize: 18,
     fontFamily: UbuntuFonts.bold,
   },
+  demoSeparator: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 24,
+    gap: 10,
+  },
+  demoLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#E2E8F0",
+  },
+  demoSeparatorText: {
+    fontSize: 12,
+    color: "#94A3B8",
+    fontFamily: UbuntuFonts.medium,
+  },
+  demoBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    paddingVertical: 14,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#F8FAFF",
+    marginBottom: 12,
+  },
+  demoBtnText: {
+    fontSize: 14,
+    color: "#3185FC",
+    fontFamily: UbuntuFonts.bold,
+  },
   rtlText: {
-    textAlign: 'right',
+    textAlign: "right",
   },
 });
 
 export default SelectRoleScreen;
-
-

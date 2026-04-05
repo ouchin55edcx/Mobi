@@ -73,14 +73,14 @@ const NotificationsModal = ({
       const { data, error } = await getStudentNotifications(studentId, { limit: 50 });
 
       if (error) {
-        console.error('Error loading notifications:', error);
+        // error handled
         // Don't crash - just show empty state
         setNotifications([]);
       } else {
         setNotifications(data || []);
       }
     } catch (error) {
-      console.error('Exception loading notifications:', error);
+      // error handled
       setNotifications([]);
     } finally {
       setLoading(false);
@@ -105,7 +105,7 @@ const NotificationsModal = ({
         }
       }
     } catch (error) {
-      console.error('Error marking notification as read:', error);
+      // error handled
     }
   };
 
@@ -121,7 +121,7 @@ const NotificationsModal = ({
         }
       }
     } catch (error) {
-      console.error('Error marking all as read:', error);
+      // error handled
     }
   };
 

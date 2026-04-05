@@ -1,5 +1,8 @@
+import Constants from "expo-constants";
+
 const MAPBOX_DIRECTIONS_BASE = "https://api.mapbox.com/directions/v5/mapbox";
-const MAPBOX_OPTIMIZED_TRIPS_BASE = "https://api.mapbox.com/optimized-trips/v1/mapbox";
+const MAPBOX_OPTIMIZED_TRIPS_BASE =
+  "https://api.mapbox.com/optimized-trips/v1/mapbox";
 
 const toCoordPair = (point) => {
   if (!point) return null;
@@ -40,7 +43,10 @@ const buildFallbackRoute = ({ origin, destination, waypoints = [] }) => {
 
   let totalDistance = 0;
   for (let index = 0; index < points.length - 1; index += 1) {
-    const legDistance = haversineDistanceMeters(points[index], points[index + 1]);
+    const legDistance = haversineDistanceMeters(
+      points[index],
+      points[index + 1],
+    );
     totalDistance += legDistance;
     legs.push({
       distanceMeters: legDistance,
@@ -63,7 +69,9 @@ export const getDirectionsRoute = async ({
   waypoints = [],
   profile = "driving",
 }) => {
-  const accessToken = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN;
+  const accessToken =
+    Constants.expoConfig?.extra?.mapboxToken ??
+    process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN;
 
   if (!origin || !destination) {
     throw new Error("Origin and destination are required.");
@@ -105,9 +113,7 @@ export const getDirectionsRoute = async ({
     }
 
     return {
-      coordinates: route.geometry.coordinates
-        .map(toLatLng)
-        .filter(Boolean),
+      coordinates: route.geometry.coordinates.map(toLatLng).filter(Boolean),
       distanceMeters: route.distance || 0,
       durationSeconds: route.duration || 0,
       legs: (route.legs || []).map((leg) => ({
@@ -127,7 +133,9 @@ export const getOptimizedRoute = async ({
   waypoints = [],
   profile = "driving",
 }) => {
-  const accessToken = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN;
+  const accessToken =
+    Constants.expoConfig?.extra?.mapboxToken ??
+    process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN;
 
   if (!origin || !destination) {
     throw new Error("Origin and destination are required.");
@@ -167,13 +175,12 @@ export const getOptimizedRoute = async ({
     }
 
     // Optimization API returns stop sequence
-    const waypointIndices = (data?.waypoints || [])
-      .sort((a, b) => a.waypoint_index - b.waypoint_index);
+    const waypointIndices = (data?.waypoints || []).sort(
+      (a, b) => a.waypoint_index - b.waypoint_index,
+    );
 
     return {
-      coordinates: trip.geometry.coordinates
-        .map(toLatLng)
-        .filter(Boolean),
+      coordinates: trip.geometry.coordinates.map(toLatLng).filter(Boolean),
       distanceMeters: trip.distance || 0,
       durationSeconds: trip.duration || 0,
       legs: (trip.legs || []).map((leg) => ({
@@ -181,9 +188,13 @@ export const getOptimizedRoute = async ({
         durationSeconds: leg.duration || 0,
       })),
       waypointOrder: (data?.waypoints || [])
-        .filter(wp => wp.waypoint_index !== 0 && wp.waypoint_index !== coordinatePairs.length - 1)
+        .filter(
+          (wp) =>
+            wp.waypoint_index !== 0 &&
+            wp.waypoint_index !== coordinatePairs.length - 1,
+        )
         .sort((a, b) => a.waypoint_index - b.waypoint_index)
-        .map(wp => wp.location_index - 1), // location_index 1 is the first waypoint after origin
+        .map((wp) => wp.location_index - 1), // location_index 1 is the first waypoint after origin
       raw: data,
     };
   } catch (_error) {

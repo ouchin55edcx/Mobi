@@ -91,7 +91,7 @@ export const createBooking = async (bookingData) => {
       .single();
 
     if (error) {
-      console.warn("Supabase not available, creating booking locally");
+      // warning: console.warn("Supabase not available, creating booking locally");
 
       const localBooking = {
         id: generateUUID(),
@@ -131,7 +131,7 @@ export const createBooking = async (bookingData) => {
 
     return { data, error: null };
   } catch (error) {
-    console.warn("Exception creating booking, saving locally:", error);
+    // warning: console.warn("Exception creating booking, saving locally:", error);
 
     const localBooking = {
       id: generateUUID(),
@@ -197,7 +197,7 @@ export const getBookingsByStudent = async (studentId, options = {}) => {
     const { data, error } = await query;
 
     if (error) {
-      console.warn("Supabase not available, fetching bookings locally");
+      // warning: console.warn("Supabase not available, fetching bookings locally");
       const studentBookingsStr = await AsyncStorage.getItem(
         `student_bookings_${studentId}`,
       );
@@ -227,7 +227,7 @@ export const getBookingsByStudent = async (studentId, options = {}) => {
 
     return { data, error: null };
   } catch (error) {
-    console.warn("Exception fetching bookings, looking locally:", error);
+    // warning: console.warn("Exception fetching bookings, looking locally:", error);
     const studentBookingsStr = await AsyncStorage.getItem(
       `student_bookings_${studentId}`,
     );
@@ -250,7 +250,7 @@ export const getBookingById = async (bookingId) => {
       .single();
 
     if (error) {
-      console.warn("Supabase not available, searching booking locally");
+      // warning: console.warn("Supabase not available, searching booking locally");
       const b = await AsyncStorage.getItem(`booking_${bookingId}`);
       if (b) return { data: JSON.parse(b), error: null };
       return { data: null, error };
@@ -289,7 +289,7 @@ export const updateBooking = async (bookingId, updates) => {
       .single();
 
     if (error) {
-      console.warn("Supabase not available, updating booking locally");
+      // warning: console.warn("Supabase not available, updating booking locally");
       const b = await AsyncStorage.getItem(`booking_${bookingId}`);
       if (b) {
         const booking = JSON.parse(b);
@@ -309,7 +309,7 @@ export const updateBooking = async (bookingId, updates) => {
 
     return { data, error: null };
   } catch (error) {
-    console.warn("Exception updating booking, looking locally:", error);
+    // warning: console.warn("Exception updating booking, looking locally:", error);
     const b = await AsyncStorage.getItem(`booking_${bookingId}`);
     if (b) {
       const booking = JSON.parse(b);
@@ -366,7 +366,7 @@ export const getActiveBooking = async (studentId) => {
         return { data: null, error: null };
       }
 
-      console.warn("Supabase not available, searching active booking locally");
+      // warning: console.warn("Supabase not available, searching active booking locally");
       const studentBookingsStr = await AsyncStorage.getItem(
         `student_bookings_${studentId}`,
       );
@@ -399,7 +399,7 @@ export const getActiveBooking = async (studentId) => {
 
     return { data, error: null };
   } catch (error) {
-    console.warn("Exception fetching active booking, looking locally:", error);
+    // warning: console.warn("Exception fetching active booking, looking locally:", error);
     return { data: null, error: null };
   }
 };
@@ -419,7 +419,7 @@ export const cancelBooking = async (bookingId) => {
       .single();
 
     if (error) {
-      console.warn("Supabase not available, cancelling booking locally");
+      // warning: console.warn("Supabase not available, cancelling booking locally");
       const b = await AsyncStorage.getItem(`booking_${bookingId}`);
       if (b) {
         const booking = JSON.parse(b);
@@ -490,7 +490,7 @@ export const getBookingsGroupedByTimeSlot = async (date = new Date()) => {
       .order("start_time", { ascending: true });
 
     if (error) {
-      console.error("Error fetching bookings:", error);
+      // error: console.error("Error fetching bookings:", error);
       return { data: null, error };
     }
 
@@ -547,7 +547,7 @@ export const getBookingsGroupedByTimeSlot = async (date = new Date()) => {
 
     return { data: Object.values(grouped), error: null };
   } catch (error) {
-    console.error("Exception fetching grouped bookings:", error);
+    // error: console.error("Exception fetching grouped bookings:", error);
     return { data: null, error };
   }
 };

@@ -155,7 +155,7 @@ const DriverProfileScreen = ({
         });
       }
     } catch (error) {
-      console.error("Error loading driver:", error);
+      // error handled
       Alert.alert(t.error, t.errorMessage, [{ text: t.ok }]);
     } finally {
       setLoading(false);
@@ -192,7 +192,7 @@ const DriverProfileScreen = ({
 
       setEditing(false);
     } catch (error) {
-      console.error("Error saving driver:", error);
+      // error handled
       Alert.alert(t.error, t.errorMessage, [{ text: t.ok }]);
     } finally {
       setSaving(false);

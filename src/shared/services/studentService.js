@@ -37,13 +37,13 @@ export const createStudent = async (studentData) => {
       .single();
 
     if (error) {
-      console.error("Error creating student:", error);
+      // error: console.error("Error creating student:", error);
       return { data: null, error };
     }
 
     return { data, error: null };
   } catch (error) {
-    console.error("Exception creating student:", error);
+    // error: console.error("Exception creating student:", error);
     return { data: null, error };
   }
 };
@@ -75,7 +75,7 @@ export const getStudentById = async (studentId) => {
       .single();
 
     if (error) {
-      console.error("Error fetching student:", error);
+      // error: console.error("Error fetching student:", error);
       return { data: null, error };
     }
 
@@ -87,7 +87,7 @@ export const getStudentById = async (studentId) => {
 
     return { data, error: null };
   } catch (error) {
-    console.error("Exception fetching student:", error);
+    // error: console.error("Exception fetching student:", error);
     return { data: null, error };
   }
 };
@@ -119,7 +119,7 @@ export const getStudentByEmail = async (email) => {
       .single();
 
     if (error) {
-      console.error("Error fetching student by email:", error);
+      // error: console.error("Error fetching student by email:", error);
       return { data: null, error };
     }
 
@@ -131,7 +131,7 @@ export const getStudentByEmail = async (email) => {
 
     return { data, error: null };
   } catch (error) {
-    console.error("Exception fetching student by email:", error);
+    // error: console.error("Exception fetching student by email:", error);
     return { data: null, error };
   }
 };
@@ -163,13 +163,13 @@ export const getStudentsBySchoolId = async (schoolId) => {
       .order("created_at", { ascending: false });
 
     if (error) {
-      console.error("Error fetching students by school:", error);
+      // error: console.error("Error fetching students by school:", error);
       return { data: null, error };
     }
 
     return { data, error: null };
   } catch (error) {
-    console.error("Exception fetching students by school:", error);
+    // error: console.error("Exception fetching students by school:", error);
     return { data: null, error };
   }
 };
@@ -204,7 +204,7 @@ export const updateStudent = async (studentId, updates) => {
       .single();
 
     if (error) {
-      console.error("Error updating student:", error);
+      // error: console.error("Error updating student:", error);
       return { data: null, error };
     }
 
@@ -216,7 +216,7 @@ export const updateStudent = async (studentId, updates) => {
 
     return { data, error: null };
   } catch (error) {
-    console.error("Exception updating student:", error);
+    // error: console.error("Exception updating student:", error);
     return { data: null, error };
   }
 };

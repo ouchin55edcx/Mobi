@@ -67,7 +67,7 @@ const MapRoute = ({
         getCurrentLocation();
       }
     } catch (err) {
-      console.error('Error requesting location permission:', err);
+      // error handled
       setHasPermission(false);
     }
   };
@@ -97,7 +97,7 @@ const MapRoute = ({
         );
       }
     } catch (err) {
-      console.error('Error getting current location:', err);
+      // error handled
     } finally {
       setIsLoadingLocation(false);
     }

@@ -209,7 +209,7 @@ const BookingModal = ({
         ]);
       }
     } catch (err) {
-      console.error("Error creating booking:", err);
+      // error handled
       Alert.alert(
         language === "ar" ? "خطأ" : "Error",
         language === "ar"

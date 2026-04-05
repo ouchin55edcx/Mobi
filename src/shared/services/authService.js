@@ -91,7 +91,7 @@ export const signUp = async (email, password, metadata = {}) => {
     });
 
     if (error) {
-      console.warn("Supabase sign up failed, mocking sign up locally");
+      // warning: console.warn("Supabase sign up failed, mocking sign up locally");
 
       const mockUser = {
         id: Math.random().toString(36).substr(2, 9),
@@ -114,7 +114,7 @@ export const signUp = async (email, password, metadata = {}) => {
 
     return { data, error: null };
   } catch (error) {
-    console.warn("Exception during sign up, mocking locally:", error);
+    // warning: console.warn("Exception during sign up, mocking locally:", error);
     return { data: null, error };
   }
 };
@@ -134,7 +134,7 @@ export const signIn = async (email, password) => {
     });
 
     if (error) {
-      console.warn("Supabase sign in failed, mocking sign in locally");
+      // warning: console.warn("Supabase sign in failed, mocking sign in locally");
 
       // Check driver first, then student to enforce role-priority login routing.
       const driverResult = await getDriverByEmail(normalizedEmail);
@@ -185,7 +185,7 @@ export const signIn = async (email, password) => {
 
     return { data, error: null };
   } catch (error) {
-    console.warn("Exception during sign in, mocking locally:", error);
+    // warning: console.warn("Exception during sign in, mocking locally:", error);
     return { data: null, error };
   }
 };
@@ -202,7 +202,7 @@ export const signInWithMagicLink = async (email) => {
     });
 
     if (error) {
-      console.warn("Supabase magic link failed, mocking locally");
+      // warning: console.warn("Supabase magic link failed, mocking locally");
       return {
         data: { message: "Mock magic link sent (check console)" },
         error: null,
@@ -211,7 +211,7 @@ export const signInWithMagicLink = async (email) => {
 
     return { data, error: null };
   } catch (error) {
-    console.error("Exception sending magic link:", error);
+    // error: console.error("Exception sending magic link:", error);
     return { data: null, error };
   }
 };
@@ -293,7 +293,6 @@ export const signInWithGoogle = async () => {
   }
 };
 
-
 /**
  * Sign out current user
  * @returns {Promise<Object>} - Result object with error
@@ -307,16 +306,13 @@ export const signOut = async () => {
     await AsyncStorage.removeItem(AUTH_SESSION_KEY);
 
     if (error) {
-      console.warn(
-        "Supabase sign out error (cleared local session anyway)",
-        error,
-      );
+      // Supabase sign out error handled
       return { error: null };
     }
 
     return { error: null };
   } catch (error) {
-    console.error("Exception signing out:", error);
+    // Exception signing out handled
     return { error };
   }
 };
@@ -454,9 +450,7 @@ export const requestPasswordResetCode = async (email) => {
     );
 
     if (__DEV__) {
-      console.log(
-        `[Auth][ForgotPassword] Reset code for ${normalizedEmail}: ${code}`,
-      );
+      // Reset code logged for development
     }
 
     return {
@@ -587,7 +581,7 @@ export const getUserDataByEmail = async (email, userType = "student") => {
       return { data: null, error: { message: "Invalid user type" } };
     }
   } catch (error) {
-    console.error("Exception getting user data:", error);
+    // error: console.error("Exception getting user data:", error);
     return { data: null, error };
   }
 };

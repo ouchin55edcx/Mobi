@@ -16,8 +16,12 @@ import { StatusBar } from "expo-status-bar";
 import { MaterialIcons, Ionicons } from "@expo/vector-icons";
 import MapView, { Marker, Callout, Polyline, UrlTile } from "react-native-maps";
 import { UbuntuFonts } from "../../shared/utils/fonts";
-import { getDirectionsRoute, getOptimizedRoute } from "../../shared/services/mapboxService";
+import {
+  getDirectionsRoute,
+  getOptimizedRoute,
+} from "../../shared/services/mapboxService";
 import { mockTrip } from "../../mocks/mockDriverData";
+import Constants from "expo-constants";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
 
@@ -119,9 +123,9 @@ const calculateDistanceKm = (lat1, lon1, lat2, lon2) => {
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
     Math.cos((lat1 * Math.PI) / 180) *
-    Math.cos((lat2 * Math.PI) / 180) *
-    Math.sin(dLon / 2) *
-    Math.sin(dLon / 2);
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLon / 2) *
+      Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
 };
@@ -307,7 +311,9 @@ const StudentMarker = React.memo(
         ]}
       >
         <Animated.View style={{ transform: [{ scale }] }}>
-          <View style={[markerStyles.studentCore, { backgroundColor: bgColor }]}>
+          <View
+            style={[markerStyles.studentCore, { backgroundColor: bgColor }]}
+          >
             {isPicked ? (
               <MaterialIcons name="check" size={14} color={COLORS.white} />
             ) : isSkipped ? (
@@ -363,7 +369,13 @@ const StudentRow = React.memo(({ student, isNext, onCall, t }) => {
       <View
         style={[
           rowStyles.avatar,
-          { backgroundColor: isNext ? COLORS.primary : isPicked ? COLORS.successLight : COLORS.neutral100 },
+          {
+            backgroundColor: isNext
+              ? COLORS.primary
+              : isPicked
+                ? COLORS.successLight
+                : COLORS.neutral100,
+          },
         ]}
       >
         {isPicked ? (
@@ -382,12 +394,17 @@ const StudentRow = React.memo(({ student, isNext, onCall, t }) => {
 
       {/* Info */}
       <View style={rowStyles.info}>
-        <Text style={[rowStyles.name, isPicked && rowStyles.nameDone]} numberOfLines={1}>
+        <Text
+          style={[rowStyles.name, isPicked && rowStyles.nameDone]}
+          numberOfLines={1}
+        >
           {student.name}
         </Text>
         <View style={rowStyles.metaRow}>
           <View style={[rowStyles.badge, { backgroundColor: statusBg }]}>
-            <View style={[rowStyles.badgeDot, { backgroundColor: statusColor }]} />
+            <View
+              style={[rowStyles.badgeDot, { backgroundColor: statusColor }]}
+            />
             <Text style={[rowStyles.badgeText, { color: statusColor }]}>
               {statusLabel}
             </Text>
@@ -442,10 +459,10 @@ const TripLiveViewScreen = ({
 
   const [driverLocation] = useState(
     trip.parkingLocation ||
-    trip.students?.[0]?.homeLocation || {
-      latitude: 33.575,
-      longitude: -7.59,
-    },
+      trip.students?.[0]?.homeLocation || {
+        latitude: 33.575,
+        longitude: -7.59,
+      },
   );
 
   const [tripTime, setTripTime] = useState(0);
@@ -457,7 +474,9 @@ const TripLiveViewScreen = ({
   const tripTimeIntervalRef = useRef(null);
   const livePulse = useRef(new Animated.Value(1)).current;
   const panelAnim = useRef(new Animated.Value(0)).current;
-  const mapboxToken = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN;
+  const mapboxToken =
+    Constants.expoConfig?.extra?.mapboxToken ??
+    process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN;
 
   // ── Derived data ──
   const routeCoordinates = useMemo(() => {
@@ -473,13 +492,16 @@ const TripLiveViewScreen = ({
   }, [trip.parkingLocation, trip.destinationLocation, students]);
 
   const nextStudentIndex = useMemo(
-    () => students.findIndex((s) => normalizeStatus(s.status) === STATUS_WAITING),
+    () =>
+      students.findIndex((s) => normalizeStatus(s.status) === STATUS_WAITING),
     [students],
   );
   const nextStudent = nextStudentIndex >= 0 ? students[nextStudentIndex] : null;
 
   const pickedCount = useMemo(
-    () => students.filter((s) => normalizeStatus(s.status) === STATUS_PICKED).length,
+    () =>
+      students.filter((s) => normalizeStatus(s.status) === STATUS_PICKED)
+        .length,
     [students],
   );
   const totalCount = students.length;
@@ -507,7 +529,12 @@ const TripLiveViewScreen = ({
     for (let i = 0; i < waiting.length - 1; i++) {
       const from = waiting[i].homeLocation;
       const to = waiting[i + 1].homeLocation;
-      total += calculateDistanceKm(from.latitude, from.longitude, to.latitude, to.longitude);
+      total += calculateDistanceKm(
+        from.latitude,
+        from.longitude,
+        to.latitude,
+        to.longitude,
+      );
     }
     const last = waiting[waiting.length - 1].homeLocation;
     if (trip.destinationLocation) {
@@ -542,15 +569,26 @@ const TripLiveViewScreen = ({
 
   // ── Effects ──
   useEffect(() => {
-    tripTimeIntervalRef.current = setInterval(() => setTripTime((p) => p + 1), 1000);
+    tripTimeIntervalRef.current = setInterval(
+      () => setTripTime((p) => p + 1),
+      1000,
+    );
     return () => clearInterval(tripTimeIntervalRef.current);
   }, []);
 
   useEffect(() => {
     const loop = Animated.loop(
       Animated.sequence([
-        Animated.timing(livePulse, { toValue: 0.6, duration: 600, useNativeDriver: true }),
-        Animated.timing(livePulse, { toValue: 1, duration: 600, useNativeDriver: true }),
+        Animated.timing(livePulse, {
+          toValue: 0.6,
+          duration: 600,
+          useNativeDriver: true,
+        }),
+        Animated.timing(livePulse, {
+          toValue: 1,
+          duration: 600,
+          useNativeDriver: true,
+        }),
       ]),
     );
     loop.start();
@@ -564,7 +602,9 @@ const TripLiveViewScreen = ({
         return;
       }
       const waitingWaypoints = students
-        .filter((s) => normalizeStatus(s.status) === STATUS_WAITING && s.homeLocation)
+        .filter(
+          (s) => normalizeStatus(s.status) === STATUS_WAITING && s.homeLocation,
+        )
         .map((s) => s.homeLocation);
 
       const r = await getDirectionsRoute({
@@ -578,7 +618,9 @@ const TripLiveViewScreen = ({
   }, [driverLocation, students, trip.destinationLocation]);
 
   useEffect(() => {
-    const points = routeData?.coordinates?.length ? routeData.coordinates : routeCoordinates;
+    const points = routeData?.coordinates?.length
+      ? routeData.coordinates
+      : routeCoordinates;
     if (mapRef.current && points.length > 0) {
       mapRef.current.fitToCoordinates(points, {
         edgePadding: { top: 180, right: 60, bottom: 360, left: 60 },
@@ -616,7 +658,6 @@ const TripLiveViewScreen = ({
       setEndingTrip(false);
     }
   };
-
 
   // Panel height interpolation
   const PANEL_COLLAPSED = 220;
@@ -671,8 +712,18 @@ const TripLiveViewScreen = ({
           const status = normalizeStatus(student.status);
           const isPicked = status === STATUS_PICKED;
           const isSkipped = status === STATUS_SKIPPED;
-          const statusLabel = isPicked ? t.picked : isSkipped ? t.skipped : student.isNext ? `${t.nextStop} →` : t.waiting;
-          const statusColor = isPicked ? COLORS.success : isSkipped ? COLORS.danger : COLORS.primary;
+          const statusLabel = isPicked
+            ? t.picked
+            : isSkipped
+              ? t.skipped
+              : student.isNext
+                ? `${t.nextStop} →`
+                : t.waiting;
+          const statusColor = isPicked
+            ? COLORS.success
+            : isSkipped
+              ? COLORS.danger
+              : COLORS.primary;
           return (
             <Marker
               key={`${student.id || `s-${student.index}`}`}
@@ -697,7 +748,9 @@ const TripLiveViewScreen = ({
                       <Text style={styles.calloutName} numberOfLines={1}>
                         {student.name}
                       </Text>
-                      <Text style={[styles.calloutStatus, { color: statusColor }]}>
+                      <Text
+                        style={[styles.calloutStatus, { color: statusColor }]}
+                      >
                         {statusLabel}
                       </Text>
                     </View>
@@ -710,7 +763,11 @@ const TripLiveViewScreen = ({
                         Vibration.vibrate(30);
                       }}
                     >
-                      <MaterialIcons name="phone" size={15} color={COLORS.white} />
+                      <MaterialIcons
+                        name="phone"
+                        size={15}
+                        color={COLORS.white}
+                      />
                       <Text style={styles.calloutCallText}>{t.call}</Text>
                     </TouchableOpacity>
                   ) : null}
@@ -732,12 +789,26 @@ const TripLiveViewScreen = ({
             <Callout tooltip>
               <View style={styles.calloutCard}>
                 <View style={styles.calloutRow}>
-                  <View style={[styles.calloutAvatar, { backgroundColor: COLORS.warningLight }]}>
-                    <MaterialIcons name="school" size={18} color={COLORS.warning} />
+                  <View
+                    style={[
+                      styles.calloutAvatar,
+                      { backgroundColor: COLORS.warningLight },
+                    ]}
+                  >
+                    <MaterialIcons
+                      name="school"
+                      size={18}
+                      color={COLORS.warning}
+                    />
                   </View>
                   <View style={styles.calloutInfo}>
                     <Text style={styles.calloutName}>{t.school}</Text>
-                    <Text style={[styles.calloutStatus, { color: COLORS.neutral500 }]}>
+                    <Text
+                      style={[
+                        styles.calloutStatus,
+                        { color: COLORS.neutral500 },
+                      ]}
+                    >
                       {trip.destination || t.school}
                     </Text>
                   </View>
@@ -758,12 +829,23 @@ const TripLiveViewScreen = ({
           <Callout tooltip>
             <View style={styles.calloutCard}>
               <View style={styles.calloutRow}>
-                <View style={[styles.calloutAvatar, { backgroundColor: COLORS.primarySurface }]}>
-                  <MaterialIcons name="directions-bus" size={18} color={COLORS.primary} />
+                <View
+                  style={[
+                    styles.calloutAvatar,
+                    { backgroundColor: COLORS.primarySurface },
+                  ]}
+                >
+                  <MaterialIcons
+                    name="directions-bus"
+                    size={18}
+                    color={COLORS.primary}
+                  />
                 </View>
                 <View style={styles.calloutInfo}>
                   <Text style={styles.calloutName}>{t.bus}</Text>
-                  <Text style={[styles.calloutStatus, { color: COLORS.neutral500 }]}>
+                  <Text
+                    style={[styles.calloutStatus, { color: COLORS.neutral500 }]}
+                  >
                     {t.live} • {t.enRoute}
                   </Text>
                 </View>
@@ -778,7 +860,10 @@ const TripLiveViewScreen = ({
         {/* Back button */}
         <TouchableOpacity
           style={styles.iconBtn}
-          onPress={() => { triggerHaptic(); onBack?.(); }}
+          onPress={() => {
+            triggerHaptic();
+            onBack?.();
+          }}
           activeOpacity={0.8}
         >
           <MaterialIcons
@@ -810,11 +895,15 @@ const TripLiveViewScreen = ({
       {/* ── MAP LEGEND (top-right) ───────────────────────────────────── */}
       <View style={[styles.legend, isRTL && styles.legendRTL]}>
         <View style={[styles.legendChip, { backgroundColor: COLORS.white }]}>
-          <View style={[styles.legendDot, { backgroundColor: COLORS.primary }]} />
+          <View
+            style={[styles.legendDot, { backgroundColor: COLORS.primary }]}
+          />
           <Text style={styles.legendText}>{t.bus}</Text>
         </View>
         <View style={[styles.legendChip, { backgroundColor: COLORS.white }]}>
-          <View style={[styles.legendDot, { backgroundColor: COLORS.warning }]} />
+          <View
+            style={[styles.legendDot, { backgroundColor: COLORS.warning }]}
+          />
           <Text style={styles.legendText}>{t.school}</Text>
         </View>
       </View>
@@ -864,7 +953,9 @@ const TripLiveViewScreen = ({
         {/* ── Progress bar ── */}
         <View style={styles.progressWrap}>
           <View style={styles.progressTrack}>
-            <View style={[styles.progressFill, { width: `${progressPercent}%` }]} />
+            <View
+              style={[styles.progressFill, { width: `${progressPercent}%` }]}
+            />
           </View>
           <Text style={styles.progressText}>
             {pickedCount} {t.completed}
@@ -884,7 +975,11 @@ const TripLiveViewScreen = ({
               <View style={styles.nextMeta}>
                 {nextStudent.etaSeconds != null && (
                   <View style={styles.metaChip}>
-                    <Ionicons name="time-outline" size={12} color={COLORS.neutral500} />
+                    <Ionicons
+                      name="time-outline"
+                      size={12}
+                      color={COLORS.neutral500}
+                    />
                     <Text style={styles.metaChipText}>
                       {formatClockFromNow(nextStudent.etaSeconds, language)}
                     </Text>
@@ -904,7 +999,11 @@ const TripLiveViewScreen = ({
           </View>
         ) : (
           <View style={styles.allDoneCard}>
-            <MaterialIcons name="check-circle" size={22} color={COLORS.success} />
+            <MaterialIcons
+              name="check-circle"
+              size={22}
+              color={COLORS.success}
+            />
             <Text style={styles.allDoneText}>{t.noStopsLeft}</Text>
           </View>
         )}

@@ -57,7 +57,7 @@ const MapLocationPicker = ({
         setHasPermission(false);
       }
     } catch (err) {
-      console.error('Error requesting location permission:', err);
+      // error handled
       setHasPermission(false);
     }
   };
@@ -88,7 +88,7 @@ const MapLocationPicker = ({
         );
       }
     } catch (err) {
-      console.error('Error getting current location:', err);
+      // error handled
       Alert.alert(
         language === 'ar' ? 'خطأ' : 'Error',
         language === 'ar'

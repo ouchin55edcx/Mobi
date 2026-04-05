@@ -11,6 +11,7 @@
 import React, { useMemo } from "react";
 import { View, StyleSheet, Text } from "react-native";
 import { WebView } from "react-native-webview";
+import Constants from "expo-constants";
 
 const MAPBOX_STYLE = "mapbox://styles/mapbox/streets-v12";
 
@@ -408,7 +409,9 @@ const MapboxRoutePreview = ({
   focusOnStudent = false,
   fitPadding = null,
 }) => {
-  const accessToken = process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN;
+  const accessToken =
+    Constants.expoConfig?.extra?.mapboxToken ??
+    process.env.EXPO_PUBLIC_MAPBOX_ACCESS_TOKEN;
 
   const html = useMemo(
     () =>

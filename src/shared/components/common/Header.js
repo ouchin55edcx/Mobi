@@ -32,7 +32,7 @@ const Header = ({
           setUnreadCount(count);
         }
       } catch (error) {
-        console.warn('Error loading unread count:', error);
+        // warning handled
         // Don't crash - just don't show count
       } finally {
         setLoading(false);

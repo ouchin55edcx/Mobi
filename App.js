@@ -5,7 +5,6 @@ import { useFonts } from "expo-font";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import SplashScreen from "./src/screens/public/SplashScreen";
 import OnboardingScreen from "./src/screens/public/OnboardingScreen";
-import LoginScreen from "./src/screens/auth/LoginScreen";
 import SelectRoleScreen from "./src/screens/auth/SelectRoleScreen";
 import StudentRegisterScreen from "./src/screens/student/StudentRegisterScreen";
 import EmailVerificationScreen from "./src/screens/auth/EmailVerificationScreen";
@@ -110,9 +109,9 @@ export default function App() {
     try {
       await AsyncStorage.setItem("@has_seen_onboarding", "true");
       setHasSeenOnboarding(true);
-      setCurrentScreen("login");
+      setCurrentScreen("selectRole");
     } catch (e) {
-      setCurrentScreen("login");
+      setCurrentScreen("selectRole");
     }
   };
 
@@ -326,31 +325,21 @@ export default function App() {
     return <SplashScreen />;
   }
 
+  const handleSplashComplete = (targetScreen) => {
+    setShowSplash(false);
+    setCurrentScreen(targetScreen);
+  };
+
   const renderScreen = () => {
-    if (showSplash) return <SplashScreen language={language} />;
+    if (showSplash) {
+      return <SplashScreen onSplashComplete={handleSplashComplete} />;
+    }
 
     if (currentScreen === "onboarding") {
       return (
         <OnboardingScreen
           language={language}
           onFinish={handleFinishOnboarding}
-        />
-      );
-    }
-
-    if (currentScreen === "login") {
-      return (
-        <LoginScreen
-          language={language}
-          onBack={null}
-          onSignUp={() => setCurrentScreen("selectRole")}
-          onGoogleLogin={handleGoogleLogin}
-          onLogin={handleEmailPasswordLogin}
-          onRequestResetCode={handleRequestPasswordResetCode}
-          onConfirmResetPassword={handleConfirmResetPassword}
-          onDemoStudent={goToDemoStudentHome}
-          onDemoDriver={goToDemoDriverHome}
-          onLanguageChange={setLanguage}
         />
       );
     }
@@ -362,10 +351,10 @@ export default function App() {
           onLanguageChange={setLanguage}
           onBack={() => {
             setIsDemoMode(false);
-            setCurrentScreen("login");
+            setCurrentScreen("onboarding");
           }}
-          onRoleSelect={(role) => {
-            if (isDemoMode) {
+          onRoleSelect={(role, isDemo) => {
+            if (isDemo) {
               // Demo mode: redirect to home screen with demo data
               if (role === "student") {
                 setStudentData({
@@ -373,7 +362,6 @@ export default function App() {
                   email: DEMO_STUDENT.email,
                   isDemo: true,
                 });
-                setIsDemoMode(false);
                 setCurrentScreen("studentHome");
               } else if (role === "driver") {
                 setDriverData({
@@ -381,7 +369,6 @@ export default function App() {
                   email: DEMO_DRIVER.email || "driver.demo@mobi.app",
                   isDemo: true,
                 });
-                setIsDemoMode(false);
                 setCurrentScreen("driverHome");
               }
             } else {

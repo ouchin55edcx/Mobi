@@ -41,7 +41,7 @@ export const createTrip = async (tripData) => {
             .single();
 
         if (error) {
-            console.warn('Supabase not available, creating trip locally');
+            // warning: console.warn('Supabase not available, creating trip locally');
 
             const localTrip = {
                 id: generateUUID(),
@@ -61,7 +61,7 @@ export const createTrip = async (tripData) => {
 
         return { data, error: null };
     } catch (error) {
-        console.warn('Exception during createTrip, mocking locally:', error);
+        // warning: console.warn('Exception during createTrip, mocking locally:', error);
         return { data: null, error };
     }
 };
@@ -101,7 +101,7 @@ export const getTripById = async (tripId) => {
             .single();
 
         if (error) {
-            console.warn('Supabase not available, fetching trip locally');
+            // warning: console.warn('Supabase not available, fetching trip locally');
             const t = await AsyncStorage.getItem(`trip_${tripId}`);
             if (t) return { data: JSON.parse(t), error: null };
             return { data: null, error };
@@ -150,7 +150,7 @@ export const getTripByBookingId = async (bookingId) => {
             .single();
 
         if (error) {
-            console.warn('Supabase not available, fetching trip by booking ID locally');
+            // warning: console.warn('Supabase not available, fetching trip by booking ID locally');
             const tripId = await AsyncStorage.getItem(`booking_trip_${bookingId}`);
             if (tripId) {
                 const t = await AsyncStorage.getItem(`trip_${tripId}`);
@@ -189,7 +189,7 @@ export const updateTripLocation = async (tripId, location) => {
             .single();
 
         if (error) {
-            console.warn('Supabase not available, updating trip location locally');
+            // warning: console.warn('Supabase not available, updating trip location locally');
             const t = await AsyncStorage.getItem(`trip_${tripId}`);
             if (t) {
                 const trip = JSON.parse(t);
@@ -464,7 +464,7 @@ export const getActiveTripForStudent = async (studentId) => {
 
         return { data, error: null };
     } catch (error) {
-        console.error('Exception fetching active trip:', error);
+        // error: console.error('Exception fetching active trip:', error);
         return { data: null, error: null };
     }
 };
