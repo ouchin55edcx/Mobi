@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Platform,
   ScrollView,
   Animated,
   Easing,
@@ -23,9 +22,6 @@ const translations = {
     student: "Student",
     studentDescription: "Find safe, reliable, and affordable campus rides.",
     continue: "Continue",
-    tryDemo: "Try Demo",
-    demoStudent: "Demo Student",
-    demoDriver: "Demo Driver",
     languageName: "English",
     languageFlag: "🇬🇧",
   },
@@ -37,9 +33,6 @@ const translations = {
     student: "طالب",
     studentDescription: "ابحث عن رحلات جامعية آمنة وموثوقة وبأسعار معقولة.",
     continue: "متابعة",
-    tryDemo: "تجربة العرض",
-    demoStudent: "تجربة كطالب",
-    demoDriver: "تجربة كسائق",
     languageName: "العربية",
     languageFlag: "🇲🇦",
   },
@@ -233,48 +226,6 @@ const SelectRoleScreen = ({
             <Text style={styles.continueButtonText}>{t.continue}</Text>
             <MaterialIcons name="arrow-forward" size={20} color="#FFFFFF" />
           </TouchableOpacity>
-
-          {/* Demo separator */}
-          <View style={styles.demoSeparator}>
-            <View style={styles.demoLine} />
-            <Text
-              style={[
-                styles.demoSeparatorText,
-                language === "ar" && styles.rtlText,
-              ]}
-            >
-              {t.tryDemo}
-            </Text>
-            <View style={styles.demoLine} />
-          </View>
-
-          {/* Demo Student */}
-          <TouchableOpacity
-            style={styles.demoBtn}
-            onPress={() => onRoleSelect && onRoleSelect("student", true)}
-            activeOpacity={0.7}
-          >
-            <MaterialCommunityIcons name="school" size={18} color="#3185FC" />
-            <Text
-              style={[styles.demoBtnText, language === "ar" && styles.rtlText]}
-            >
-              {t.demoStudent}
-            </Text>
-          </TouchableOpacity>
-
-          {/* Demo Driver */}
-          <TouchableOpacity
-            style={styles.demoBtn}
-            onPress={() => onRoleSelect && onRoleSelect("driver", true)}
-            activeOpacity={0.7}
-          >
-            <MaterialCommunityIcons name="car" size={18} color="#10B981" />
-            <Text
-              style={[styles.demoBtnText, language === "ar" && styles.rtlText]}
-            >
-              {t.demoDriver}
-            </Text>
-          </TouchableOpacity>
         </Animated.View>
       </ScrollView>
     </SafeAreaView>
@@ -416,39 +367,6 @@ const styles = StyleSheet.create({
   continueButtonText: {
     color: "#FFFFFF",
     fontSize: 18,
-    fontFamily: UbuntuFonts.bold,
-  },
-  demoSeparator: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginVertical: 24,
-    gap: 10,
-  },
-  demoLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "#E2E8F0",
-  },
-  demoSeparatorText: {
-    fontSize: 12,
-    color: "#94A3B8",
-    fontFamily: UbuntuFonts.medium,
-  },
-  demoBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    paddingVertical: 14,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: "#E2E8F0",
-    backgroundColor: "#F8FAFF",
-    marginBottom: 12,
-  },
-  demoBtnText: {
-    fontSize: 14,
-    color: "#3185FC",
     fontFamily: UbuntuFonts.bold,
   },
   rtlText: {

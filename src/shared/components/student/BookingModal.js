@@ -16,7 +16,6 @@ import { MaterialIcons } from "@expo/vector-icons";
 import BookingTypePicker from "./BookingTypePicker";
 import DateTimePicker from "./DateTimePicker";
 import { createBooking } from "../../services/bookingService";
-import { createDemoTripFromBooking } from "../../data/demoData";
 
 const translations = {
   en: {
@@ -47,7 +46,6 @@ const BookingModal = ({
   studentId,
   language = "en",
   onBookingSuccess,
-  isDemo = false,
   schoolEntryTime = null,
   schoolExitTime = null,
 }) => {
@@ -153,25 +151,6 @@ const BookingModal = ({
     });
 
     if (!validateForm()) {
-      return;
-    }
-
-    if (isDemo) {
-      // Demo mode: create demo trip from form data
-      const demoBooking = {
-        type: formData.type,
-        startTime: formData.startTime,
-        endTime: formData.endTime,
-      };
-      const demoTrip = createDemoTripFromBooking(demoBooking, studentId);
-
-      resetForm();
-      onClose();
-
-      // Notify parent with demo trip data
-      if (onBookingSuccess) {
-        onBookingSuccess(demoTrip);
-      }
       return;
     }
 

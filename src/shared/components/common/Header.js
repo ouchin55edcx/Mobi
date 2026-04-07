@@ -3,7 +3,6 @@ import { View, Text, StyleSheet, TouchableOpacity, Platform } from 'react-native
 import { MaterialIcons } from '@expo/vector-icons';
 import { getUnreadNotificationsCount, subscribeToNotifications } from '../../services/notificationService';
 import NotificationsModal from '../student/NotificationsModal';
-import DemoBadge from './DemoBadge';
 import { UbuntuFonts } from '../../utils/fonts';
 
 const Header = ({
@@ -11,7 +10,6 @@ const Header = ({
   subtitle,
   language = 'en',
   studentId,
-  isDemo = false,
   showNotifications = true,
   onNotificationPress,
   onBack,
@@ -22,7 +20,7 @@ const Header = ({
 
   // Load unread count
   useEffect(() => {
-    if (!studentId || isDemo || !showNotifications) return;
+    if (!studentId || !showNotifications) return;
 
     const loadUnreadCount = async () => {
       try {
@@ -54,7 +52,7 @@ const Header = ({
       unsubscribe();
       clearInterval(interval);
     };
-  }, [studentId, isDemo, showNotifications]);
+  }, [studentId, showNotifications]);
 
   const handleNotificationPress = () => {
     if (onNotificationPress) {
@@ -86,8 +84,7 @@ const Header = ({
             )}
           </View>
           <View style={styles.actionsContainer}>
-            {isDemo && <DemoBadge language={language} />}
-            {showNotifications && !isDemo && studentId && (
+            {showNotifications && studentId && (
               <TouchableOpacity
                 style={styles.notificationButton}
                 onPress={handleNotificationPress}
@@ -115,7 +112,7 @@ const Header = ({
           onClose={() => setShowNotificationsModal(false)}
           onNotificationRead={() => {
             // Refresh count when notification is read
-            if (studentId && !isDemo) {
+            if (studentId) {
               getUnreadNotificationsCount(studentId).then(({ count }) => {
                 if (count !== undefined) setUnreadCount(count);
               });
@@ -199,4 +196,3 @@ const styles = StyleSheet.create({
 });
 
 export default Header;
-

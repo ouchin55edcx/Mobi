@@ -25,7 +25,6 @@ import { StatusBar } from "expo-status-bar";
 import { MaterialIcons } from "@expo/vector-icons";
 
 import MapboxRoutePreview from "../../shared/components/common/MapboxRoutePreview";
-import { DEMO_STUDENT } from "../../shared/data/demoData";
 import { supabase } from "../../lib/supabase";
 import { getDirectionsRoute } from "../../shared/services/mapboxService";
 import {
@@ -179,7 +178,6 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
   const isRTL = language === "ar";
   const [activeTab, setActiveTab] = useState("aller");
   const [driverLiveLocation, setDriverLiveLocation] = useState(null);
-  const [demoLive, setDemoLive] = useState(false);
 
   /* ── Coordinate Normalization ──────────────────────────────────────── */
   const studentLoc = useMemo(
@@ -223,12 +221,9 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
   const studentOrder = Number.isFinite(tripData?.studentOrder)
     ? tripData.studentOrder
     : 1;
-  const isDemo =
-    tripData?.isDemo === true || tripData?.studentId === DEMO_STUDENT.id;
   const liveTripId = tripData?.tripId || tripData?.trip_id || tripData?.id;
   const isLive =
-    ["IN_PROGRESS", "STARTED", "trip_started"].includes(tripData?.status) ||
-    demoLive;
+    ["IN_PROGRESS", "STARTED", "trip_started"].includes(tripData?.status);
   const initialDriverLiveLocation = useMemo(() => {
     const source = tripData?.liveLocation || tripData?.live_location || null;
     if (
@@ -261,16 +256,6 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
   const [liveEtaMinutes, setLiveEtaMinutes] = useState(null);
   const [isResolving, setIsResolving] = useState(false);
   const [mapExpanded, setMapExpanded] = useState(false);
-
-  useEffect(() => {
-    if (!isDemo) return undefined;
-
-    const timer = setTimeout(() => {
-      setDemoLive(true);
-    }, 5000);
-
-    return () => clearTimeout(timer);
-  }, [isDemo]);
 
   useEffect(() => {
     setDriverLiveLocation(initialDriverLiveLocation);

@@ -90,47 +90,7 @@ const translations = {
   },
 };
 
-// Demo data generator
-const generateDemoTrips = () => {
-  const trips = [];
-  const now = new Date();
-
-  for (let i = 0; i < 10; i++) {
-    const date = new Date(now);
-    date.setDate(date.getDate() - i * 2);
-    date.setHours(7 + (i % 3), 30, 0, 0);
-
-    trips.push({
-      id: `trip-${i + 1}`,
-      date: date.toISOString(),
-      students: 5 + Math.floor(Math.random() * 5),
-      school: "Casablanca International School",
-      duration: 30 + Math.floor(Math.random() * 30),
-      distance: 5 + Math.random() * 5,
-      status: i < 7 ? "completed" : "cancelled",
-    });
-  }
-
-  return trips;
-};
-
-const generateDemoStatistics = () => {
-  return {
-    totalTrips: 45,
-    totalDistance: 225.5,
-    totalTime: 1800, // minutes
-    totalStudents: 360,
-    averageRating: 4.8,
-    monthlyData: [
-      { month: "Jan", trips: 8, distance: 40 },
-      { month: "Feb", trips: 10, distance: 50 },
-      { month: "Mar", trips: 12, distance: 60 },
-      { month: "Apr", trips: 15, distance: 75 },
-    ],
-  };
-};
-
-const DriverHistoryScreen = ({ driverId, isDemo = false, language = "en" }) => {
+const DriverHistoryScreen = ({ driverId, language = "en" }) => {
   const [trips, setTrips] = useState([]);
   const [statistics, setStatistics] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -149,12 +109,7 @@ const DriverHistoryScreen = ({ driverId, isDemo = false, language = "en" }) => {
       setLoading(true);
       setError(null);
 
-      if (isDemo) {
-        // Use demo data
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        setTrips(generateDemoTrips());
-        setStatistics(generateDemoStatistics());
-      } else if (!driverId) {
+      if (!driverId) {
         // No driver ID, show empty state
         setTrips([]);
         setStatistics(null);
@@ -165,9 +120,7 @@ const DriverHistoryScreen = ({ driverId, isDemo = false, language = "en" }) => {
         });
 
         if (error) {
-          // error handled - use demo data as fallback
-          setTrips(generateDemoTrips());
-          setStatistics(generateDemoStatistics());
+          throw new Error(error.message || t.errorMessage);
         } else if (data && Object.keys(data).length > 0) {
           // Transform API data to match expected format
           const transformedTrips = Object.values(data).map((trip) => ({
@@ -224,7 +177,7 @@ const DriverHistoryScreen = ({ driverId, isDemo = false, language = "en" }) => {
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     loadData();
-  }, [driverId, isDemo]);
+  }, [driverId]);
 
   const formatDate = (dateString) => {
     const date = new Date(dateString);

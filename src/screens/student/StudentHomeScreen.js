@@ -9,7 +9,9 @@ import {
   ActivityIndicator,
   Alert,
   Animated,
+  AppState,
   Platform,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
@@ -18,12 +20,11 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
-import { MaterialIcons } from "@expo/vector-icons";
+import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import DateTimePicker from "@react-native-community/datetimepicker";
 
 import MapboxRoutePreview from "../../shared/components/common/MapboxRoutePreview";
-import { DEMO_SCHOOL, DEMO_STUDENT } from "../../shared/data/demoData";
 import { UbuntuFonts } from "../../shared/utils/fonts";
 import { getDirectionsRoute } from "../../shared/services/mapboxService";
 import { getSchoolById } from "../../shared/services/schoolService";
@@ -33,6 +34,7 @@ import {
   getStudentCurrentTrip,
   requestStudentTripDetailsState,
 } from "../../shared/services/groupingService";
+import { supabase } from "../../lib/supabase";
 
 const PRIMARY_BLUE = "#3185FC";
 const NEUTRAL_900 = "#1A1A1A";
@@ -110,38 +112,52 @@ const buildDateOnTomorrowFromTime = (timeValue) => {
   return tomorrow;
 };
 
+const buildDateFromSelection = (timeValue, selectedDate) => {
+  const source = timeValue instanceof Date ? timeValue : new Date(timeValue);
+  return new Date(
+    selectedDate.getFullYear(),
+    selectedDate.getMonth(),
+    selectedDate.getDate(),
+    source.getHours(),
+    source.getMinutes(),
+    0,
+    0,
+  );
+};
+
 const StudentHomeScreen = ({
   studentId,
-  isDemo = false,
   language = "en",
   onNavigateToTripDetails,
   onNavigateToProfile,
+  isDemo = false,
+  onFocus,
 }) => {
   const { height: screenHeight } = useWindowDimensions();
   const t = translations[language] || translations.en;
   const isRTL = language === "ar";
 
   // States
-  const [studentData, setStudentData] = useState(isDemo ? DEMO_STUDENT : null);
-  const [studentLocation, setStudentLocation] = useState(
-    isDemo ? DEMO_STUDENT.home_location : null,
-  );
-  const [schoolLocation, setSchoolLocation] = useState(
-    isDemo ? DEMO_SCHOOL.location : null,
-  );
-  const [schoolName, setSchoolName] = useState(isDemo ? DEMO_SCHOOL.name : "");
+  const [studentData, setStudentData] = useState(null);
+  const [studentLocation, setStudentLocation] = useState(null);
+  const [schoolLocation, setSchoolLocation] = useState(null);
+  const [schoolName, setSchoolName] = useState("");
 
   const [routeCoordinates, setRouteCoordinates] = useState([]);
   const [distanceMeters, setDistanceMeters] = useState(0);
   const [durationSeconds, setDurationSeconds] = useState(0);
   const [isRouteLoading, setIsRouteLoading] = useState(true);
 
-  const [startTime, setStartTime] = useState(null);
-  const [endTime, setEndTime] = useState(null);
-  const [showStartTimePicker, setShowStartTimePicker] = useState(false);
-  const [showEndTimePicker, setShowEndTimePicker] = useState(false);
+  const [tripDate, setTripDate] = useState(null);
+  const [arrivalTime, setArrivalTime] = useState(null);
+  const [returnTime, setReturnTime] = useState(null);
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [showArrivalPicker, setShowArrivalPicker] = useState(false);
+  const [showReturnPicker, setShowReturnPicker] = useState(false);
 
-  const [isPreparingTrip, setIsPreparingTrip] = useState(false);
+  const [upcomingBookings, setUpcomingBookings] = useState([]);
+  const [isBooking, setIsBooking] = useState(false);
+  const [refreshBooking, setRefreshBooking] = useState(0);
   const [pendingTripData, setPendingTripData] = useState(null);
   const [isCheckingTrip, setIsCheckingTrip] = useState(false);
   const [locationHint, setLocationHint] = useState("");
@@ -169,7 +185,6 @@ const StudentHomeScreen = ({
   // Initialization & Data Loading
   useEffect(() => {
     const loadData = async () => {
-      if (isDemo) return;
       try {
         const { data } = await getStudentById(studentId);
         if (data) {
@@ -188,12 +203,11 @@ const StudentHomeScreen = ({
       }
     };
     loadData();
-  }, [studentId, isDemo]);
+  }, [studentId]);
 
   // Location Resolution
   useEffect(() => {
     const resolveLocation = async () => {
-      if (isDemo) return;
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== "granted") {
@@ -212,7 +226,7 @@ const StudentHomeScreen = ({
       }
     };
     resolveLocation();
-  }, [isDemo, t.gpsDenied]);
+  }, [t.gpsDenied]);
 
   // Route Loading
   useEffect(() => {
@@ -241,7 +255,7 @@ const StudentHomeScreen = ({
   // Trip Status Check
   useEffect(() => {
     const checkTrip = async () => {
-      if (isDemo || !studentId) return;
+      if (!studentId) return;
       setIsCheckingTrip(true);
       try {
         const result = await getStudentCurrentTrip(studentId);
@@ -253,67 +267,202 @@ const StudentHomeScreen = ({
       }
     };
     checkTrip();
-  }, [studentId, isDemo]);
+  }, [studentId]);
+
+  // Check existing bookings for today and tomorrow
+  useEffect(() => {
+    const checkUpcomingBookings = async () => {
+      if (!studentId) return;
+      try {
+        const today = new Date().toISOString().split("T")[0];
+        const tomorrow = new Date(Date.now() + 86400000)
+          .toISOString()
+          .split("T")[0];
+
+        console.log("Checking upcoming bookings for student:", studentId);
+        console.log("  Date range:", today, "to", tomorrow);
+
+        const { data, error } = await supabase
+          .from("bookings")
+          .select("*")
+          .eq("student_id", studentId)
+          .in("status", ["PENDING", "CONFIRMED", "ASSIGNED"])
+          .gte("trip_date", today)
+          .lte("trip_date", tomorrow)
+          .order("trip_date", { ascending: true })
+          .order("start_time", { ascending: true });
+
+        if (error) {
+          console.error("Supabase booking query error:", error);
+          setUpcomingBookings([]);
+          return;
+        }
+
+        if (data && data.length > 0) {
+          console.log(`✅ Found ${data.length} upcoming booking(s):`);
+          data.forEach((b) => {
+            console.log(`  - ${b.id} | ${b.trip_date} | ${b.status}`);
+          });
+          setUpcomingBookings(data);
+        } else {
+          console.log("No upcoming bookings found");
+          setUpcomingBookings([]);
+        }
+      } catch (e) {
+        console.error("Error checking bookings:", e.message);
+        setUpcomingBookings([]);
+      }
+    };
+    checkUpcomingBookings();
+  }, [studentId, refreshBooking]);
+
+  // Refresh booking when app comes back to foreground (e.g., returning from trip details)
+  useEffect(() => {
+    const subscription = AppState.addEventListener("change", (state) => {
+      if (state === "active") {
+        console.log("App came to foreground — refreshing booking status");
+        setRefreshBooking((prev) => prev + 1);
+      }
+    });
+    return () => subscription.remove();
+  }, []);
+
+  // Notify parent when this screen is focused
+  useEffect(() => {
+    if (onFocus) onFocus(() => setRefreshBooking((prev) => prev + 1));
+  }, [onFocus]);
 
   const handleGo = async () => {
-    if (!studentLocation || !schoolLocation || !startTime || !endTime) {
+    // Validation
+    if (!tripDate || !arrivalTime || !returnTime) {
+      console.log("Booking validation failed: missing date/time selection");
       Alert.alert(
-        t.error,
+        language === "ar" ? "معلومات ناقصة" : "Missing info",
         language === "ar"
-          ? "يرجى اختيار الأوقات أولاً"
-          : "Please select times first",
+          ? "يرجى اختيار التاريخ ووقت الوصول ووقت العودة."
+          : "Please select date, arrival and return time.",
       );
       return;
     }
 
-    setIsPreparingTrip(true);
-    const plannedStart = buildDateOnTomorrowFromTime(startTime);
-    const plannedEnd = buildDateOnTomorrowFromTime(endTime);
+    const buildDateTime = (base, time) =>
+      new Date(
+        base.getFullYear(),
+        base.getMonth(),
+        base.getDate(),
+        time.getHours(),
+        time.getMinutes(),
+        0,
+        0,
+      );
 
+    const startDateTime = buildDateTime(tripDate, arrivalTime);
+    const endDateTime = buildDateTime(tripDate, returnTime);
+
+    if (endDateTime <= startDateTime) {
+      console.log("Booking validation failed: return time before arrival time");
+      Alert.alert(
+        language === "ar" ? "أوقات غير صالحة" : "Invalid times",
+        language === "ar"
+          ? "وقت العودة يجب أن يكون بعد وقت الوصول."
+          : "Return time must be after arrival time.",
+      );
+      return;
+    }
+
+    console.log("Booking details:");
+    console.log("  Student ID:", studentData?.id);
+    console.log("  School ID:", studentData?.school_id);
+    console.log("  Date:", tripDate.toISOString());
+    console.log("  Arrival:", startDateTime.toISOString());
+    console.log("  Return:", endDateTime.toISOString());
+    console.log("  Pickup:", JSON.stringify(studentLocation));
+    console.log("  Destination:", JSON.stringify(schoolLocation));
+
+    if (isDemo) {
+      console.log("Demo mode — skipping Supabase booking");
+      onNavigateToTripDetails({
+        homeLocation: studentLocation,
+        destinationLocation: schoolLocation,
+        routeCoordinates: routeCoordinates,
+        leaveHomeTime: startDateTime,
+        arriveDestinationTime: endDateTime,
+        studentId,
+        language,
+      });
+      return;
+    }
+
+    console.log("Creating booking in Supabase...");
+    setIsBooking(true);
     try {
-      if (isDemo) {
-        onNavigateToTripDetails({
-          homeLocation: studentLocation,
-          pickupLocation: studentLocation,
-          destinationLocation: schoolLocation,
-          routeCoordinates:
-            routeCoordinates?.length > 1
-              ? routeCoordinates
-              : [studentLocation, schoolLocation],
-          leaveHomeTime: plannedStart,
-          arriveDestinationTime: plannedEnd,
-          studentId,
-          language,
-        });
+      const { data, error } = await supabase
+        .from("bookings")
+        .insert({
+          student_id: studentId,
+          school_id: studentData?.school_id,
+          trip_date: tripDate.toISOString().split("T")[0],
+          start_time: startDateTime.toISOString(),
+          end_time: endDateTime.toISOString(),
+          pickup_location: studentLocation,
+          status: "PENDING",
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error("Booking creation failed:", error);
+        Alert.alert(language === "ar" ? "خطأ" : "Error", error.message);
         return;
       }
 
-      const tripState = await requestStudentTripDetailsState({
-        studentId,
-        startTime: plannedStart,
-        endTime: plannedEnd,
-        type: "PICKUP",
-      });
-
-      if (tripState.state === "error") {
-        setGroupingHint(tripState.error?.message || t.groupingProcessing);
-      } else {
-        onNavigateToTripDetails({
-          homeLocation: studentLocation,
-          pickupLocation: studentLocation,
-          destinationLocation: schoolLocation,
-          routeCoordinates,
-          leaveHomeTime: plannedStart,
-          arriveDestinationTime: plannedEnd,
-          studentId,
-          language,
-        });
-      }
+      console.log("✅ Booking created successfully!");
+      console.log("  Booking ID:", data.id);
+      console.log("  Status:", data.status);
+      // Refresh the bookings list
+      setRefreshBooking((prev) => prev + 1);
     } catch (e) {
-      Alert.alert(t.error, e.message);
+      console.error("Unexpected error creating booking:", e);
+      Alert.alert(language === "ar" ? "خطأ" : "Error", e.message);
     } finally {
-      setIsPreparingTrip(false);
+      setIsBooking(false);
     }
+  };
+
+  const handleCancel = async (bookingId) => {
+    Alert.alert(
+      language === "ar" ? "إلغاء الرحلة" : "Cancel Trip",
+      language === "ar"
+        ? "هل أنت متأكد أنك تريد إلغاء هذه الرحلة؟"
+        : "Are you sure you want to cancel this trip?",
+      [
+        {
+          text: language === "ar" ? "لا" : "No",
+          style: "cancel",
+        },
+        {
+          text: language === "ar" ? "نعم، إلغاء" : "Yes, cancel",
+          style: "destructive",
+          onPress: async () => {
+            console.log("Cancelling booking:", bookingId);
+            const { error } = await supabase
+              .from("bookings")
+              .update({ status: "CANCELLED" })
+              .eq("id", bookingId);
+
+            if (error) {
+              console.error("Booking cancellation failed:", error);
+              return;
+            }
+
+            console.log("✅ Booking cancelled successfully!");
+            console.log("  Booking ID:", bookingId);
+            // Refresh the list
+            setRefreshBooking((prev) => prev + 1);
+          },
+        },
+      ],
+    );
   };
 
   const getInitials = (name) => {
@@ -349,16 +498,6 @@ const StudentHomeScreen = ({
         detail: groupingHint,
       });
     }
-
-    // Demo Notification: Trip Started
-    items.push({
-      id: "trip-started-demo",
-      title: language === "ar" ? "بدأت الرحلة" : "Trip Started",
-      detail:
-        language === "ar"
-          ? "سائقك في الطريق إليك"
-          : "Your driver is on the way",
-    });
 
     return items;
   }, [
@@ -493,6 +632,60 @@ const StudentHomeScreen = ({
             <ActivityIndicator size="small" color={PRIMARY_BLUE} />
           </View>
         )}
+
+        {/* Booking Info Overlay on Map */}
+        {upcomingBookings.length > 0 && (
+          <View style={styles.bookingOverlay}>
+            <View style={styles.bookingOverlayCard}>
+              <View style={styles.bookingOverlayHeader}>
+                <MaterialIcons
+                  name="event-available"
+                  size={18}
+                  color="#3185FC"
+                />
+                <Text style={styles.bookingOverlayTitle}>
+                  {language === "ar"
+                    ? `${upcomingBookings.length} رحلة قادمة`
+                    : `${upcomingBookings.length} Upcoming Trip${upcomingBookings.length > 1 ? "s" : ""}`}
+                </Text>
+              </View>
+              {upcomingBookings.slice(0, 2).map((booking) => (
+                <View key={booking.id} style={styles.bookingOverlayRow}>
+                  <MaterialCommunityIcons
+                    name="calendar"
+                    size={14}
+                    color="#64748B"
+                  />
+                  <Text style={styles.bookingOverlayText}>
+                    {new Date(
+                      booking.trip_date + "T00:00:00",
+                    ).toLocaleDateString("en-GB", {
+                      weekday: "short",
+                      day: "2-digit",
+                      month: "short",
+                    })}{" "}
+                    •{" "}
+                    {new Date(booking.start_time).toLocaleTimeString([], {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    })}
+                  </Text>
+                </View>
+              ))}
+              {upcomingBookings.length > 2 && (
+                <Text style={styles.bookingOverlayHint}>
+                  +{upcomingBookings.length - 2}{" "}
+                  {language === "ar" ? "أخرى" : "more"}
+                </Text>
+              )}
+              <Text style={styles.bookingOverlayHint}>
+                {language === "ar"
+                  ? "انقر على البطاقة أدناه للتفاصيل"
+                  : "Tap card below for details"}
+              </Text>
+            </View>
+          </View>
+        )}
       </View>
 
       {/* 30% Action Section */}
@@ -503,125 +696,223 @@ const StudentHomeScreen = ({
         ]}
       >
         <View style={styles.actionPanel}>
-          <View style={styles.inputRow}>
-            {/* Departure Card */}
-            <TouchableOpacity
-              style={styles.tripCard}
-              onPress={() => setShowStartTimePicker(true)}
-              activeOpacity={0.7}
+          {upcomingBookings.length > 0 ? (
+            /* ── UPCOMING TRIPS LIST ── */
+            <ScrollView
+              style={styles.bookingsScrollView}
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={styles.bookingsScrollContent}
             >
-              <View style={styles.tripCardLeft}>
-                <View
-                  style={[styles.tripCardIcon, { backgroundColor: "#EEF4FF" }]}
-                >
-                  <MaterialIcons
-                    name="arrow-forward"
-                    size={18}
-                    color={PRIMARY_BLUE}
-                  />
-                </View>
-                <View style={styles.tripCardText}>
-                  <Text style={[styles.tripCardTitle, isRTL && styles.rtlText]}>
-                    {language === "ar" ? "الذهاب" : "Departure"}
-                  </Text>
-                  <Text
-                    style={[styles.tripCardSubtitle, isRTL && styles.rtlText]}
-                  >
-                    {language === "ar" ? "متى تغادر؟" : "When do you leave?"}
-                  </Text>
-                </View>
-              </View>
-              <MaterialIcons
-                name={isRTL ? "chevron-left" : "chevron-right"}
-                size={20}
-                color={NEUTRAL_500}
-              />
-            </TouchableOpacity>
-
-            <View style={styles.tripCardTimeRow}>
-              <MaterialIcons name="access-time" size={16} color={NEUTRAL_500} />
-              <Text style={styles.tripCardTimeText}>
-                {startTime ? formatTime(startTime) : "08:00"}
+              <Text style={styles.bookingsSectionTitle}>
+                {language === "ar" ? "الرحلات القادمة" : "Upcoming Trips"}
               </Text>
-            </View>
-
-            {/* Return Card */}
-            <TouchableOpacity
-              style={[styles.tripCard, { marginTop: 12 }]}
-              onPress={() => setShowEndTimePicker(true)}
-              activeOpacity={0.7}
-            >
-              <View style={styles.tripCardLeft}>
-                <View
-                  style={[styles.tripCardIcon, { backgroundColor: "#F0FDF4" }]}
+              {upcomingBookings.map((booking) => (
+                <TouchableOpacity
+                  key={booking.id}
+                  style={styles.tripCardContainer}
+                  onPress={() => {
+                    if (!onNavigateToTripDetails) return;
+                    const tripPayload = {
+                      id: booking.id,
+                      tripId: booking.id,
+                      studentId: studentId,
+                      homeLocation: booking.pickup_location,
+                      destinationLocation: booking.destination_location,
+                      routeCoordinates: routeCoordinates,
+                      leaveHomeTime: booking.start_time,
+                      arriveDestinationTime: booking.end_time,
+                      status: booking.status,
+                      schoolName: schoolName,
+                    };
+                    onNavigateToTripDetails(tripPayload);
+                  }}
+                  activeOpacity={0.85}
                 >
-                  <MaterialIcons name="arrow-back" size={18} color="#10B981" />
-                </View>
-                <View style={styles.tripCardText}>
-                  <Text style={[styles.tripCardTitle, isRTL && styles.rtlText]}>
-                    {language === "ar" ? "الإياب" : "Return"}
+                  <View style={styles.tripCardHeader}>
+                    <View style={styles.tripStatusBadge}>
+                      <Text style={styles.tripStatusText}>
+                        {booking.status === "CONFIRMED"
+                          ? "✓ Confirmed"
+                          : booking.status === "ASSIGNED"
+                            ? "🚐 Assigned"
+                            : "⏳ Pending"}
+                      </Text>
+                    </View>
+                    <Text style={styles.tripCardDate}>
+                      {new Date(
+                        booking.trip_date + "T00:00:00",
+                      ).toLocaleDateString("en-GB", {
+                        weekday: "short",
+                        day: "2-digit",
+                        month: "short",
+                      })}
+                    </Text>
+                  </View>
+
+                  <View style={styles.tripCardRow}>
+                    <View style={styles.directionDotBlue} />
+                    <Text style={styles.tripCardRowText}>
+                      {language === "ar" ? "المنزل ← المدرسة" : "Home → School"}{" "}
+                      <Text style={styles.tripCardTimeHighlight}>
+                        {new Date(booking.start_time).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </Text>
+                    </Text>
+                  </View>
+
+                  <View style={styles.tripCardRow}>
+                    <View style={styles.directionDotGreen} />
+                    <Text style={styles.tripCardRowText}>
+                      {language === "ar" ? "المدرسة ← المنزل" : "School → Home"}{" "}
+                      <Text style={styles.tripCardTimeHighlight}>
+                        {new Date(booking.end_time).toLocaleTimeString([], {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </Text>
+                    </Text>
+                  </View>
+
+                  <Text style={styles.tripCardTapHint}>
+                    {language === "ar"
+                      ? "انقر لعرض التفاصيل"
+                      : "Tap to view details →"}
                   </Text>
-                  <Text
-                    style={[styles.tripCardSubtitle, isRTL && styles.rtlText]}
+
+                  <TouchableOpacity
+                    style={styles.cancelBtn}
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      handleCancel(booking.id);
+                    }}
+                    activeOpacity={0.8}
                   >
-                    {language === "ar" ? "متى تعود؟" : "When do you return?"}
+                    <Text style={styles.cancelBtnText}>Cancel Trip</Text>
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+          ) : (
+            /* ── BOOKING FORM (no booking yet) ── */
+            <View style={styles.inputRow}>
+              {/* Date */}
+              <TouchableOpacity
+                style={styles.timeInput}
+                onPress={() => setShowDatePicker(true)}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons
+                  name="calendar-today"
+                  size={20}
+                  color={PRIMARY_BLUE}
+                />
+                <View style={styles.inputLabels}>
+                  <Text style={styles.inputLabel}>DATE</Text>
+                  <Text style={styles.inputValue}>
+                    {tripDate
+                      ? tripDate.toLocaleDateString("en-GB", {
+                          weekday: "short",
+                          day: "2-digit",
+                          month: "short",
+                        })
+                      : "Select date"}
                   </Text>
                 </View>
-              </View>
-              <MaterialIcons
-                name={isRTL ? "chevron-left" : "chevron-right"}
-                size={20}
-                color={NEUTRAL_500}
-              />
-            </TouchableOpacity>
+              </TouchableOpacity>
 
-            <View style={styles.tripCardTimeRow}>
-              <MaterialIcons name="access-time" size={16} color={NEUTRAL_500} />
-              <Text style={styles.tripCardTimeText}>
-                {endTime ? formatTime(endTime) : "16:00"}
-              </Text>
+              {/* Arrival time */}
+              <TouchableOpacity
+                style={styles.timeInput}
+                onPress={() => setShowArrivalPicker(true)}
+                activeOpacity={0.7}
+              >
+                <MaterialCommunityIcons
+                  name="clock-start"
+                  size={20}
+                  color={PRIMARY_BLUE}
+                />
+                <View style={styles.inputLabels}>
+                  <Text style={styles.inputLabel}>ARRIVAL AT SCHOOL</Text>
+                  <Text style={styles.inputValue}>
+                    {arrivalTime ? formatTime(arrivalTime) : "08:00"}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* Return time */}
+              <TouchableOpacity
+                style={styles.timeInput}
+                onPress={() => setShowReturnPicker(true)}
+                activeOpacity={0.7}
+              >
+                <MaterialCommunityIcons
+                  name="clock-check-outline"
+                  size={20}
+                  color="#10B981"
+                />
+                <View style={styles.inputLabels}>
+                  <Text style={styles.inputLabel}>RETURN FROM SCHOOL</Text>
+                  <Text style={styles.inputValue}>
+                    {returnTime ? formatTime(returnTime) : "16:00"}
+                  </Text>
+                </View>
+              </TouchableOpacity>
+
+              {/* GO button */}
+              <TouchableOpacity
+                style={[
+                  styles.goButton,
+                  (!tripDate || !arrivalTime || !returnTime) &&
+                    styles.goButtonDisabled,
+                ]}
+                onPress={handleGo}
+                disabled={isBooking || !tripDate || !arrivalTime || !returnTime}
+                activeOpacity={0.8}
+              >
+                {isBooking ? (
+                  <ActivityIndicator color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.goButtonText}>{t.go}</Text>
+                )}
+              </TouchableOpacity>
             </View>
-          </View>
-
-          {/* GO Button */}
-          <TouchableOpacity
-            style={[
-              styles.goButton,
-              (!startTime || !endTime) && styles.goButtonDisabled,
-            ]}
-            onPress={handleGo}
-            disabled={isPreparingTrip || !startTime || !endTime}
-            activeOpacity={0.8}
-          >
-            {isPreparingTrip ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.goButtonText}>{t.go}</Text>
-            )}
-          </TouchableOpacity>
+          )}
         </View>
       </Animated.View>
 
-      {/* Time Pickers */}
-      {showStartTimePicker && (
+      {/* Date/Time Pickers */}
+      {showDatePicker && (
         <DateTimePicker
-          value={startTime || new Date()}
-          mode="time"
-          is24Hour
-          onChange={(e, time) => {
-            setShowStartTimePicker(false);
-            if (time) setStartTime(time);
+          value={tripDate || new Date()}
+          mode="date"
+          minimumDate={new Date()}
+          onChange={(e, date) => {
+            setShowDatePicker(false);
+            if (date) setTripDate(date);
           }}
         />
       )}
-      {showEndTimePicker && (
+      {showArrivalPicker && (
         <DateTimePicker
-          value={endTime || new Date()}
+          value={arrivalTime || new Date()}
           mode="time"
           is24Hour
           onChange={(e, time) => {
-            setShowEndTimePicker(false);
-            if (time) setEndTime(time);
+            setShowArrivalPicker(false);
+            if (time) setArrivalTime(time);
+          }}
+        />
+      )}
+      {showReturnPicker && (
+        <DateTimePicker
+          value={returnTime || new Date()}
+          mode="time"
+          is24Hour
+          onChange={(e, time) => {
+            setShowReturnPicker(false);
+            if (time) setReturnTime(time);
           }}
         />
       )}
@@ -783,6 +1074,54 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 2,
   },
+  bookingOverlay: {
+    position: "absolute",
+    bottom: 20,
+    left: 16,
+    right: 16,
+    zIndex: 8,
+  },
+  bookingOverlayCard: {
+    backgroundColor: "rgba(255, 255, 255, 0.95)",
+    borderRadius: 16,
+    padding: 14,
+    shadowColor: "#1A1A1A",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 6,
+    borderWidth: 1,
+    borderColor: "rgba(49, 133, 252, 0.15)",
+  },
+  bookingOverlayHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 10,
+  },
+  bookingOverlayTitle: {
+    fontSize: 13,
+    fontFamily: UbuntuFonts.bold,
+    color: "#3185FC",
+  },
+  bookingOverlayRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 6,
+  },
+  bookingOverlayText: {
+    fontSize: 13,
+    fontFamily: UbuntuFonts.medium,
+    color: "#1A1A1A",
+  },
+  bookingOverlayHint: {
+    fontSize: 11,
+    fontFamily: UbuntuFonts.medium,
+    color: "#64748B",
+    marginTop: 4,
+    textAlign: "center",
+  },
   actionArea: {
     flex: 0.35,
     backgroundColor: "#FFFFFF",
@@ -799,6 +1138,18 @@ const styles = StyleSheet.create({
     flex: 1,
     padding: 24,
     justifyContent: "center",
+  },
+  bookingsScrollView: {
+    flex: 1,
+  },
+  bookingsScrollContent: {
+    paddingBottom: 8,
+  },
+  bookingsSectionTitle: {
+    fontSize: 16,
+    fontFamily: UbuntuFonts.bold,
+    color: NEUTRAL_900,
+    marginBottom: 12,
   },
   inputRow: {
     flexDirection: "column",
@@ -859,6 +1210,116 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontFamily: UbuntuFonts.bold,
     color: NEUTRAL_900,
+  },
+  tripDateValue: {
+    fontSize: 13,
+    fontFamily: UbuntuFonts.bold,
+    color: "#7C3AED",
+  },
+  // New booking form styles
+  timeInput: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    marginBottom: 12,
+    gap: 14,
+  },
+  inputLabels: {
+    flex: 1,
+  },
+  inputLabel: {
+    fontSize: 10,
+    fontFamily: UbuntuFonts.bold,
+    color: NEUTRAL_500,
+    letterSpacing: 0.5,
+  },
+  inputValue: {
+    fontSize: 16,
+    fontFamily: UbuntuFonts.bold,
+    color: NEUTRAL_900,
+    marginTop: 2,
+  },
+  tripCardContainer: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    gap: 12,
+  },
+  tripCardHeader: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+  },
+  tripStatusBadge: {
+    backgroundColor: "#EFF6FF",
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 99,
+  },
+  tripStatusText: {
+    fontSize: 12,
+    fontFamily: UbuntuFonts.bold,
+    color: PRIMARY_BLUE,
+  },
+  tripCardDate: {
+    fontSize: 13,
+    fontFamily: UbuntuFonts.bold,
+    color: "#64748B",
+  },
+  tripCardRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+  },
+  tripCardRowText: {
+    fontSize: 14,
+    fontFamily: UbuntuFonts.medium,
+    color: "#0F172A",
+  },
+  tripCardTimeHighlight: {
+    fontFamily: UbuntuFonts.bold,
+    color: PRIMARY_BLUE,
+  },
+  directionDotBlue: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: PRIMARY_BLUE,
+    marginRight: 8,
+  },
+  directionDotGreen: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: "#10B981",
+    marginRight: 8,
+  },
+  tripCardTapHint: {
+    fontSize: 12,
+    fontFamily: UbuntuFonts.medium,
+    color: "#3185FC",
+    textAlign: "center",
+    marginTop: 4,
+    opacity: 0.7,
+  },
+  cancelBtn: {
+    marginTop: 4,
+    paddingVertical: 12,
+    borderRadius: 99,
+    borderWidth: 1.5,
+    borderColor: "#EF4444",
+    alignItems: "center",
+  },
+  cancelBtnText: {
+    fontSize: 14,
+    fontFamily: UbuntuFonts.bold,
+    color: "#EF4444",
   },
   goButton: {
     backgroundColor: PRIMARY_BLUE,

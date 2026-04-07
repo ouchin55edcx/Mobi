@@ -14,7 +14,6 @@ import {
 import { StatusBar } from "expo-status-bar";
 import { MaterialIcons } from "@expo/vector-icons";
 import Header from "../../shared/components/common/Header";
-import DemoBadge from "../../shared/components/common/DemoBadge";
 
 const translations = {
   en: {
@@ -77,8 +76,8 @@ const translations = {
   },
 };
 
-const DEMO_DRIVER = {
-  id: "demo-driver-id",
+const DEFAULT_DRIVER_PROFILE = {
+  id: "driver-profile-placeholder",
   name: "Mohamed Alami",
   email: "mohamed.alami@example.com",
   phone: "+212612345678",
@@ -93,7 +92,6 @@ const DEMO_DRIVER = {
 
 const DriverProfileScreen = ({
   driverId,
-  isDemo = false,
   language = "en",
   onLogout,
   onBack,
@@ -129,31 +127,16 @@ const DriverProfileScreen = ({
   const loadDriverData = async () => {
     try {
       setLoading(true);
-
-      if (isDemo) {
-        await new Promise((resolve) => setTimeout(resolve, 500));
-        setDriver(DEMO_DRIVER);
-        setFormData({
-          name: DEMO_DRIVER.name,
-          phone: DEMO_DRIVER.phone,
-          email: DEMO_DRIVER.email,
-          license_number: DEMO_DRIVER.license_number,
-          bus_plate: DEMO_DRIVER.bus.plate_number,
-          bus_capacity: DEMO_DRIVER.bus.capacity.toString(),
-          bus_model: DEMO_DRIVER.bus.model,
-        });
-      } else {
-        setDriver(DEMO_DRIVER);
-        setFormData({
-          name: DEMO_DRIVER.name,
-          phone: DEMO_DRIVER.phone,
-          email: DEMO_DRIVER.email,
-          license_number: DEMO_DRIVER.license_number,
-          bus_plate: DEMO_DRIVER.bus.plate_number,
-          bus_capacity: DEMO_DRIVER.bus.capacity.toString(),
-          bus_model: DEMO_DRIVER.bus.model,
-        });
-      }
+      setDriver(DEFAULT_DRIVER_PROFILE);
+      setFormData({
+        name: DEFAULT_DRIVER_PROFILE.name,
+        phone: DEFAULT_DRIVER_PROFILE.phone,
+        email: DEFAULT_DRIVER_PROFILE.email,
+        license_number: DEFAULT_DRIVER_PROFILE.license_number,
+        bus_plate: DEFAULT_DRIVER_PROFILE.bus.plate_number,
+        bus_capacity: DEFAULT_DRIVER_PROFILE.bus.capacity.toString(),
+        bus_model: DEFAULT_DRIVER_PROFILE.bus.model,
+      });
     } catch (error) {
       // error handled
       Alert.alert(t.error, t.errorMessage, [{ text: t.ok }]);
@@ -169,26 +152,20 @@ const DriverProfileScreen = ({
   const handleSave = async () => {
     try {
       setSaving(true);
-
-      if (isDemo) {
-        await new Promise((resolve) => setTimeout(resolve, 1000));
-        setDriver((prev) => ({
-          ...prev,
-          name: formData.name,
-          phone: formData.phone,
-          email: formData.email,
-          license_number: formData.license_number,
-          bus: {
-            ...prev.bus,
-            plate_number: formData.bus_plate,
-            capacity: parseInt(formData.bus_capacity, 10),
-            model: formData.bus_model,
-          },
-        }));
-        Alert.alert(t.saved, "", [{ text: t.ok }]);
-      } else {
-        Alert.alert(t.saved, "", [{ text: t.ok }]);
-      }
+      setDriver((prev) => ({
+        ...prev,
+        name: formData.name,
+        phone: formData.phone,
+        email: formData.email,
+        license_number: formData.license_number,
+        bus: {
+          ...prev.bus,
+          plate_number: formData.bus_plate,
+          capacity: parseInt(formData.bus_capacity, 10),
+          model: formData.bus_model,
+        },
+      }));
+      Alert.alert(t.saved, "", [{ text: t.ok }]);
 
       setEditing(false);
     } catch (error) {
@@ -244,8 +221,6 @@ const DriverProfileScreen = ({
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {isDemo && <DemoBadge />}
-
         <View style={styles.heroCard}>
           <View style={styles.heroTopAccent} />
           <View style={styles.heroMain}>
@@ -267,7 +242,7 @@ const DriverProfileScreen = ({
               <Text style={[styles.heroRole, isRTL && styles.rtl]}>{t.driver}</Text>
               <View style={styles.ratingPill}>
                 <MaterialIcons name="star" size={14} color="#F59E0B" />
-                <Text style={styles.ratingText}>{(driver?.rating || DEMO_DRIVER.rating).toFixed(1)}</Text>
+                <Text style={styles.ratingText}>{(driver?.rating || DEFAULT_DRIVER_PROFILE.rating).toFixed(1)}</Text>
               </View>
             </View>
 

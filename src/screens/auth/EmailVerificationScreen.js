@@ -1,397 +1,390 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useRef, useState } from "react";
 import {
-  View,
-  Text,
+  ActivityIndicator,
+  Alert,
   StyleSheet,
+  Text,
   TextInput,
   TouchableOpacity,
+  View,
   Platform,
-  KeyboardAvoidingView,
-  ScrollView,
-  Alert,
-  ActivityIndicator,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { StatusBar } from 'expo-status-bar';
-import { MaterialIcons } from '@expo/vector-icons';
-import {
-  createVerificationCode,
-  verifyCode,
-  resendVerificationCode,
-} from '../../shared/services/verificationService';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { StatusBar } from "expo-status-bar";
+import { MaterialIcons } from "@expo/vector-icons";
+import { supabase } from "../../lib/supabase";
+
+const CODE_LENGTH = 8;
 
 const translations = {
   en: {
-    title: 'Verify Your Email',
-    subtitle: 'We sent a 6-digit code to',
-    enterCode: 'Enter verification code',
-    codePlaceholder: '000000',
-    verify: 'Verify',
-    verifying: 'Verifying...',
-    resend: 'Resend Code',
-    resending: 'Resending...',
-    success: 'Email Verified',
-    successMessage: 'Your email has been verified successfully!',
-    invalidCode: 'Invalid code',
-    expiredCode: 'Code expired',
-    maxAttempts: 'Maximum attempts reached',
-    resendWait: 'Please wait before requesting a new code',
-    ok: 'OK',
+    title: "Enter verification code",
+    subtitle: "We sent an 8-digit code to",
+    enterCode: "Enter all 8 digits",
+    verify: "Verify",
+    verifying: "Verifying...",
+    resend: "Resend code",
+    resendCooldown: "Resend code in",
+    resending: "Resending...",
+    back: "← Back to register",
+    error: "Error",
+    ok: "OK",
+    invalidCode: "The code is incorrect or has expired. Try again.",
+    enterAllDigits: "Please enter all 8 digits.",
   },
   ar: {
-    title: 'تحقق من بريدك الإلكتروني',
-    subtitle: 'أرسلنا رمزاً مكوناً من 6 أرقام إلى',
-    enterCode: 'أدخل رمز التحقق',
-    codePlaceholder: '000000',
-    verify: 'تحقق',
-    verifying: 'جاري التحقق...',
-    resend: 'إعادة إرسال الرمز',
-    resending: 'جاري إعادة الإرسال...',
-    success: 'تم التحقق من البريد الإلكتروني',
-    successMessage: 'تم التحقق من بريدك الإلكتروني بنجاح!',
-    invalidCode: 'رمز غير صحيح',
-    expiredCode: 'انتهت صلاحية الرمز',
-    maxAttempts: 'تم الوصول إلى الحد الأقصى للمحاولات',
-    resendWait: 'يرجى الانتظار قبل طلب رمز جديد',
-    ok: 'حسناً',
+    title: "أدخل رمز التحقق",
+    subtitle: "أرسلنا رمزاً مكوناً من 8 أرقام إلى",
+    enterCode: "أدخل جميع الأرقام الثمانية",
+    verify: "تحقق",
+    verifying: "جاري التحقق...",
+    resend: "إعادة إرسال الرمز",
+    resendCooldown: "إعادة الإرسال في",
+    resending: "جاري إعادة الإرسال...",
+    back: "← العودة للتسجيل",
+    error: "خطأ",
+    ok: "حسناً",
+    invalidCode: "الرمز غير صحيح أو انتهت صلاحيته. حاول مرة أخرى.",
+    enterAllDigits: "يرجى إدخال جميع الأرقام الثمانية.",
   },
 };
 
 const EmailVerificationScreen = ({
-  userId,
   email,
-  userType = 'student',
-  language = 'en',
+  language = "en",
   onBack,
   onSuccess,
 }) => {
-  const [code, setCode] = useState(['', '', '', '', '', '']);
-  const [loading, setLoading] = useState(false);
-  const [resending, setResending] = useState(false);
-  const [error, setError] = useState(null);
-  const [remainingAttempts, setRemainingAttempts] = useState(5);
-  const [resendCooldown, setResendCooldown] = useState(0);
-  const inputRefs = useRef([]);
+  const [code, setCode] = useState(["", "", "", "", "", "", "", ""]);
+  const [isVerifying, setIsVerifying] = useState(false);
+  const [isResending, setIsResending] = useState(false);
+  const [cooldown, setCooldown] = useState(0);
+  const inputs = useRef([]);
 
   const t = translations[language];
 
-  // Initialize verification code on mount
-  useEffect(() => {
-    initializeVerification();
-  }, []);
+  // Handle digit input
+  const handleChange = (text, index) => {
+    const digit = text.replace(/[^0-9]/g, "").slice(-1);
+    const newCode = [...code];
+    newCode[index] = digit;
+    setCode(newCode);
 
-  // Resend cooldown timer
-  useEffect(() => {
-    if (resendCooldown > 0) {
-      const timer = setTimeout(() => {
-        setResendCooldown(resendCooldown - 1);
-      }, 1000);
-      return () => clearTimeout(timer);
+    // Auto-focus next input
+    if (digit && index < CODE_LENGTH - 1) {
+      inputs.current[index + 1]?.focus();
     }
-  }, [resendCooldown]);
 
-  const initializeVerification = async () => {
-    try {
-      setLoading(true);
-      const result = await createVerificationCode(userId, email, userType);
-      if (result.error) {
-        Alert.alert(
-          language === 'ar' ? 'خطأ' : 'Error',
-          result.error.message || (language === 'ar' ? 'فشل إنشاء رمز التحقق' : 'Failed to create verification code'),
-          [{ text: language === 'ar' ? 'حسناً' : 'OK' }]
-        );
+    // Auto-submit when all 6 digits filled
+    if (digit && index === CODE_LENGTH - 1) {
+      const fullCode = [...newCode].join("");
+      if (fullCode.length === CODE_LENGTH) {
+        verifyCode(fullCode);
       }
-    } catch (err) {
-      // error handled
-    } finally {
-      setLoading(false);
     }
   };
 
-  const handleCodeChange = useCallback((index, value) => {
-    // Only allow digits
-    if (value && !/^\d$/.test(value)) {
-      return;
+  // Handle backspace
+  const handleKeyPress = (e, index) => {
+    if (e.nativeEvent.key === "Backspace" && !code[index] && index > 0) {
+      inputs.current[index - 1]?.focus();
     }
+  };
 
-    const newCode = [...code];
-    newCode[index] = value;
-    setCode(newCode);
-    setError(null);
-
-    // Auto-focus next input
-    if (value && index < 5) {
-      inputRefs.current[index + 1]?.focus();
-    }
-
-    // Auto-verify when all digits are entered
-    if (newCode.every((digit) => digit !== '') && newCode.length === 6) {
-      handleVerify(newCode.join(''));
-    }
-  }, [code]);
-
-  const handleKeyPress = useCallback((index, key) => {
-    if (key === 'Backspace' && !code[index] && index > 0) {
-      inputRefs.current[index - 1]?.focus();
-    }
-  }, [code]);
-
-  const handleVerify = async (verificationCode = null) => {
-    const codeToVerify = verificationCode || code.join('');
-
-    if (codeToVerify.length !== 6) {
-      setError(t.invalidCode);
-      return;
-    }
-
-    setLoading(true);
-    setError(null);
-
+  const verifyCode = async (otp) => {
+    setIsVerifying(true);
     try {
-      const result = await verifyCode(userId, codeToVerify, userType);
+      const { data, error } = await supabase.auth.verifyOtp({
+        email,
+        token: otp,
+        type: "email",
+      });
 
-      if (result.success) {
+      if (error) {
+        console.error("OTP verification error:", error);
         Alert.alert(
-          t.success,
-          t.successMessage,
-          [
-            {
-              text: t.ok,
-              onPress: () => {
-                if (onSuccess) {
-                  onSuccess();
-                }
-              },
-            },
-          ]
+          language === "ar" ? "رمز غير صحيح" : "Invalid code",
+          t.invalidCode,
+          [{ text: t.ok }],
         );
-      } else {
-        const errorMessage = result.error?.message || t.invalidCode;
-        setError(errorMessage);
+        setCode(["", "", "", "", "", "", "", ""]);
+        inputs.current[0]?.focus();
+        return;
+      }
 
-        if (result.error?.remainingAttempts !== undefined) {
-          setRemainingAttempts(result.error.remainingAttempts);
-        }
+      console.log("OTP verified successfully! Inserting student profile...");
+      console.log("Auth user ID:", user.id);
+      console.log("User metadata:", JSON.stringify(meta, null, 2));
 
-        // Clear code on error
-        setCode(['', '', '', '', '', '']);
-        inputRefs.current[0]?.focus();
+      // Validate required fields
+      if (!meta.fullname || !meta.cin) {
+        console.error("Missing required metadata: fullname or cin not found");
+        Alert.alert(
+          language === "ar" ? "خطأ" : "Error",
+          language === "ar"
+            ? "بيانات التسجيل ناقصة. يرجى إعادة التسجيل."
+            : "Registration data is missing. Please register again.",
+          [{ text: t.ok }],
+        );
+        return;
+      }
 
-        // Show specific error messages
-        if (errorMessage.includes('expired')) {
-          Alert.alert(
-            language === 'ar' ? 'انتهت الصلاحية' : 'Code Expired',
-            language === 'ar'
-              ? 'انتهت صلاحية رمز التحقق. يرجى طلب رمز جديد.'
-              : 'The verification code has expired. Please request a new code.',
-            [{ text: t.ok }]
-          );
-        } else if (errorMessage.includes('Maximum')) {
-          Alert.alert(
-            language === 'ar' ? 'الحد الأقصى' : 'Max Attempts',
-            language === 'ar'
-              ? 'تم الوصول إلى الحد الأقصى للمحاولات. يرجى طلب رمز جديد.'
-              : 'Maximum verification attempts reached. Please request a new code.',
-            [{ text: t.ok }]
-          );
+      // Parse home_location from JSON string if it exists
+      let homeLocation = null;
+      if (meta.home_location) {
+        try {
+          homeLocation = JSON.parse(meta.home_location);
+        } catch (e) {
+          console.error("Failed to parse home_location:", e);
         }
       }
-    } catch (err) {
-      // error handled
-      setError(language === 'ar' ? 'حدث خطأ' : 'An error occurred');
+
+      console.log("Inserting student with data:", {
+        user_id: user.id,
+        fullname: meta.fullname,
+        phone: meta.phone,
+        email: user.email,
+        cin: meta.cin,
+        school_id: meta.school_id,
+        home_location: homeLocation,
+      });
+
+      const { data: insertedStudent, error: dbError } = await supabase
+        .from("students")
+        .insert({
+          user_id: user.id,
+          fullname: meta.fullname,
+          phone: meta.phone,
+          email: user.email,
+          cin: meta.cin,
+          school_id: meta.school_id,
+          home_location: homeLocation,
+          is_verified: true,
+        })
+        .select("id")
+        .single();
+
+      if (dbError) {
+        console.error("Failed to insert student profile:", dbError);
+        Alert.alert(
+          language === "ar" ? "خطأ" : "Error",
+          dbError.message ||
+            (language === "ar"
+              ? "فشل إنشاء الملف الشخصي"
+              : "Failed to create profile"),
+          [{ text: t.ok }],
+        );
+        return;
+      }
+
+      console.log("✅ Student profile created successfully!");
+      console.log("  Student ID (students table):", insertedStudent.id);
+      console.log("  Auth User ID:", user.id);
+
+      // Navigate to student home with the CORRECT student ID
+      if (onSuccess) {
+        onSuccess({
+          studentId: insertedStudent.id,
+          email: user.email,
+        });
+      }
+    } catch (error) {
+      console.error("Unexpected error during verification:", error);
+      Alert.alert(
+        language === "ar" ? "خطأ" : "Error",
+        language === "ar"
+          ? "حدث خطأ غير متوقع"
+          : "An unexpected error occurred",
+        [{ text: t.ok }],
+      );
     } finally {
-      setLoading(false);
+      setIsVerifying(false);
     }
+  };
+
+  const handleVerifyPress = () => {
+    const fullCode = code.join("");
+    if (fullCode.length < CODE_LENGTH) {
+      Alert.alert(
+        language === "ar" ? "أدخل الرمز" : "Enter code",
+        t.enterAllDigits,
+        [{ text: t.ok }],
+      );
+      return;
+    }
+    verifyCode(fullCode);
   };
 
   const handleResend = async () => {
-    if (resendCooldown > 0) {
+    if (cooldown > 0 || isResending) {
       return;
     }
 
-    setResending(true);
-    setError(null);
-    setResendCooldown(60); // 60 second cooldown
+    setIsResending(true);
 
-    try {
-      const result = await resendVerificationCode(userId, email, userType);
+    const { error } = await supabase.auth.signInWithOtp({
+      email,
+      options: { shouldCreateUser: false },
+    });
+    setIsResending(false);
 
-      if (result.error) {
-        if (result.error.message?.includes('wait')) {
-          setResendCooldown(60);
-          Alert.alert(
-            language === 'ar' ? 'انتظر' : 'Please Wait',
-            t.resendWait,
-            [{ text: t.ok }]
-          );
-        } else {
-          Alert.alert(
-            language === 'ar' ? 'خطأ' : 'Error',
-            result.error.message || (language === 'ar' ? 'فشل إعادة الإرسال' : 'Failed to resend code'),
-            [{ text: t.ok }]
-          );
-        }
-      } else {
-        // Clear current code
-        setCode(['', '', '', '', '', '']);
-        inputRefs.current[0]?.focus();
-        setRemainingAttempts(5);
+    if (error) {
+      console.error("Resend error:", error);
 
+      // Check for rate limit error
+      if (error.message?.includes("rate limit")) {
         Alert.alert(
-          language === 'ar' ? 'تم الإرسال' : 'Code Sent',
-          language === 'ar'
-            ? 'تم إرسال رمز التحقق الجديد إلى بريدك الإلكتروني'
-            : 'A new verification code has been sent to your email',
-          [{ text: t.ok }]
+          language === "ar" ? "محاولات كثيرة" : "Too Many Attempts",
+          language === "ar"
+            ? "تم إرسال العديد من رموز التحقق. يرجى الانتظار بضع دقائق قبل المحاولة مرة أخرى."
+            : "Too many verification codes sent. Please wait a few minutes before trying again.",
+          [{ text: t.ok }],
+        );
+      } else {
+        Alert.alert(
+          language === "ar" ? "خطأ" : "Error",
+          error.message ||
+            (language === "ar"
+              ? "فشل إعادة إرسال الرمز"
+              : "Failed to resend code"),
+          [{ text: t.ok }],
         );
       }
-    } catch (err) {
-      // error handled
-      Alert.alert(
-        language === 'ar' ? 'خطأ' : 'Error',
-        language === 'ar' ? 'حدث خطأ أثناء إعادة الإرسال' : 'An error occurred while resending',
-        [{ text: t.ok }]
-      );
-    } finally {
-      setResending(false);
+      return;
     }
+
+    setCode(["", "", "", "", "", ""]);
+    inputs.current[0]?.focus();
+
+    // 60s cooldown
+    setCooldown(60);
+    const timer = setInterval(() => {
+      setCooldown((prev) => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+
+    Alert.alert(
+      language === "ar" ? "تم الإرسال" : "Code Sent",
+      language === "ar"
+        ? "تم إرسال رمز تحقق جديد إلى بريدك الإلكتروني"
+        : "A new verification code has been sent to your email",
+      [{ text: t.ok }],
+    );
   };
 
+  const filledCount = code.filter((d) => d !== "").length;
+
   return (
-    <SafeAreaView style={styles.container} edges={['top', 'left', 'right']}>
+    <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <StatusBar style="dark" />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.keyboardView}
-        keyboardVerticalOffset={0}
-        enabled={Platform.OS === 'ios'}
+
+      {/* Back Button */}
+      <TouchableOpacity
+        style={styles.backButton}
+        onPress={onBack}
+        activeOpacity={0.7}
+        disabled={isVerifying}
       >
-        <ScrollView
-          contentContainerStyle={styles.scrollContent}
-          keyboardShouldPersistTaps="always"
-          keyboardDismissMode="none"
-          showsVerticalScrollIndicator={false}
+        <MaterialIcons name="arrow-back" size={24} color="#1A1A1A" />
+      </TouchableOpacity>
+
+      <View style={styles.content}>
+        {/* Icon */}
+        <View style={styles.iconWrapper}>
+          <MaterialIcons name="mark-email-read" size={48} color="#3185FC" />
+        </View>
+
+        {/* Title */}
+        <Text style={[styles.title, language === "ar" && styles.rtl]}>
+          {t.title}
+        </Text>
+
+        {/* Subtitle */}
+        <Text style={[styles.subtitle, language === "ar" && styles.rtl]}>
+          {t.subtitle}
+        </Text>
+
+        {/* Email */}
+        <Text style={[styles.email, language === "ar" && styles.rtl]}>
+          {email}
+        </Text>
+
+        {/* Code Label */}
+        <Text style={[styles.codeLabel, language === "ar" && styles.rtl]}>
+          {t.enterCode}
+        </Text>
+
+        {/* Code inputs */}
+        <View style={styles.codeRow}>
+          {code.map((digit, index) => (
+            <TextInput
+              key={index}
+              ref={(ref) => (inputs.current[index] = ref)}
+              style={[styles.codeInput, digit ? styles.codeInputFilled : null]}
+              value={digit}
+              onChangeText={(text) => handleChange(text, index)}
+              onKeyPress={(e) => handleKeyPress(e, index)}
+              keyboardType="number-pad"
+              maxLength={1}
+              selectTextOnFocus
+              autoFocus={index === 0}
+              editable={!isVerifying}
+            />
+          ))}
+        </View>
+
+        {/* Verify button */}
+        <TouchableOpacity
+          style={[
+            styles.verifyBtn,
+            filledCount < CODE_LENGTH && styles.verifyBtnDisabled,
+          ]}
+          onPress={handleVerifyPress}
+          disabled={isVerifying || filledCount < CODE_LENGTH}
+          activeOpacity={0.85}
         >
-          {/* Back Button */}
-          <TouchableOpacity
-            style={styles.backButton}
-            onPress={onBack}
-            activeOpacity={0.7}
-            disabled={loading}
-          >
-            <MaterialIcons name="arrow-back" size={24} color="#1A1A1A" />
-          </TouchableOpacity>
+          {isVerifying ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.verifyBtnText}>{t.verify}</Text>
+          )}
+        </TouchableOpacity>
 
-          {/* Language Switcher */}
-          <View style={styles.languageContainer}>
-            <TouchableOpacity style={styles.languageButton} activeOpacity={0.7}>
-              <Text style={styles.languageIcon}>
-                {language === 'en' ? '🇬🇧' : '🇲🇦'}
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Header */}
-          <View style={styles.header}>
-            <View style={styles.iconContainer}>
-              <MaterialIcons name="email" size={64} color="#3185FC" />
-            </View>
-            <Text style={[styles.title, language === 'ar' && styles.rtl]}>
-              {t.title}
-            </Text>
-            <Text style={[styles.subtitle, language === 'ar' && styles.rtl]}>
-              {t.subtitle}
-            </Text>
-            <Text style={[styles.emailText, language === 'ar' && styles.rtl]}>
-              {email}
-            </Text>
-          </View>
-
-          {/* Code Input */}
-          <View style={styles.codeContainer}>
-            <Text style={[styles.codeLabel, language === 'ar' && styles.rtl]}>
-              {t.enterCode}
-            </Text>
-            <View style={styles.codeInputsContainer}>
-              {code.map((digit, index) => (
-                <TextInput
-                  key={index}
-                  ref={(ref) => (inputRefs.current[index] = ref)}
-                  style={[
-                    styles.codeInput,
-                    error && styles.codeInputError,
-                    digit && !error && styles.codeInputFilled,
-                  ]}
-                  value={digit}
-                  onChangeText={(value) => handleCodeChange(index, value)}
-                  onKeyPress={({ nativeEvent }) =>
-                    handleKeyPress(index, nativeEvent.key)
-                  }
-                  keyboardType="number-pad"
-                  maxLength={1}
-                  editable={!loading}
-                  selectTextOnFocus
-                  autoFocus={index === 0}
-                />
-              ))}
-            </View>
-            {error && (
-              <Text style={styles.errorText}>{error}</Text>
-            )}
-            {remainingAttempts < 5 && remainingAttempts > 0 && (
-              <Text style={styles.attemptsText}>
-                {language === 'ar'
-                  ? `محاولات متبقية: ${remainingAttempts}`
-                  : `Remaining attempts: ${remainingAttempts}`}
-              </Text>
-            )}
-          </View>
-
-          {/* Verify Button */}
-          <TouchableOpacity
-            style={[
-              styles.verifyButton,
-              loading && styles.verifyButtonDisabled,
-            ]}
-            onPress={() => handleVerify()}
-            disabled={loading || code.some((digit) => !digit)}
-            activeOpacity={0.8}
-          >
-            {loading ? (
-              <ActivityIndicator color="#FFFFFF" />
-            ) : (
-              <Text style={styles.verifyButtonText}>{t.verify}</Text>
-            )}
-          </TouchableOpacity>
-
-          {/* Resend Code */}
-          <View style={styles.resendContainer}>
-            <Text style={styles.resendText}>
-              {language === 'ar'
-                ? 'لم تستلم الرمز؟'
-                : "Didn't receive the code?"}
-            </Text>
-            <TouchableOpacity
-              onPress={handleResend}
-              disabled={resending || resendCooldown > 0}
-              activeOpacity={0.7}
+        {/* Resend */}
+        <TouchableOpacity
+          onPress={handleResend}
+          disabled={isResending || cooldown > 0}
+          style={styles.resendBtn}
+          activeOpacity={0.7}
+        >
+          {isResending ? (
+            <ActivityIndicator color="#3185FC" size="small" />
+          ) : (
+            <Text
+              style={[
+                styles.resendText,
+                cooldown > 0 && styles.resendTextMuted,
+              ]}
             >
-              <Text
-                style={[
-                  styles.resendLink,
-                  (resending || resendCooldown > 0) && styles.resendLinkDisabled,
-                ]}
-              >
-                {resending
-                  ? t.resending
-                  : resendCooldown > 0
-                    ? `${language === 'ar' ? 'إعادة الإرسال' : 'Resend'} (${resendCooldown}s)`
-                    : t.resend}
-              </Text>
-            </TouchableOpacity>
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+              {cooldown > 0 ? `${t.resendCooldown} ${cooldown}s` : t.resend}
+            </Text>
+          )}
+        </TouchableOpacity>
+
+        {/* Back */}
+        <TouchableOpacity
+          onPress={onBack}
+          style={styles.backBtn}
+          activeOpacity={0.7}
+        >
+          <Text style={styles.backText}>{t.back}</Text>
+        </TouchableOpacity>
+      </View>
     </SafeAreaView>
   );
 };
@@ -399,160 +392,122 @@ const EmailVerificationScreen = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  scrollContent: {
-    flexGrow: 1,
-    paddingHorizontal: 24,
-    paddingBottom: 40,
+    backgroundColor: "#FFFFFF",
   },
   backButton: {
-    marginTop: Platform.OS === 'ios' ? 10 : 20,
+    marginTop: Platform.OS === "ios" ? 10 : 20,
     marginBottom: 10,
-    alignSelf: 'flex-start',
+    marginLeft: 20,
+    alignSelf: "flex-start",
   },
-  languageContainer: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginBottom: 20,
+  content: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 24,
   },
-  languageButton: {
-    padding: 8,
-  },
-  languageIcon: {
-    fontSize: 24,
-  },
-  header: {
-    alignItems: 'center',
-    marginTop: 20,
-    marginBottom: 48,
-  },
-  iconContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: '#F0F7FF',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: '#3185FC',
-    marginBottom: 12,
-    textAlign: 'center',
-  },
-  subtitle: {
-    fontSize: 16,
-    color: '#666666',
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  emailText: {
-    fontSize: 16,
-    color: '#3185FC',
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  rtl: {
-    textAlign: 'right',
-  },
-  codeContainer: {
+  iconWrapper: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    backgroundColor: "#F0F7FF",
+    alignItems: "center",
+    justifyContent: "center",
     marginBottom: 32,
   },
-  codeLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#666666',
-    marginBottom: 16,
-    textAlign: 'center',
+  title: {
+    fontSize: 24,
+    fontWeight: "700",
+    color: "#1A1A1A",
+    marginBottom: 8,
+    textAlign: "center",
   },
-  codeInputsContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 12,
+  subtitle: {
+    fontSize: 14,
+    color: "#64748B",
+    textAlign: "center",
+  },
+  email: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#3185FC",
+    marginTop: 4,
+    marginBottom: 24,
+    textAlign: "center",
+  },
+  codeLabel: {
+    fontSize: 13,
+    color: "#94A3B8",
     marginBottom: 16,
+    textAlign: "center",
+  },
+  codeRow: {
+    flexDirection: "row",
+    gap: 10,
+    marginBottom: 32,
   },
   codeInput: {
-    width: 50,
-    height: 60,
-    borderWidth: 2,
-    borderColor: '#E0E0E0',
+    width: 46,
+    height: 56,
     borderRadius: 12,
-    fontSize: 24,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    color: '#1A1A1A',
-    backgroundColor: '#FFFFFF',
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
+    backgroundColor: "#F8FAFF",
+    textAlign: "center",
+    fontSize: 22,
+    fontWeight: "700",
+    color: "#1A1A1A",
   },
   codeInputFilled: {
-    borderColor: '#3185FC',
-    backgroundColor: '#F0F7FF',
+    borderColor: "#3185FC",
+    backgroundColor: "#EFF6FF",
   },
-  codeInputError: {
-    borderColor: '#EF4444',
-    backgroundColor: '#FEF2F2',
-  },
-  errorText: {
-    fontSize: 14,
-    color: '#EF4444',
-    textAlign: 'center',
-    marginTop: 8,
-  },
-  attemptsText: {
-    fontSize: 12,
-    color: '#F59E0B',
-    textAlign: 'center',
-    marginTop: 8,
-  },
-  verifyButton: {
-    backgroundColor: '#3185FC',
-    borderRadius: 12,
-    paddingVertical: 16,
-    paddingHorizontal: 24,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 24,
-    shadowColor: '#3185FC',
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
+  verifyBtn: {
+    width: "100%",
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: "#3185FC",
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 16,
+    shadowColor: "#3185FC",
+    shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.3,
     shadowRadius: 8,
     elevation: 6,
   },
-  verifyButtonDisabled: {
-    opacity: 0.6,
+  verifyBtnDisabled: {
+    backgroundColor: "#CBD5E1",
+    shadowOpacity: 0,
+    elevation: 0,
   },
-  verifyButtonText: {
-    color: '#FFFFFF',
-    fontSize: 18,
-    fontWeight: '600',
+  verifyBtnText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
   },
-  resendContainer: {
-    alignItems: 'center',
-    gap: 8,
+  resendBtn: {
+    marginBottom: 16,
+    paddingVertical: 8,
   },
   resendText: {
     fontSize: 14,
-    color: '#666666',
+    color: "#3185FC",
+    fontWeight: "600",
   },
-  resendLink: {
-    fontSize: 16,
-    color: '#3185FC',
-    fontWeight: '600',
-    textDecorationLine: 'underline',
+  resendTextMuted: {
+    color: "#94A3B8",
   },
-  resendLinkDisabled: {
-    color: '#9CA3AF',
-    textDecorationLine: 'none',
+  backBtn: {
+    paddingVertical: 8,
+  },
+  backText: {
+    fontSize: 13,
+    color: "#94A3B8",
+  },
+  rtl: {
+    textAlign: "right",
   },
 });
 
 export default EmailVerificationScreen;
-

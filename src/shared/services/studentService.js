@@ -18,6 +18,9 @@ import { supabase } from "../../lib/supabase";
  */
 export const createStudent = async (studentData) => {
   try {
+    console.log("Attempting to connect to Supabase...");
+    console.log("Supabase URL:", process.env.EXPO_PUBLIC_SUPABASE_URL);
+
     const { data, error } = await supabase
       .from("students")
       .insert([
@@ -37,13 +40,20 @@ export const createStudent = async (studentData) => {
       .single();
 
     if (error) {
-      // error: console.error("Error creating student:", error);
+      console.error("Error creating student:", error);
+      console.error("Error code:", error.code);
+      console.error("Error message:", error.message);
+      console.error("Error details:", error.details);
       return { data: null, error };
     }
 
+    console.log("Student created successfully:", data);
     return { data, error: null };
   } catch (error) {
-    // error: console.error("Exception creating student:", error);
+    console.error("Exception creating student:", error);
+    console.error("Error type:", error.constructor.name);
+    console.error("Error message:", error.message);
+    console.error("Full error:", JSON.stringify(error, null, 2));
     return { data: null, error };
   }
 };

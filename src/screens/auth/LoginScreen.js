@@ -34,9 +34,6 @@ const translations = {
     resetPasswordButton: "Verify & Reset",
     loginButton: "Sign In",
     orContinue: "or continue with",
-    demoAccessTitle: "Quick demo access",
-    demoStudent: "Demo Student Home",
-    demoDriver: "Demo Driver Home",
     languageName: "English",
     languageFlag: "🇬🇧",
   },
@@ -57,9 +54,6 @@ const translations = {
     resetPasswordButton: "تحقق وأعد التعيين",
     loginButton: "تسجيل الدخول",
     orContinue: "أو المتابعة عبر",
-    demoAccessTitle: "وصول تجريبي سريع",
-    demoStudent: "الواجهة التجريبية للطالب",
-    demoDriver: "الواجهة التجريبية للسائق",
     languageName: "العربية",
     languageFlag: "🇲🇦",
   },
@@ -73,8 +67,6 @@ const LoginScreen = ({
   onLogin,
   onRequestResetCode,
   onConfirmResetPassword,
-  onDemoStudent,
-  onDemoDriver,
   onLanguageChange, // New prop to handle language switching
 }) => {
   const [email, setEmail] = useState("");
@@ -390,33 +382,6 @@ const LoginScreen = ({
                     {t.continueWithGoogle}
                   </Text>
                 </TouchableOpacity>
-
-                <View style={styles.demoContainer}>
-                  <Text
-                    style={[
-                      styles.demoTitle,
-                      language === "ar" && styles.rtlText,
-                    ]}
-                  >
-                    {t.demoAccessTitle}
-                  </Text>
-                  <View style={styles.demoActionsRow}>
-                    <TouchableOpacity
-                      style={styles.demoButton}
-                      onPress={onDemoStudent}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.demoButtonText}>{t.demoStudent}</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.demoButton}
-                      onPress={onDemoDriver}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={styles.demoButtonText}>{t.demoDriver}</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
               </View>
             ) : (
               /* Forgot Password Form */
@@ -724,41 +689,6 @@ const styles = StyleSheet.create({
   loadingContainer: {
     flexDirection: "row",
     alignItems: "center",
-  },
-  demoContainer: {
-    marginTop: 20,
-    backgroundColor: "#F8FAFF",
-    borderWidth: 1,
-    borderColor: "#E2E8F0",
-    borderRadius: 16,
-    padding: 12,
-    gap: 10,
-  },
-  demoTitle: {
-    fontSize: 13,
-    color: "#475569",
-    fontFamily: UbuntuFonts.medium,
-  },
-  demoActionsRow: {
-    flexDirection: "row",
-    gap: 8,
-  },
-  demoButton: {
-    flex: 1,
-    minHeight: 40,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: "#BFDBFE",
-    backgroundColor: "#EFF6FF",
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: 8,
-  },
-  demoButtonText: {
-    fontSize: 12,
-    color: "#1D4ED8",
-    fontFamily: UbuntuFonts.semiBold,
-    textAlign: "center",
   },
 });
 

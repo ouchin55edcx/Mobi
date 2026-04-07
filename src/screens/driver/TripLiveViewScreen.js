@@ -20,7 +20,6 @@ import {
   getDirectionsRoute,
   getOptimizedRoute,
 } from "../../shared/services/mapboxService";
-import { mockTrip } from "../../mocks/mockDriverData";
 import Constants from "expo-constants";
 
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
@@ -170,36 +169,7 @@ const getStudentInitials = (name) => {
   return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
 };
 
-const buildLiveTripSeed = (incomingTripData, isDemo) => {
-  const demoSeed = {
-    ...mockTrip,
-    students: (mockTrip.students || []).map((student) => ({
-      ...student,
-      status: normalizeStatus(student?.status),
-      etaSeconds: student?.etaSeconds ?? null,
-    })),
-  };
-
-  if (isDemo) {
-    if (!incomingTripData) return demoSeed;
-    return {
-      ...demoSeed,
-      ...incomingTripData,
-      students: (incomingTripData.students?.length
-        ? incomingTripData.students
-        : demoSeed.students
-      ).map((student) => ({
-        ...student,
-        status: normalizeStatus(student?.status),
-      })),
-      destinationLocation:
-        incomingTripData.destinationLocation || demoSeed.destinationLocation,
-      parkingLocation:
-        incomingTripData.parkingLocation || demoSeed.parkingLocation,
-      destination: incomingTripData.destination || demoSeed.destination,
-    };
-  }
-
+const buildLiveTripSeed = (incomingTripData) => {
   if (!incomingTripData) {
     return {
       students: [],
@@ -439,15 +409,11 @@ const TripLiveViewScreen = ({
   language = "en",
   onBack,
   onCompleteTrip,
-  isDemo = true,
 }) => {
   const t = translations[language] || translations.en;
   const isRTL = language === "ar";
 
-  const seededTrip = useMemo(
-    () => buildLiveTripSeed(tripData, isDemo),
-    [tripData, isDemo],
-  );
+  const seededTrip = useMemo(() => buildLiveTripSeed(tripData), [tripData]);
 
   const [trip] = useState(() => seededTrip);
   const [students] = useState(() =>

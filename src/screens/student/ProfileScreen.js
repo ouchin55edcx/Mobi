@@ -22,7 +22,6 @@ import {
   getStudentById,
   updateStudent,
 } from "../../shared/services/studentService";
-import { DEMO_STUDENT } from "../../shared/data/demoData";
 
 const translations = {
   en: {
@@ -137,7 +136,6 @@ const getInitials = (name = "") =>
 
 const ProfileScreen = ({
   studentId,
-  isDemo = false,
   language = "en",
   onLogout,
   onBack,
@@ -178,27 +176,10 @@ const ProfileScreen = ({
     !emailEditableAfter || new Date().getTime() >= emailEditableAfter.getTime();
 
   useEffect(() => {
-    if (studentId && !isDemo) {
+    if (studentId) {
       loadStudent();
-    } else if (isDemo) {
-      // Demo mode: use demo student data
-      setStudent({
-        id: DEMO_STUDENT.id,
-        fullname: DEMO_STUDENT.fullname,
-        email: DEMO_STUDENT.email,
-        phone: DEMO_STUDENT.phone,
-        school: DEMO_STUDENT.schoolName,
-        home_location: DEMO_STUDENT.home_location,
-      });
-      setFormData({
-        fullname: DEMO_STUDENT.fullname,
-        email: DEMO_STUDENT.email,
-        phone: DEMO_STUDENT.phone,
-        school: DEMO_STUDENT.school || "",
-      });
-      setLoading(false);
     }
-  }, [studentId, isDemo]);
+  }, [studentId]);
 
   useEffect(() => {
     let active = true;
@@ -269,9 +250,7 @@ const ProfileScreen = ({
   };
 
   const handleSave = async () => {
-    if (!studentId || isDemo) {
-      Alert.alert(t.saved);
-      setEditing(false);
+    if (!studentId) {
       return;
     }
 
@@ -389,7 +368,6 @@ const ProfileScreen = ({
         language={language}
         onBack={onBack}
         studentId={studentId}
-        isDemo={isDemo}
       />
 
       <ScrollView

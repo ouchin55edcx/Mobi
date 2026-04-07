@@ -8,7 +8,6 @@ import BottomTabNavigator from './BottomTabNavigator';
 
 const DriverTabNavigator = ({
   driverId,
-  isDemo = false,
   language = 'en',
   onLogout,
   onTripPress,
@@ -22,7 +21,6 @@ const DriverTabNavigator = ({
         return (
           <DriverHomeScreen
             driverId={driverId}
-            isDemo={isDemo}
             language={language}
             onTripPress={onTripPress}
             onSkipToProfile={() => setActiveTab('profile')}
@@ -32,7 +30,6 @@ const DriverTabNavigator = ({
         return (
           <DriverHistoryScreen
             driverId={driverId}
-            isDemo={isDemo}
             language={language}
           />
         );
@@ -40,7 +37,6 @@ const DriverTabNavigator = ({
         return (
           <DriverProfileScreen
             driverId={driverId}
-            isDemo={isDemo}
             language={language}
             onLogout={onLogout}
           />
@@ -49,7 +45,6 @@ const DriverTabNavigator = ({
         return (
           <DriverHomeScreen
             driverId={driverId}
-            isDemo={isDemo}
             language={language}
           />
         );
@@ -81,4 +76,3 @@ const styles = StyleSheet.create({
 });
 
 export default DriverTabNavigator;
-

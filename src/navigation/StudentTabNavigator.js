@@ -7,7 +7,6 @@ import BottomTabNavigator from "./BottomTabNavigator";
 
 const StudentTabNavigator = ({
   studentId,
-  isDemo = false,
   language = "en",
   onLogout,
   onNavigateToTripDetails,
@@ -20,7 +19,6 @@ const StudentTabNavigator = ({
         return (
           <StudentHomeScreen
             studentId={studentId}
-            isDemo={isDemo}
             language={language}
             onNavigateToTripDetails={onNavigateToTripDetails}
             onNavigateToProfile={() => setActiveTab("profile")}
@@ -30,7 +28,6 @@ const StudentTabNavigator = ({
         return (
           <ProfileScreen
             studentId={studentId}
-            isDemo={isDemo}
             language={language}
             onLogout={onLogout}
           />
@@ -39,7 +36,6 @@ const StudentTabNavigator = ({
         return (
           <StudentHomeScreen
             studentId={studentId}
-            isDemo={isDemo}
             language={language}
             onNavigateToProfile={() => setActiveTab("profile")}
           />

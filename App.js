@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import { Alert, StyleSheet } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { useFonts } from "expo-font";
@@ -18,8 +18,6 @@ import DriverProfileScreen from "./src/screens/driver/DriverProfileScreen";
 import TripLiveViewScreen from "./src/screens/driver/TripLiveViewScreen";
 import DriverTripDetailsScreen from "./src/screens/driver/DriverTripDetailsScreen";
 import TripDetailsScreen from "./src/screens/student/TripDetailsScreen";
-import mockDriverScenario from "./src/mocks/mockDriverData";
-import { DEMO_STUDENT, DEMO_DRIVER } from "./src/shared/data/demoData";
 import {
   getSession,
   signIn,
@@ -46,8 +44,6 @@ export default function App() {
   const [showSplash, setShowSplash] = useState(true);
   const [currentScreen, setCurrentScreen] = useState("login");
   const [language, setLanguage] = useState("en");
-  const [selectedRole, setSelectedRole] = useState(null);
-  const [isDemoMode, setIsDemoMode] = useState(false);
   const [studentData, setStudentData] = useState(null);
   const [driverData, setDriverData] = useState(null);
   const [driverRegisterParams, setDriverRegisterParams] = useState(null);
@@ -56,6 +52,7 @@ export default function App() {
   const [studentTripDetailsData, setStudentTripDetailsData] = useState(null);
   const [isBootstrappingAuth, setIsBootstrappingAuth] = useState(true);
   const [hasSeenOnboarding, setHasSeenOnboarding] = useState(null);
+  const studentHomeRefreshRef = useRef(null);
 
   // Load Ubuntu fonts
   const [fontsLoaded, fontError] = useFonts({
@@ -282,38 +279,7 @@ export default function App() {
     setTripLiveViewData(null);
     setTripDetailsData(null);
     setStudentTripDetailsData(null);
-    setSelectedRole(null);
-    setIsDemoMode(false);
     setCurrentScreen("login");
-  };
-
-  const goToDemoStudentHome = () => {
-    setIsDemoMode(false);
-    setDriverData(null);
-    setTripLiveViewData(null);
-    setTripDetailsData(null);
-    setStudentTripDetailsData(null);
-    setStudentData({
-      studentId: DEMO_STUDENT.id,
-      email: DEMO_STUDENT.email || "student.demo@mobi.app",
-      isDemo: true,
-    });
-    setCurrentScreen("studentHome");
-  };
-
-  const goToDemoDriverHome = () => {
-    setIsDemoMode(false);
-    setStudentData(null);
-    setTripLiveViewData(null);
-    setTripDetailsData(null);
-    setStudentTripDetailsData(null);
-    setDriverData({
-      driverId: DEMO_DRIVER.id,
-      email: DEMO_DRIVER.email || "driver.demo@mobi.app",
-      isDemo: true,
-    });
-    setDriverRegisterParams(null);
-    setCurrentScreen("driverHome");
   };
 
   // Show splash screen while fonts are loading or during initial splash
@@ -325,7 +291,7 @@ export default function App() {
     return <SplashScreen />;
   }
 
-  const handleSplashComplete = (targetScreen) => {
+  const handleSplashComplete = (targetScreen, params = null) => {
     setShowSplash(false);
     setCurrentScreen(targetScreen);
   };
@@ -349,35 +315,12 @@ export default function App() {
         <SelectRoleScreen
           language={language}
           onLanguageChange={setLanguage}
-          onBack={() => {
-            setIsDemoMode(false);
-            setCurrentScreen("onboarding");
-          }}
-          onRoleSelect={(role, isDemo) => {
-            if (isDemo) {
-              // Demo mode: redirect to home screen with demo data
-              if (role === "student") {
-                setStudentData({
-                  studentId: DEMO_STUDENT.id,
-                  email: DEMO_STUDENT.email,
-                  isDemo: true,
-                });
-                setCurrentScreen("studentHome");
-              } else if (role === "driver") {
-                setDriverData({
-                  driverId: DEMO_DRIVER.id,
-                  email: DEMO_DRIVER.email || "driver.demo@mobi.app",
-                  isDemo: true,
-                });
-                setCurrentScreen("driverHome");
-              }
-            } else {
-              // Normal mode: go to registration
-              if (role === "student") {
-                setCurrentScreen("studentRegister");
-              } else if (role === "driver") {
-                setCurrentScreen("driverRegister");
-              }
+          onBack={() => setCurrentScreen("onboarding")}
+          onRoleSelect={(role) => {
+            if (role === "student") {
+              setCurrentScreen("studentRegister");
+            } else if (role === "driver") {
+              setCurrentScreen("driverRegister");
             }
           }}
         />
@@ -391,9 +334,9 @@ export default function App() {
           onLanguageChange={setLanguage}
           onBack={() => setCurrentScreen("selectRole")}
           onSuccess={(data) => {
-            console.log("Student registered:", data);
-            // Store student data and navigate to email verification
-            setStudentData({ studentId: data.id, email: data.email });
+            console.log("OTP sent, navigating to email verification:", data);
+            // Store email and navigate to email verification
+            setStudentData({ email: data.email });
             setCurrentScreen("emailVerification");
           }}
         />
@@ -401,20 +344,26 @@ export default function App() {
     }
 
     if (currentScreen === "emailVerification") {
-      if (!studentData) {
-        // If no student data, go back to registration
+      if (!studentData?.email) {
+        // If no email data, go back to registration
         setCurrentScreen("studentRegister");
         return null;
       }
       return (
         <EmailVerificationScreen
-          userId={studentData.studentId}
           email={studentData.email}
-          userType="student"
           language={language}
           onBack={() => setCurrentScreen("studentRegister")}
-          onSuccess={() => {
-            console.log("Email verified successfully");
+          onSuccess={(data) => {
+            console.log(
+              "Email verified successfully, student profile created:",
+              data,
+            );
+            // Update student data with the actual student ID
+            setStudentData({
+              studentId: data.studentId,
+              email: data.email,
+            });
             // Navigate to student home after successful verification
             setCurrentScreen("studentHome");
           }}
@@ -426,7 +375,6 @@ export default function App() {
       return (
         <StudentHomeScreen
           studentId={studentData?.studentId}
-          isDemo={studentData?.isDemo || false}
           language={language}
           onNavigateToTripDetails={(tripData) => {
             const hasValidPayload =
@@ -442,6 +390,10 @@ export default function App() {
             setCurrentScreen("studentTripDetails");
           }}
           onNavigateToProfile={() => setCurrentScreen("studentProfile")}
+          onFocus={(refreshFn) => {
+            // Store refresh function to call when returning from trip details
+            studentHomeRefreshRef.current = refreshFn;
+          }}
         />
       );
     }
@@ -450,7 +402,6 @@ export default function App() {
       return (
         <ProfileScreen
           studentId={studentData?.studentId}
-          isDemo={studentData?.isDemo || false}
           language={language}
           onLogout={handleLogout}
           onBack={() => setCurrentScreen("studentHome")}
@@ -471,6 +422,10 @@ export default function App() {
           onBack={() => {
             setStudentTripDetailsData(null);
             setCurrentScreen("studentHome");
+            // Refresh booking status when returning from trip details
+            if (studentHomeRefreshRef.current) {
+              studentHomeRefreshRef.current();
+            }
           }}
         />
       );
@@ -546,11 +501,10 @@ export default function App() {
         <DriverHomeScreen
           driverId={driverData?.driverId}
           language={language}
-          isDemo={driverData?.isDemo || false}
           onSkipToProfile={() => setCurrentScreen("driverProfile")}
           onTripPress={async (tripData) => {
             try {
-              if (tripData?.id && driverData?.driverId && !driverData?.isDemo) {
+              if (tripData?.id && driverData?.driverId) {
                 await startAssignedTrip({
                   tripId: tripData.id,
                   driverId: driverData.driverId,
@@ -577,7 +531,6 @@ export default function App() {
       return (
         <DriverProfileScreen
           driverId={driverData?.driverId}
-          isDemo={driverData?.isDemo || false}
           language={language}
           onLogout={handleLogout}
           onBack={() => setCurrentScreen("driverHome")}
@@ -602,7 +555,7 @@ export default function App() {
           }}
           onStartTrip={(tripData) => {
             (async () => {
-              if (tripData?.id && driverData?.driverId && !driverData?.isDemo) {
+              if (tripData?.id && driverData?.driverId) {
                 await startAssignedTrip({
                   tripId: tripData.id,
                   driverId: driverData.driverId,
@@ -632,9 +585,8 @@ export default function App() {
           tripData={tripLiveViewData}
           driverId={driverData?.driverId}
           language={language}
-          isDemo={driverData?.isDemo || false}
           onCompleteTrip={async (tripData) => {
-            if (tripData?.id && driverData?.driverId && !driverData?.isDemo) {
+            if (tripData?.id && driverData?.driverId) {
               await completeAssignedTrip({
                 tripId: tripData.id,
                 driverId: driverData.driverId,

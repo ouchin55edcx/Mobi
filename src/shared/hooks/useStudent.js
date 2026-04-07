@@ -1,5 +1,10 @@
-import { useState } from 'react';
-import { createStudent, getStudentById, getStudentByEmail, updateStudent } from '../services/studentService';
+import { useState } from "react";
+import {
+  createStudent,
+  getStudentById,
+  getStudentByEmail,
+  updateStudent,
+} from "../services/studentService";
 
 /**
  * Custom hook for student operations
@@ -12,17 +17,22 @@ export const useStudent = () => {
     setLoading(true);
     setError(null);
 
+    console.log("Registering student with data:", studentData);
+
     try {
       const result = await createStudent(studentData);
-      
+
       if (result.error) {
-        setError(result.error.message || 'Failed to register student');
+        console.error("Registration failed:", result.error);
+        setError(result.error.message || "Failed to register student");
         return { success: false, data: null, error: result.error };
       }
 
+      console.log("Student registered successfully:", result.data);
       return { success: true, data: result.data, error: null };
     } catch (err) {
-      const errorMessage = err.message || 'An unexpected error occurred';
+      const errorMessage = err.message || "An unexpected error occurred";
+      console.error("Registration exception:", err);
       setError(errorMessage);
       return { success: false, data: null, error: err };
     } finally {
@@ -36,15 +46,15 @@ export const useStudent = () => {
 
     try {
       const result = await getStudentById(studentId);
-      
+
       if (result.error) {
-        setError(result.error.message || 'Failed to fetch student');
+        setError(result.error.message || "Failed to fetch student");
         return { success: false, data: null, error: result.error };
       }
 
       return { success: true, data: result.data, error: null };
     } catch (err) {
-      const errorMessage = err.message || 'An unexpected error occurred';
+      const errorMessage = err.message || "An unexpected error occurred";
       setError(errorMessage);
       return { success: false, data: null, error: err };
     } finally {
@@ -58,15 +68,15 @@ export const useStudent = () => {
 
     try {
       const result = await getStudentByEmail(email);
-      
+
       if (result.error) {
-        setError(result.error.message || 'Failed to fetch student');
+        setError(result.error.message || "Failed to fetch student");
         return { success: false, data: null, error: result.error };
       }
 
       return { success: true, data: result.data, error: null };
     } catch (err) {
-      const errorMessage = err.message || 'An unexpected error occurred';
+      const errorMessage = err.message || "An unexpected error occurred";
       setError(errorMessage);
       return { success: false, data: null, error: err };
     } finally {
@@ -80,15 +90,15 @@ export const useStudent = () => {
 
     try {
       const result = await updateStudent(studentId, updates);
-      
+
       if (result.error) {
-        setError(result.error.message || 'Failed to update student');
+        setError(result.error.message || "Failed to update student");
         return { success: false, data: null, error: result.error };
       }
 
       return { success: true, data: result.data, error: null };
     } catch (err) {
-      const errorMessage = err.message || 'An unexpected error occurred';
+      const errorMessage = err.message || "An unexpected error occurred";
       setError(errorMessage);
       return { success: false, data: null, error: err };
     } finally {
@@ -105,4 +115,3 @@ export const useStudent = () => {
     updateStudentData,
   };
 };
-

@@ -28,7 +28,6 @@ import {
   getDriverAssignedTrips,
   buildAndPersistTripRoute,
 } from "../../shared/services/groupingService";
-import { mockTrip } from "../../mocks/mockDriverData";
 import { supabase } from "../../lib/supabase";
 import Constants from "expo-constants";
 
@@ -202,7 +201,6 @@ const LoadingSkeleton = () => {
 
 const DriverHomeScreen = ({
   driverId,
-  isDemo = false,
   language = "en",
   onSkipToProfile,
   onTripPress,
@@ -360,7 +358,7 @@ const DriverHomeScreen = ({
         });
         fitToAllPoints(routeData.coordinates);
 
-        if (source === "manual" && trip?.id && !isDemo) {
+        if (source === "manual" && trip?.id) {
           await buildAndPersistTripRoute({
             tripId: trip.id,
             driverStartLocation: driverLocation,
@@ -378,7 +376,6 @@ const DriverHomeScreen = ({
     [
       driverLocation,
       fitToAllPoints,
-      isDemo,
       isTripLive,
       missingCoordinates,
       schoolLocation,
@@ -475,9 +472,7 @@ const DriverHomeScreen = ({
     try {
       let selectedTrip = null;
 
-      if (isDemo) {
-        selectedTrip = mockTrip;
-      } else if (!driverId) {
+      if (!driverId) {
         setLoadingTrip(false);
         return;
       } else {
@@ -521,7 +516,7 @@ const DriverHomeScreen = ({
     } finally {
       setLoadingTrip(false);
     }
-  }, [driverId, isDemo, pickCurrentStudent, requestDriverLocation]);
+  }, [driverId, pickCurrentStudent, requestDriverLocation]);
 
   useEffect(() => {
     loadTrip();
@@ -531,7 +526,7 @@ const DriverHomeScreen = ({
   // Detect active trip on mount
   useEffect(() => {
     const checkActiveTrip = async () => {
-      if (isDemo || !driverId) return;
+      if (!driverId) return;
       const { data } = await supabase
         .from("trips")
         .select("id, status")
@@ -541,12 +536,11 @@ const DriverHomeScreen = ({
       if (data) setActiveTripId(data.id);
     };
     checkActiveTrip();
-  }, [driverId, isDemo]);
+  }, [driverId]);
 
   // Start location tracking when trip is active
   useEffect(() => {
     if (!activeTripId) return;
-    if (isDemo) return;
 
     let subscription = null;
 
@@ -578,12 +572,11 @@ const DriverHomeScreen = ({
     return () => {
       if (subscription) subscription.remove();
     };
-  }, [activeTripId, isDemo]);
+  }, [activeTripId]);
 
   // Subscribe to trip status changes to stop tracking when trip ends
   useEffect(() => {
     if (!activeTripId) return;
-    if (isDemo) return;
 
     const channel = supabase
       .channel(`trip-status-${activeTripId}`)
@@ -604,7 +597,7 @@ const DriverHomeScreen = ({
       .subscribe();
 
     return () => supabase.removeChannel(channel);
-  }, [activeTripId, isDemo]);
+  }, [activeTripId]);
 
   useEffect(() => {
     if (!trip || missingCoordinates || route) return;
