@@ -1,39 +1,34 @@
-import React, { useState } from 'react';
-import { View, StyleSheet } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import React, { useState } from "react";
+import { View, StyleSheet } from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
 import DriverHomeScreen from "../screens/driver/DriverHomeScreen";
 import DriverHistoryScreen from "../screens/driver/DriverHistoryScreen";
 import DriverProfileScreen from "../screens/driver/DriverProfileScreen";
-import BottomTabNavigator from './BottomTabNavigator';
+import BottomTabNavigator from "./BottomTabNavigator";
 
 const DriverTabNavigator = ({
   driverId,
-  language = 'en',
+  language = "en",
   onLogout,
   onTripPress,
   onSkipToProfile,
 }) => {
-  const [activeTab, setActiveTab] = useState('home');
+  const [activeTab, setActiveTab] = useState("home");
 
   const renderScreen = () => {
     switch (activeTab) {
-      case 'home':
+      case "home":
         return (
           <DriverHomeScreen
             driverId={driverId}
             language={language}
             onTripPress={onTripPress}
-            onSkipToProfile={() => setActiveTab('profile')}
+            onSkipToProfile={() => setActiveTab("profile")}
           />
         );
-      case 'history':
-        return (
-          <DriverHistoryScreen
-            driverId={driverId}
-            language={language}
-          />
-        );
-      case 'profile':
+      case "history":
+        return <DriverHistoryScreen driverId={driverId} language={language} />;
+      case "profile":
         return (
           <DriverProfileScreen
             driverId={driverId}
@@ -42,18 +37,13 @@ const DriverTabNavigator = ({
           />
         );
       default:
-        return (
-          <DriverHomeScreen
-            driverId={driverId}
-            language={language}
-          />
-        );
+        return <DriverHomeScreen driverId={driverId} language={language} />;
     }
   };
 
   return (
     <View style={styles.container}>
-      <SafeAreaView style={styles.screenContainer} edges={['top', 'left', 'right']}>
+      <SafeAreaView style={styles.screenContainer} edges={[]}>
         {renderScreen()}
       </SafeAreaView>
       <BottomTabNavigator
@@ -68,7 +58,7 @@ const DriverTabNavigator = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: "#FFFFFF",
   },
   screenContainer: {
     flex: 1,

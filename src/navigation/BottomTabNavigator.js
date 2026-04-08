@@ -1,20 +1,40 @@
 import React from "react";
-import { View, TouchableOpacity, StyleSheet, Platform } from "react-native";
+import {
+  View,
+  TouchableOpacity,
+  StyleSheet,
+  Platform,
+  Text,
+} from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { MaterialIcons } from "@expo/vector-icons";
+import { UbuntuFonts } from "../shared/utils/fonts";
 
-const BottomTabNavigator = ({ activeTab, onTabChange, language = "en" }) => {
+const BottomTabNavigator = ({
+  activeTab,
+  onTabChange,
+  language = "en",
+  notifications = [],
+}) => {
+  const unreadCount = notifications.filter((n) => !n.is_read).length;
+
   const tabs = [
     {
       id: "home",
-      label: "Mobi",
-      icon: "directions-bus",
-      activeIcon: "directions-bus",
+      label: "Home",
+      icon: "home",
+      activeIcon: "home",
+    },
+    {
+      id: "history",
+      label: language === "ar" ? "السجل" : "History",
+      icon: "history",
+      activeIcon: "history",
     },
     {
       id: "profile",
       label: language === "ar" ? "الملف الشخصي" : "Profile",
-      icon: "person",
+      icon: "person-outline",
       activeIcon: "person",
     },
   ];
@@ -39,8 +59,15 @@ const BottomTabNavigator = ({ activeTab, onTabChange, language = "en" }) => {
                 <MaterialIcons
                   name={isActive ? tab.activeIcon : tab.icon}
                   size={22}
-                  color={isActive ? "#1F2937" : "#9CA3AF"}
+                  color="#FFFFFF"
                 />
+                {tab.id === "home" && unreadCount > 0 && (
+                  <View style={styles.badge}>
+                    <Text style={styles.badgeText}>
+                      {Math.min(unreadCount, 9)}
+                    </Text>
+                  </View>
+                )}
               </View>
               {isActive ? <View style={styles.activeIndicator} /> : null}
             </TouchableOpacity>
@@ -61,16 +88,14 @@ const styles = StyleSheet.create({
   tabShell: {
     flexDirection: "row",
     height: 76,
-    backgroundColor: "rgba(37, 99, 235, 0.10)",
+    backgroundColor: "#3185FC",
     borderRadius: 26,
-    borderWidth: 1,
-    borderColor: "rgba(37, 99, 235, 0.28)",
     paddingHorizontal: 14,
     alignItems: "center",
     justifyContent: "space-between",
-    shadowColor: "#94A3B8",
+    shadowColor: "#3185FC",
     shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18,
+    shadowOpacity: 0.3,
     shadowRadius: 12,
     elevation: 6,
   },
@@ -79,6 +104,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     height: "100%",
+    position: "relative",
   },
   iconWrap: {
     width: 40,
@@ -87,22 +113,35 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
     backgroundColor: "transparent",
+    position: "relative",
   },
   iconWrapActive: {
-    backgroundColor: "rgba(255,255,255,0.95)",
-    shadowColor: "#93C5FD",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.4,
-    shadowRadius: 6,
-    elevation: 3,
+    backgroundColor: "rgba(255, 255, 255, 0.2)",
   },
   activeIndicator: {
     position: "absolute",
-    bottom: 9,
-    width: 26,
-    height: 4,
+    bottom: 8,
+    width: 20,
+    height: 3,
     borderRadius: 999,
-    backgroundColor: "#2563EB",
+    backgroundColor: "#FFFFFF",
+  },
+  badge: {
+    position: "absolute",
+    top: -2,
+    right: -4,
+    minWidth: 16,
+    height: 16,
+    borderRadius: 8,
+    paddingHorizontal: 4,
+    backgroundColor: "#EF4444",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  badgeText: {
+    color: "#FFFFFF",
+    fontSize: 10,
+    fontFamily: UbuntuFonts.bold,
   },
 });
 

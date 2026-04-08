@@ -21,13 +21,7 @@ const SplashScreen = ({ onSplashComplete }) => {
         const { data: driver } = await getDriverByEmail(userEmail);
 
         if (driver) {
-          if (driver.status === "APPROVED") {
-            onSplashComplete("driverHome");
-          } else if (driver.status === "REJECTED") {
-            onSplashComplete("selectRole");
-          } else {
-            onSplashComplete("pendingApproval");
-          }
+          onSplashComplete("driverHome");
           return;
         }
 

@@ -10,10 +10,9 @@ import StudentRegisterScreen from "./src/screens/student/StudentRegisterScreen";
 import EmailVerificationScreen from "./src/screens/auth/EmailVerificationScreen";
 import StudentHomeScreen from "./src/screens/student/StudentHomeScreen";
 import ProfileScreen from "./src/screens/student/ProfileScreen";
-import DriverRegisterScreen from "./src/screens/driver/DriverRegistrationFlow";
+import DriverRegisterScreen from "./src/screens/auth/DriverRegisterScreen";
 import DriverVehicleScreen from "./src/screens/driver/DriverVehicleScreen";
-import PendingApprovalScreen from "./src/screens/driver/PendingApprovalScreen";
-import DriverHomeScreen from "./src/screens/driver/DriverHomeScreen";
+import DriverTabNavigator from "./src/navigation/DriverTabNavigator";
 import DriverProfileScreen from "./src/screens/driver/DriverProfileScreen";
 import TripLiveViewScreen from "./src/screens/driver/TripLiveViewScreen";
 import DriverTripDetailsScreen from "./src/screens/driver/DriverTripDetailsScreen";
@@ -75,16 +74,34 @@ export default function App() {
   });
 
   useEffect(() => {
-    // Check onboarding status
-    const checkOnboarding = async () => {
+    // Check onboarding status and pending driver registration
+    const checkStartupState = async () => {
       try {
         const value = await AsyncStorage.getItem("@has_seen_onboarding");
         setHasSeenOnboarding(value === "true");
+
+        // Check for pending driver registration
+        const pending = await AsyncStorage.getItem(
+          "@pending_driver_registration",
+        );
+        if (pending) {
+          const data = JSON.parse(pending);
+          const age = Date.now() - data.timestamp;
+          // If pending and less than 24 hours old, redirect to driver registration
+          if (age < 24 * 60 * 60 * 1000) {
+            console.log("Found pending driver registration, redirecting...");
+            setCurrentScreen("driverRegister");
+            setDriverData({ email: data.email });
+          } else {
+            // Expired, clear it
+            await AsyncStorage.removeItem("@pending_driver_registration");
+          }
+        }
       } catch (e) {
         setHasSeenOnboarding(false);
       }
     };
-    checkOnboarding();
+    checkStartupState();
   }, []);
 
   useEffect(() => {
@@ -130,11 +147,7 @@ export default function App() {
             driverId: driverResult.data.id,
             email: userEmail,
           });
-          setCurrentScreen(
-            driverResult.data.status === "APPROVED"
-              ? "driverHome"
-              : "pendingApproval",
-          );
+          setCurrentScreen("driverHome");
           setIsBootstrappingAuth(false);
           return;
         }
@@ -203,11 +216,7 @@ export default function App() {
         email: userEmail,
       });
 
-      if (driverResult.data.status === "APPROVED") {
-        setCurrentScreen("driverHome");
-      } else {
-        setCurrentScreen("pendingApproval");
-      }
+      setCurrentScreen("driverHome");
       return;
     }
 
@@ -437,60 +446,12 @@ export default function App() {
           language={language}
           onLanguageChange={setLanguage}
           onBack={() => setCurrentScreen("selectRole")}
-          navigation={{
-            navigate: (routeName, params) => {
-              if (routeName === "DriverVehicleRegister") {
-                setDriverRegisterParams(params);
-                setCurrentScreen("DriverVehicleRegister");
-              }
-            },
-          }}
-        />
-      );
-    }
-
-    if (currentScreen === "DriverVehicleRegister") {
-      if (!driverRegisterParams) {
-        setCurrentScreen("driverRegister");
-        return null;
-      }
-
-      return (
-        <DriverVehicleScreen
-          language={language}
-          onLanguageChange={setLanguage}
-          route={{ params: driverRegisterParams }}
-          onBack={() => setCurrentScreen("driverRegister")}
           onSuccess={(data) => {
-            setDriverData({ driverId: data.driverId, email: data.email });
-            setDriverRegisterParams(null);
-            setCurrentScreen("pendingApproval");
-          }}
-        />
-      );
-    }
-
-    if (currentScreen === "pendingApproval") {
-      if (!driverData) {
-        // If no driver data, go back to registration
-        setCurrentScreen("driverRegister");
-        return null;
-      }
-      return (
-        <PendingApprovalScreen
-          driverId={driverData.driverId}
-          language={language}
-          onLogout={handleLogout}
-          onApproved={() => {
-            console.log("Driver approved");
-            // Navigate to driver home
-            setCurrentScreen("driverHome");
-          }}
-          onRejected={() => {
-            console.log("Driver rejected");
-            // Could navigate to a rejection screen or back to login
-            setCurrentScreen("login");
-            setDriverData(null);
+            console.log("Driver registered:", data);
+            if (data.isDriver) {
+              setDriverData({ driverId: data.driverId, email: data.email });
+              setCurrentScreen("driverHome");
+            }
           }}
         />
       );
@@ -498,10 +459,10 @@ export default function App() {
 
     if (currentScreen === "driverHome") {
       return (
-        <DriverHomeScreen
+        <DriverTabNavigator
           driverId={driverData?.driverId}
           language={language}
-          onSkipToProfile={() => setCurrentScreen("driverProfile")}
+          onLogout={handleLogout}
           onTripPress={async (tripData) => {
             try {
               if (tripData?.id && driverData?.driverId) {
