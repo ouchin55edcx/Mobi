@@ -14,7 +14,7 @@ const SplashScreen = ({ onSplashComplete }) => {
       } = await supabase.auth.getSession();
 
       if (session?.user) {
-        // User is logged in and OTP verified — check their role
+        // User has an active session — check their role
         const userEmail = session.user.email;
 
         // Check drivers table first

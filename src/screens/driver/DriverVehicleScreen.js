@@ -10,6 +10,7 @@ import {
   TouchableOpacity,
   View,
 } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { MaterialIcons } from "@expo/vector-icons";
@@ -277,6 +278,10 @@ const DriverVehicleScreen = ({
         setBannerError(dbError.message);
         return;
       }
+
+      // Persist driver identity locally for session restoration on app restart
+      await AsyncStorage.setItem("@registered_driver_email", params.email);
+      await AsyncStorage.setItem("@registered_driver_id", driverRecord.id);
 
       if (onSuccess) {
         onSuccess({ driverId: driverRecord?.id, email: params.email });

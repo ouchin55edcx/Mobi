@@ -202,10 +202,17 @@ const DriverProfileScreen = ({
   if (loading) {
     return (
       <View style={styles.container}>
-        <Header title={t.title} subtitle={t.subtitle} language={language} onBack={onBack} />
+        <Header
+          title={t.title}
+          subtitle={t.subtitle}
+          language={language}
+          onBack={onBack}
+        />
         <View style={styles.loadingContainer}>
           <ActivityIndicator size="large" color="#0D6EFD" />
-          <Text style={[styles.loadingText, isRTL && styles.rtl]}>{t.loading}</Text>
+          <Text style={[styles.loadingText, isRTL && styles.rtl]}>
+            {t.loading}
+          </Text>
         </View>
       </View>
     );
@@ -214,7 +221,12 @@ const DriverProfileScreen = ({
   return (
     <View style={styles.container}>
       <StatusBar style="dark" />
-      <Header title={t.title} subtitle={t.subtitle} language={language} onBack={onBack} />
+      <Header
+        title={t.title}
+        subtitle={t.subtitle}
+        language={language}
+        onBack={onBack}
+      />
 
       <ScrollView
         style={styles.scrollView}
@@ -237,12 +249,18 @@ const DriverProfileScreen = ({
                   placeholder={t.fullname}
                 />
               ) : (
-                <Text style={[styles.heroName, isRTL && styles.rtl]}>{displayName}</Text>
+                <Text style={[styles.heroName, isRTL && styles.rtl]}>
+                  {displayName}
+                </Text>
               )}
-              <Text style={[styles.heroRole, isRTL && styles.rtl]}>{t.driver}</Text>
+              <Text style={[styles.heroRole, isRTL && styles.rtl]}>
+                {t.driver}
+              </Text>
               <View style={styles.ratingPill}>
                 <MaterialIcons name="star" size={14} color="#F59E0B" />
-                <Text style={styles.ratingText}>{(driver?.rating || DEFAULT_DRIVER_PROFILE.rating).toFixed(1)}</Text>
+                <Text style={styles.ratingText}>
+                  {(driver?.rating || DEFAULT_DRIVER_PROFILE.rating).toFixed(1)}
+                </Text>
               </View>
             </View>
 
@@ -253,30 +271,44 @@ const DriverProfileScreen = ({
                 activeOpacity={0.8}
               >
                 <MaterialIcons name="edit" size={18} color="#0D6EFD" />
-                <Text style={[styles.editButtonText, isRTL && styles.rtl]}>{t.edit}</Text>
+                <Text style={[styles.editButtonText, isRTL && styles.rtl]}>
+                  {t.edit}
+                </Text>
               </TouchableOpacity>
             )}
           </View>
         </View>
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, isRTL && styles.rtl]}>{t.busInfo}</Text>
+          <Text style={[styles.sectionTitle, isRTL && styles.rtl]}>
+            {t.busInfo}
+          </Text>
           <View style={styles.infoCard}>
             <View style={styles.infoRow}>
               <View style={styles.iconWrap}>
-                <MaterialIcons name="directions-car" size={18} color="#0D6EFD" />
+                <MaterialIcons
+                  name="directions-car"
+                  size={18}
+                  color="#0D6EFD"
+                />
               </View>
               <View style={styles.infoContent}>
-                <Text style={[styles.infoLabel, isRTL && styles.rtl]}>{t.busModel}</Text>
+                <Text style={[styles.infoLabel, isRTL && styles.rtl]}>
+                  {t.busModel}
+                </Text>
                 {editing ? (
                   <TextInput
                     style={[styles.input, isRTL && styles.rtl]}
                     value={formData.bus_model}
-                    onChangeText={(value) => handleInputChange("bus_model", value)}
+                    onChangeText={(value) =>
+                      handleInputChange("bus_model", value)
+                    }
                     placeholder={t.busModel}
                   />
                 ) : (
-                  <Text style={[styles.infoValue, isRTL && styles.rtl]}>{driver?.bus?.model || "--"}</Text>
+                  <Text style={[styles.infoValue, isRTL && styles.rtl]}>
+                    {driver?.bus?.model || "--"}
+                  </Text>
                 )}
               </View>
             </View>
@@ -285,19 +317,29 @@ const DriverProfileScreen = ({
 
             <View style={styles.infoRow}>
               <View style={styles.iconWrap}>
-                <MaterialIcons name="confirmation-number" size={18} color="#0D6EFD" />
+                <MaterialIcons
+                  name="confirmation-number"
+                  size={18}
+                  color="#0D6EFD"
+                />
               </View>
               <View style={styles.infoContent}>
-                <Text style={[styles.infoLabel, isRTL && styles.rtl]}>{t.busPlate}</Text>
+                <Text style={[styles.infoLabel, isRTL && styles.rtl]}>
+                  {t.busPlate}
+                </Text>
                 {editing ? (
                   <TextInput
                     style={[styles.input, isRTL && styles.rtl]}
                     value={formData.bus_plate}
-                    onChangeText={(value) => handleInputChange("bus_plate", value)}
+                    onChangeText={(value) =>
+                      handleInputChange("bus_plate", value)
+                    }
                     placeholder={t.busPlate}
                   />
                 ) : (
-                  <Text style={[styles.infoValue, isRTL && styles.rtl]}>{driver?.bus?.plate_number || "--"}</Text>
+                  <Text style={[styles.infoValue, isRTL && styles.rtl]}>
+                    {driver?.bus?.plate_number || "--"}
+                  </Text>
                 )}
               </View>
             </View>
@@ -305,14 +347,18 @@ const DriverProfileScreen = ({
         </View>
 
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, isRTL && styles.rtl]}>{t.personalInfo}</Text>
+          <Text style={[styles.sectionTitle, isRTL && styles.rtl]}>
+            {t.personalInfo}
+          </Text>
           <View style={styles.infoCard}>
             <View style={styles.infoRow}>
               <View style={styles.iconWrap}>
                 <MaterialIcons name="phone" size={18} color="#0D6EFD" />
               </View>
               <View style={styles.infoContent}>
-                <Text style={[styles.infoLabel, isRTL && styles.rtl]}>{t.phone}</Text>
+                <Text style={[styles.infoLabel, isRTL && styles.rtl]}>
+                  {t.phone}
+                </Text>
                 {editing ? (
                   <TextInput
                     style={[styles.input, isRTL && styles.rtl]}
@@ -322,7 +368,9 @@ const DriverProfileScreen = ({
                     keyboardType="phone-pad"
                   />
                 ) : (
-                  <Text style={[styles.infoValue, isRTL && styles.rtl]}>{driver?.phone || "--"}</Text>
+                  <Text style={[styles.infoValue, isRTL && styles.rtl]}>
+                    {driver?.phone || "--"}
+                  </Text>
                 )}
               </View>
             </View>
@@ -334,7 +382,9 @@ const DriverProfileScreen = ({
                 <MaterialIcons name="email" size={18} color="#0D6EFD" />
               </View>
               <View style={styles.infoContent}>
-                <Text style={[styles.infoLabel, isRTL && styles.rtl]}>{t.email}</Text>
+                <Text style={[styles.infoLabel, isRTL && styles.rtl]}>
+                  {t.email}
+                </Text>
                 {editing ? (
                   <TextInput
                     style={[styles.input, isRTL && styles.rtl]}
@@ -345,7 +395,9 @@ const DriverProfileScreen = ({
                     autoCapitalize="none"
                   />
                 ) : (
-                  <Text style={[styles.infoValue, isRTL && styles.rtl]}>{driver?.email || "--"}</Text>
+                  <Text style={[styles.infoValue, isRTL && styles.rtl]}>
+                    {driver?.email || "--"}
+                  </Text>
                 )}
               </View>
             </View>
@@ -357,16 +409,22 @@ const DriverProfileScreen = ({
                 <MaterialIcons name="badge" size={18} color="#0D6EFD" />
               </View>
               <View style={styles.infoContent}>
-                <Text style={[styles.infoLabel, isRTL && styles.rtl]}>{t.licenseNumber}</Text>
+                <Text style={[styles.infoLabel, isRTL && styles.rtl]}>
+                  {t.licenseNumber}
+                </Text>
                 {editing ? (
                   <TextInput
                     style={[styles.input, isRTL && styles.rtl]}
                     value={formData.license_number}
-                    onChangeText={(value) => handleInputChange("license_number", value)}
+                    onChangeText={(value) =>
+                      handleInputChange("license_number", value)
+                    }
                     placeholder={t.licenseNumber}
                   />
                 ) : (
-                  <Text style={[styles.infoValue, isRTL && styles.rtl]}>{driver?.license_number || "--"}</Text>
+                  <Text style={[styles.infoValue, isRTL && styles.rtl]}>
+                    {driver?.license_number || "--"}
+                  </Text>
                 )}
               </View>
             </View>
@@ -378,18 +436,23 @@ const DriverProfileScreen = ({
                 <MaterialIcons name="people" size={18} color="#0D6EFD" />
               </View>
               <View style={styles.infoContent}>
-                <Text style={[styles.infoLabel, isRTL && styles.rtl]}>{t.busCapacity}</Text>
+                <Text style={[styles.infoLabel, isRTL && styles.rtl]}>
+                  {t.busCapacity}
+                </Text>
                 {editing ? (
                   <TextInput
                     style={[styles.input, isRTL && styles.rtl]}
                     value={formData.bus_capacity}
-                    onChangeText={(value) => handleInputChange("bus_capacity", value)}
+                    onChangeText={(value) =>
+                      handleInputChange("bus_capacity", value)
+                    }
                     placeholder={t.busCapacity}
                     keyboardType="numeric"
                   />
                 ) : (
                   <Text style={[styles.infoValue, isRTL && styles.rtl]}>
-                    {driver?.bus?.capacity || "--"} {language === "ar" ? "مقعد" : "seats"}
+                    {driver?.bus?.capacity || "--"}{" "}
+                    {language === "ar" ? "مقعد" : "seats"}
                   </Text>
                 )}
               </View>
@@ -424,14 +487,24 @@ const DriverProfileScreen = ({
               disabled={saving}
               activeOpacity={0.8}
             >
-              {saving ? <ActivityIndicator color="#FFFFFF" /> : <Text style={styles.saveButtonText}>{t.save}</Text>}
+              {saving ? (
+                <ActivityIndicator color="#FFFFFF" />
+              ) : (
+                <Text style={styles.saveButtonText}>{t.save}</Text>
+              )}
             </TouchableOpacity>
           </View>
         )}
 
-        <TouchableOpacity style={styles.logoutButton} onPress={handleLogout} activeOpacity={0.8}>
+        <TouchableOpacity
+          style={styles.logoutButton}
+          onPress={handleLogout}
+          activeOpacity={0.8}
+        >
           <MaterialIcons name="logout" size={20} color="#DC2626" />
-          <Text style={[styles.logoutButtonText, isRTL && styles.rtl]}>{t.logout}</Text>
+          <Text style={[styles.logoutButtonText, isRTL && styles.rtl]}>
+            {t.logout}
+          </Text>
         </TouchableOpacity>
       </ScrollView>
     </View>

@@ -117,116 +117,273 @@ export const createStudentBookingAndGroup = async ({
 };
 
 export const getStudentCurrentTrip = async (studentId) => {
-  const membershipResult = await supabase
-    .from("transport_trip_members")
-    .select(
-      `
-      trip_id,
-      pickup_order,
-      no_show,
-      booking_id,
-      bookings:booking_id (*)
-    `,
-    )
-    .eq("student_id", studentId)
-    .order("created_at", { ascending: false })
-    .limit(10);
+  // Find trips where this student is in the student_ids array
+  const { data: trips, error: tripErr } = await supabase
+    .from("trips")
+    .select(`
+      *,
+      schools (
+        latitude,
+        longitude,
+        name
+      )
+    `)
+    .in("status", ["SCHEDULED", "IN_PROGRESS"])
+    .order("start_time", { ascending: true });
 
-  if (membershipResult.error) {
-    return { data: null, error: membershipResult.error };
+  if (tripErr) {
+    return { data: null, error: tripErr };
   }
 
-  const memberships = membershipResult.data || [];
-  if (memberships.length === 0) {
+  // Filter for trips that include this student
+  const studentTrip = (trips || []).find(
+    (t) => Array.isArray(t.student_ids) && t.student_ids.includes(studentId),
+  );
+
+  if (!studentTrip) {
     return { data: null, error: null };
   }
 
-  const tripCandidates = memberships.map((item) => item.trip_id);
-  const tripResult = await supabase
-    .from("transport_trips")
-    .select("*")
-    .in("id", tripCandidates)
-    .in("status", ["trip_pending", "trip_started"])
-    .order("start_time", { ascending: true })
-    .limit(1)
-    .maybeSingle();
+  // Manually fetch driver and bus data (no FK in Supabase)
+  let driverName = null;
+  let driverPhone = null;
+  let plateNumber = null;
+  let busCapacity = null;
 
-  if (tripResult.error || !tripResult.data) {
-    return { data: null, error: tripResult.error || null };
+  if (studentTrip.driver_id) {
+    const { data: drv } = await supabase
+      .from("drivers")
+      .select("fullname, phone")
+      .eq("id", studentTrip.driver_id)
+      .maybeSingle();
+    if (drv) {
+      driverName = drv.fullname;
+      driverPhone = drv.phone;
+    }
   }
 
-  const tripId = tripResult.data.id;
-  const booking =
-    memberships.find((item) => item.trip_id === tripId)?.bookings || null;
-
-  const membersResult = await supabase
-    .from("transport_trip_members")
-    .select(
-      `
-      *,
-      students:student_id (id, fullname, phone, home_location)
-    `,
-    )
-    .eq("trip_id", tripId)
-    .order("pickup_order", { ascending: true });
-
-  if (membersResult.error) {
-    return { data: null, error: membersResult.error };
+  if (studentTrip.bus_id) {
+    const { data: bus } = await supabase
+      .from("buses")
+      .select("plate_number, capacity")
+      .eq("id", studentTrip.bus_id)
+      .maybeSingle();
+    if (bus) {
+      plateNumber = bus.plate_number;
+      busCapacity = bus.capacity;
+    }
   }
+
+  const pickupOrder = studentTrip.pickup_order || studentTrip.student_ids || [];
+  const pickupTimes = studentTrip.pickup_times || {};
+  const studentIndex = pickupOrder.indexOf(studentId);
+
+  const trip = {
+    id: studentTrip.id,
+    tripId: studentTrip.id,
+    status: studentTrip.status,
+    startTime: studentTrip.start_time,
+    endTime: studentTrip.end_time || studentTrip.school_arrival,
+    timeSlot: `${new Date(studentTrip.start_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })} - ${new Date(studentTrip.school_arrival || studentTrip.start_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}`,
+    driverId: studentTrip.driver_id,
+    busId: studentTrip.bus_id,
+    membersCount: pickupOrder.length,
+    capacity: busCapacity || null,
+    schoolLocation: studentTrip.schools ? {
+      latitude: studentTrip.schools.latitude,
+      longitude: studentTrip.schools.longitude
+    } : studentTrip.school_location,
+    destination: studentTrip.schools?.name || "School",
+    destinationLocation: studentTrip.schools ? {
+      latitude: studentTrip.schools.latitude,
+      longitude: studentTrip.schools.longitude
+    } : studentTrip.school_location,
+    pickupLocation: studentTrip.school_location,
+    routeCoordinates: studentTrip.route_polyline || [],
+    totalDistanceKm: studentTrip.total_distance_m
+      ? studentTrip.total_distance_m / 1000
+      : null,
+    totalDurationMinutes: studentTrip.total_duration_s
+      ? Math.round(studentTrip.total_duration_s / 60)
+      : null,
+    students: pickupOrder.map((sid, i) => ({
+      id: sid,
+      name: sid === studentId ? "You" : `Student ${i + 1}`,
+      phone: null,
+      homeLocation: null,
+      pickupOrder: i + 1,
+      pickupTime: pickupTimes[sid] || null,
+    })),
+    etaByMember: studentTrip.eta_by_member || {},
+    liveLocation:
+      studentTrip.live_location || studentTrip.current_location ||
+      (studentTrip.driver_lat && studentTrip.driver_lng ? { latitude: studentTrip.driver_lat, longitude: studentTrip.driver_lng } : null) || null,
+    isLocked: studentTrip.is_locked,
+    driverName,
+    driverPhone,
+    plateNumber,
+    busModel: busCapacity ? `${busCapacity} seats` : null,
+    pickupOrder,
+    pickupTimes,
+    studentOrder: studentIndex >= 0 ? studentIndex + 1 : 1,
+    pickupTime: pickupTimes[studentId] || null,
+  };
 
   return {
     data: {
-      booking,
-      trip: normalizeTripShape(tripResult.data, membersResult.data || []),
+      booking: null,
+      trip,
     },
     error: null,
   };
 };
 
 export const getDriverAssignedTrips = async (driverId) => {
+  console.log("[getDriverAssignedTrips] Querying for driverId:", driverId);
+
   const { data, error } = await supabase
-    .from("transport_trips")
-    .select("*")
+    .from("trips")
+    .select(`
+      *,
+      schools (
+        latitude,
+        longitude,
+        name
+      )
+    `)
     .eq("driver_id", driverId)
-    .in("status", ["trip_pending", "trip_started"])
+    .in("status", ["SCHEDULED", "IN_PROGRESS"])
     .order("start_time", { ascending: true });
+
+  console.log(
+    "[getDriverAssignedTrips] Raw result:",
+    data?.length ?? 0,
+    "trips, error:",
+    error,
+  );
 
   if (error) {
     return { data: [], error };
   }
 
-  const tripIds = (data || []).map((row) => row.id);
-  if (tripIds.length === 0) {
+  if (!data?.length) {
     return { data: [], error: null };
   }
 
-  const membersResult = await supabase
-    .from("transport_trip_members")
-    .select(
-      `
-      *,
-      students:student_id (id, fullname, phone, home_location)
-    `,
-    )
-    .in("trip_id", tripIds)
-    .order("pickup_order", { ascending: true });
+  console.log(
+    "[getDriverAssignedTrips] Trip statuses:",
+    data.map((t) => ({
+      id: t.id,
+      status: t.status,
+      studentCount: t.student_ids?.length,
+    })),
+  );
 
-  if (membersResult.error) {
-    return { data: [], error: membersResult.error };
+  // Collect all student IDs, driver IDs, and bus IDs across all trips
+  const allStudentIds = [
+    ...new Set(
+      data
+        .flatMap((t) => t.student_ids || t.pickup_order || [])
+        .filter(Boolean),
+    ),
+  ];
+  const driverIds = [...new Set(data.map((t) => t.driver_id).filter(Boolean))];
+  const busIds = [...new Set(data.map((t) => t.bus_id).filter(Boolean))];
+
+  let studentsById = new Map();
+  if (allStudentIds.length > 0) {
+    const { data: students, error: stuErr } = await supabase
+      .from("students")
+      .select("id, fullname, phone, home_location")
+      .in("id", allStudentIds);
+    if (!stuErr && students) {
+      studentsById = new Map(students.map((s) => [s.id, s]));
+    }
   }
 
-  const membersByTripId = new Map();
-  (membersResult.data || []).forEach((member) => {
-    const key = member.trip_id;
-    if (!membersByTripId.has(key)) {
-      membersByTripId.set(key, []);
+  let driversById = new Map();
+  if (driverIds.length > 0) {
+    const { data: drivers, error: drvErr } = await supabase
+      .from("drivers")
+      .select("id, fullname, phone")
+      .in("id", driverIds);
+    if (!drvErr && drivers) {
+      driversById = new Map(drivers.map((d) => [d.id, d]));
     }
-    membersByTripId.get(key).push(member);
-  });
+  }
 
-  const normalized = data.map((trip) =>
-    normalizeTripShape(trip, membersByTripId.get(trip.id) || []),
-  );
+  let busesById = new Map();
+  if (busIds.length > 0) {
+    const { data: buses, error: busErr } = await supabase
+      .from("buses")
+      .select("id, plate_number, capacity")
+      .in("id", busIds);
+    if (!busErr && buses) {
+      busesById = new Map(buses.map((b) => [b.id, b]));
+    }
+  }
+
+  // Normalize trip shape for DriverHomeScreen
+  const normalized = data.map((trip) => {
+    const pickupOrder = trip.pickup_order || trip.student_ids || [];
+    const pickupTimes = trip.pickup_times || {};
+
+    // Build student list with real data from students table
+    const students = pickupOrder.map((sid, index) => {
+      const stu = studentsById.get(sid);
+      return {
+        id: sid,
+        name: stu?.fullname || `Student ${index + 1}`,
+        phone: stu?.phone || null,
+        homeLocation: stu?.home_location || null,
+        pickupOrder: index + 1,
+        pickupTime: pickupTimes[sid] || null,
+      };
+    });
+
+    const bus = busesById.get(trip.bus_id);
+    const driver = driversById.get(trip.driver_id);
+
+    const schoolLoc = trip.schools ? {
+      latitude: trip.schools.latitude,
+      longitude: trip.schools.longitude
+    } : trip.school_location;
+
+    return {
+      id: trip.id,
+      tripId: trip.id,
+      status: trip.status,
+      startTime: trip.start_time,
+      endTime: trip.end_time || trip.school_arrival,
+      timeSlot: `${new Date(trip.start_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })} - ${new Date(trip.school_arrival || trip.start_time).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false })}`,
+      driverId: trip.driver_id,
+      busId: trip.bus_id,
+      membersCount: students.length,
+      capacity: bus?.capacity || null,
+      schoolLocation: schoolLoc,
+      destination: trip.schools?.name || "School",
+      destinationLocation: schoolLoc,
+      pickupLocation: students[0]?.homeLocation || schoolLoc,
+      routeCoordinates: trip.route_polyline || [],
+      totalDistanceKm: trip.total_distance_m
+        ? trip.total_distance_m / 1000
+        : null,
+      totalDurationMinutes: trip.total_duration_s
+        ? Math.round(trip.total_duration_s / 60)
+        : null,
+      students,
+      etaByMember: trip.eta_by_member || {},
+      liveLocation: trip.live_location || trip.current_location ||
+        (trip.driver_lat && trip.driver_lng ? { latitude: trip.driver_lat, longitude: trip.driver_lng } : null) || null,
+      isLocked: trip.is_locked,
+      driverName: driver?.fullname || null,
+      driverPhone: driver?.phone || null,
+      plateNumber: bus?.plate_number || null,
+      busModel: bus?.capacity ? `${bus.capacity} seats` : null,
+      pickupOrder,
+      pickupTimes,
+    };
+  });
 
   return { data: normalized, error: null };
 };
@@ -680,18 +837,18 @@ export const cancelStudentPendingTrip = async ({
   const tripUpdatePayload =
     remainingMembers === 0
       ? {
-          status: "trip_completed",
-          bus_id: null,
-          driver_id: null,
-          locked_at: null,
-          members_count: 0,
-          is_locked: false,
-          updated_at: new Date().toISOString(),
-        }
+        status: "trip_completed",
+        bus_id: null,
+        driver_id: null,
+        locked_at: null,
+        members_count: 0,
+        is_locked: false,
+        updated_at: new Date().toISOString(),
+      }
       : {
-          members_count: remainingMembers,
-          updated_at: new Date().toISOString(),
-        };
+        members_count: remainingMembers,
+        updated_at: new Date().toISOString(),
+      };
 
   const tripUpdate = await supabase
     .from("transport_trips")
@@ -952,7 +1109,7 @@ const buildGroupingPayload = ({
               60,
               Math.round(
                 ((group.estimated_total_time_minutes || 1) * 60 * (index + 1)) /
-                  Math.max(1, (group.optimized_pickup_order || []).length),
+                Math.max(1, (group.optimized_pickup_order || []).length),
               ),
             ),
           };

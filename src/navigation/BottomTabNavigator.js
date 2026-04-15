@@ -26,12 +26,6 @@ const BottomTabNavigator = ({
       activeIcon: "home",
     },
     {
-      id: "history",
-      label: language === "ar" ? "السجل" : "History",
-      icon: "history",
-      activeIcon: "history",
-    },
-    {
       id: "profile",
       label: language === "ar" ? "الملف الشخصي" : "Profile",
       icon: "person-outline",

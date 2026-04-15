@@ -36,6 +36,7 @@ import {
   computeTripTimes,
   getTimeBadge,
 } from "../../shared/services/tripTimingService";
+import { getAssignedTripForStudent } from "../../shared/services/tripService";
 import { UbuntuFonts } from "../../shared/utils/fonts";
 
 /* ─────────────────────────────── Color Palette ────────────────────────────── */
@@ -172,6 +173,34 @@ const formatTimeCompact = (date) => {
   });
 };
 
+/** Format a future/past time relative to now: "in 2h 15m", "3m ago", or "—:—" */
+const formatDynamicTime = (date, badge, lang) => {
+  if (!date || isNaN(date.getTime())) return "—:—";
+
+  const now = Date.now();
+  const eventMs = date.getTime();
+  const diffMs = eventMs - now;
+  const diffSec = Math.round(diffMs / 1000);
+  const diffMin = Math.round(Math.abs(diffSec) / 60);
+  const diffHour = Math.floor(diffMin / 60);
+  const remainMin = diffMin % 60;
+
+  if (badge === "NOW") {
+    return lang === "ar" ? "الآن" : "NOW";
+  }
+
+  if (badge === "PASSED" || diffSec < 0) {
+    if (diffMin < 1) return lang === "ar" ? "انتهى" : "Done";
+    if (diffMin < 60) return `${diffMin}m ${lang === "ar" ? "مضى" : "ago"}`;
+    return `${diffHour}h ${remainMin}m ${lang === "ar" ? "مضى" : "ago"}`;
+  }
+
+  // SOON / future
+  if (diffMin < 1) return lang === "ar" ? "أقل من دقيقة" : "< 1 min";
+  if (diffMin < 60) return `${lang === "ar" ? "في" : "in"} ${diffMin}m`;
+  return `${lang === "ar" ? "في" : "in"} ${diffHour}h ${remainMin}m`;
+};
+
 /* ═════════════════════════════ Main Component ════════════════════════════ */
 const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
   const t = translations[language] || translations.en;
@@ -179,53 +208,145 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
   const [activeTab, setActiveTab] = useState("aller");
   const [driverLiveLocation, setDriverLiveLocation] = useState(null);
 
-  /* ── Coordinate Normalization ──────────────────────────────────────── */
+  /* ── Enriched trip data from Supabase ─────────────────────────────── */
+  const [enrichedTrip, setEnrichedTrip] = useState(tripData);
+  const [isLoadingEnrichment, setIsLoadingEnrichment] = useState(true);
+
+  useEffect(() => {
+    let mounted = true;
+    const enrich = async () => {
+      if (tripData?.driverName || tripData?.driver_id) {
+        setIsLoadingEnrichment(false);
+        return;
+      }
+
+      const tripId = tripData?.tripId || tripData?.trip_id || tripData?.id;
+      const studentId = tripData?.studentId || tripData?.student_id;
+      const tripDate = tripData?.trip_date;
+
+      if (!tripId || !studentId) {
+        setIsLoadingEnrichment(false);
+        return;
+      }
+
+      if (tripDate) {
+        const { data, error } = await getAssignedTripForStudent(
+          studentId,
+          tripDate,
+        );
+        if (mounted && data) {
+          setEnrichedTrip((prev) => ({ ...prev, ...data }));
+        }
+      } else {
+        const { data } = await supabase
+          .from("trips")
+          .select("*")
+          .eq("id", tripId)
+          .maybeSingle();
+
+        if (mounted && data) {
+          let driverName = null;
+          let driverPhone = null;
+          let plateNumber = null;
+          let busModel = null;
+
+          if (data.driver_id) {
+            const { data: drv } = await supabase
+              .from("drivers")
+              .select("fullname, phone")
+              .eq("id", data.driver_id)
+              .maybeSingle();
+            if (drv) {
+              driverName = drv.fullname;
+              driverPhone = drv.phone;
+            }
+          }
+
+          if (data.bus_id) {
+            const { data: bus } = await supabase
+              .from("buses")
+              .select("plate_number, model, capacity")
+              .eq("id", data.bus_id)
+              .maybeSingle();
+            if (bus) {
+              plateNumber = bus.plate_number;
+              busModel =
+                bus.model || (bus.capacity ? `${bus.capacity} seats` : null);
+            }
+          }
+
+          const pickupOrder = data.pickup_order || data.student_ids || [];
+          const studentIndex = pickupOrder.indexOf(studentId);
+
+          setEnrichedTrip((prev) => ({
+            ...prev,
+            ...data,
+            driverName,
+            driverPhone,
+            driverRating: data.driver_rating || null,
+            plateNumber: plateNumber || prev.plateNumber,
+            busModel: busModel || prev.busModel,
+            studentOrder: studentIndex >= 0 ? studentIndex + 1 : 1,
+            startTime: data.start_time || prev.startTime,
+            pickupAddress: data.pickup_address || prev.pickupAddress,
+          }));
+        }
+      }
+
+      if (mounted) setIsLoadingEnrichment(false);
+    };
+    enrich();
+    return () => {
+      mounted = false;
+    };
+  }, [tripData]);
+
+  /* ── Coordinate Normalization (require real coords) ───────────────── */
   const studentLoc = useMemo(
-    () =>
-      normalizeCoord(tripData?.homeLocation, {
-        latitude: 33.5731,
-        longitude: -7.5898,
-      }),
-    [tripData?.homeLocation],
+    () => normalizeCoord(enrichedTrip?.homeLocation, null),
+    [enrichedTrip?.homeLocation],
   );
 
   const schoolLoc = useMemo(
-    () =>
-      normalizeCoord(tripData?.destinationLocation, {
-        latitude: 33.58,
-        longitude: -7.592,
-      }),
-    [tripData?.destinationLocation],
+    () => normalizeCoord(enrichedTrip?.destinationLocation, null),
+    [enrichedTrip?.destinationLocation],
   );
 
-  /* ── Data Extraction ────────────────────────────────────────────────── */
-  const driverName = tripData?.driverName || "Captain Ahmed";
-  const driverPhone = tripData?.driverPhone || null;
+  /* ── Data Extraction (from enriched data only) ────────────────────── */
+  const driverName = enrichedTrip?.driverName || null;
+  const driverPhone = enrichedTrip?.driverPhone || null;
   const driverAvatar =
-    tripData?.driverAvatar ||
-    tripData?.driverPhoto ||
-    tripData?.drivers?.avatar_url ||
+    enrichedTrip?.driverAvatar ||
+    enrichedTrip?.driverPhoto ||
+    enrichedTrip?.drivers?.avatar_url ||
     null;
-  const driverRating = Number.isFinite(Number(tripData?.driverRating))
-    ? Number(tripData.driverRating)
-    : 4.8;
+  const driverRating = Number.isFinite(Number(enrichedTrip?.driverRating))
+    ? Number(enrichedTrip.driverRating)
+    : null;
   const carModel =
-    tripData?.carModel || tripData?.busModel || tripData?.buses?.model || "Van";
+    enrichedTrip?.carModel ||
+    enrichedTrip?.busModel ||
+    enrichedTrip?.buses?.model ||
+    null;
   const plateNumber =
-    tripData?.plateNumber ||
-    tripData?.busPlate ||
-    tripData?.buses?.plate_number;
-  const isOnline = ["IN_PROGRESS", "STARTED"].includes(tripData?.status);
+    enrichedTrip?.plateNumber ||
+    enrichedTrip?.busPlate ||
+    enrichedTrip?.buses?.plate_number ||
+    null;
+  const isOnline = ["IN_PROGRESS", "STARTED"].includes(enrichedTrip?.status);
   const schoolName =
-    tripData?.schoolName || tripData?.destinationName || t.school;
-  const studentOrder = Number.isFinite(tripData?.studentOrder)
-    ? tripData.studentOrder
+    enrichedTrip?.schoolName || enrichedTrip?.destinationName || t.school;
+  const studentOrder = Number.isFinite(enrichedTrip?.studentOrder)
+    ? enrichedTrip.studentOrder
     : 1;
-  const liveTripId = tripData?.tripId || tripData?.trip_id || tripData?.id;
-  const isLive =
-    ["IN_PROGRESS", "STARTED", "trip_started"].includes(tripData?.status);
+  const liveTripId =
+    enrichedTrip?.tripId || enrichedTrip?.trip_id || enrichedTrip?.id;
+  const isLive = ["IN_PROGRESS", "STARTED", "trip_started"].includes(
+    enrichedTrip?.status,
+  );
   const initialDriverLiveLocation = useMemo(() => {
-    const source = tripData?.liveLocation || tripData?.live_location || null;
+    const source =
+      enrichedTrip?.liveLocation || enrichedTrip?.live_location || null;
     if (
       Number.isFinite(Number(source?.latitude)) &&
       Number.isFinite(Number(source?.longitude))
@@ -236,7 +357,7 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
       };
     }
     return null;
-  }, [tripData?.liveLocation, tripData?.live_location]);
+  }, [enrichedTrip?.liveLocation, enrichedTrip?.live_location]);
   const isRetour = activeTab === "retour";
   const originLoc = isRetour ? schoolLoc : studentLoc;
   const destLoc = isRetour ? studentLoc : schoolLoc;
@@ -246,12 +367,8 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
 
   /* ── Route State ────────────────────────────────────────────────────── */
   const [routeCoords, setRouteCoords] = useState([]);
-  const [distanceKm, setDistanceKm] = useState(
-    tripData?.totalDistanceKm || 2.5,
-  );
-  const [etaMinutes, setEtaMinutes] = useState(
-    tripData?.estimatedArrivalMinutes || 10,
-  );
+  const [distanceKm, setDistanceKm] = useState(null);
+  const [etaMinutes, setEtaMinutes] = useState(null);
   const [etaToSchoolSecs, setEtaToSchoolSecs] = useState(null);
   const [liveEtaMinutes, setLiveEtaMinutes] = useState(null);
   const [isResolving, setIsResolving] = useState(false);
@@ -261,17 +378,7 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
     setDriverLiveLocation(initialDriverLiveLocation);
   }, [initialDriverLiveLocation]);
 
-  useEffect(() => {
-    if (!isLive || driverLiveLocation) return;
-
-    const studentLat = studentLoc?.latitude ?? 33.5731;
-    const studentLng = studentLoc?.longitude ?? -7.5898;
-
-    setDriverLiveLocation({
-      latitude: studentLat + 0.004,
-      longitude: studentLng + 0.003,
-    });
-  }, [isLive, driverLiveLocation, studentLoc]);
+  // Only load driver location from Supabase — no fake simulation
 
   useEffect(() => {
     if (!isLive || !liveTripId) return undefined;
@@ -378,11 +485,11 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
 
   useEffect(() => {
     setRouteCoords([]);
-    setDistanceKm(tripData?.totalDistanceKm || 2.5);
-    setEtaMinutes(tripData?.estimatedArrivalMinutes || 10);
+    setDistanceKm(null);
+    setEtaMinutes(null);
     setEtaToSchoolSecs(null);
     setLiveEtaMinutes(null);
-  }, [activeTab, tripData?.estimatedArrivalMinutes, tripData?.totalDistanceKm]);
+  }, [activeTab]);
 
   /* ── Pickup Station ────────────────────────────────────────────────── */
   const pickupStation = useMemo(() => {
@@ -444,35 +551,65 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
 
   /* ── Timing Computation ────────────────────────────────────────────── */
   const timing = useMemo(() => {
+    const anchorTime =
+      enrichedTrip?.startTime || enrichedTrip?.start_time || null;
+    const walkDist = pickupStation?.walkDistMeters ?? null;
+    const distMeters = Number.isFinite(distanceKm) ? distanceKm * 1_000 : null;
+
     return computeTripTimes({
-      startTime: tripData?.startTime || tripData?.start_time || null,
-      walkDistMeters: pickupStation?.walkDistMeters ?? 400,
+      startTime: anchorTime,
+      walkDistMeters: walkDist ?? 400,
       driverEtaToSchoolSecs: etaToSchoolSecs,
-      pickupToSchoolDistMeters: distanceKm * 1_000 * 0.6,
+      pickupToSchoolDistMeters: distMeters ? distMeters * 0.6 : null,
       studentOrder,
     });
   }, [
-    tripData?.startTime,
-    tripData?.start_time,
+    enrichedTrip?.startTime,
+    enrichedTrip?.start_time,
     pickupStation?.walkDistMeters,
     etaToSchoolSecs,
     distanceKm,
     studentOrder,
   ]);
 
-  /* ── Badge States ──────────────────────────────────────────────────── */
-  const homeBadge = getTimeBadge(timing.leaveHomeTime);
-  const pickupBadge = getTimeBadge(timing.pickupTime);
-  const schoolBadge = getTimeBadge(timing.schoolTime);
+  /* ── Badge States (updated every 30s for dynamic behavior) ───────── */
+  const [tick, setTick] = useState(0);
+
+  useEffect(() => {
+    const interval = setInterval(() => setTick((t) => t + 1), 30_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  const homeBadge = useMemo(
+    () => getTimeBadge(timing.leaveHomeTime),
+    [timing.leaveHomeTime, tick],
+  );
+  const pickupBadge = useMemo(
+    () => getTimeBadge(timing.pickupTime),
+    [timing.pickupTime, tick],
+  );
+  const schoolBadge = useMemo(
+    () => getTimeBadge(timing.schoolTime),
+    [timing.schoolTime, tick],
+  );
+  const hasDriverAssigned = !!driverName;
   const busEtaMinutes = useMemo(() => {
     if (!etaToSchoolSecs) return null;
     return Math.max(1, Math.round(etaToSchoolSecs / 60));
   }, [etaToSchoolSecs]);
   const pickupAddress = useMemo(() => {
-    if (tripData?.pickupAddress) return tripData.pickupAddress;
-    if (tripData?.pickupName) return tripData.pickupName;
-    return t.pickupUnavailable;
-  }, [t.pickupUnavailable, tripData?.pickupAddress, tripData?.pickupName]);
+    if (enrichedTrip?.pickupAddress) return enrichedTrip.pickupAddress;
+    if (enrichedTrip?.pickupName) return enrichedTrip.pickupName;
+    if (pickupStation?.address) return pickupStation.address;
+    return isLoadingEnrichment ? t.loading : t.pickupUnavailable;
+  }, [
+    t.loading,
+    t.pickupUnavailable,
+    enrichedTrip?.pickupAddress,
+    enrichedTrip?.pickupName,
+    pickupStation?.address,
+    isLoadingEnrichment,
+  ]);
 
   /* ── Contact Handlers ──────────────────────────────────────────────── */
   const handleCall = () => driverPhone && Linking.openURL(`tel:${driverPhone}`);
@@ -529,7 +666,11 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
               <View>
                 <Text style={styles.mapHeaderStatLabel}>{t.eta}</Text>
                 <Text style={styles.mapHeaderStatValue}>
-                  {isLive && liveEtaMinutes ? liveEtaMinutes : etaMinutes} min
+                  {isLive && liveEtaMinutes
+                    ? `${liveEtaMinutes} min`
+                    : Number.isFinite(etaMinutes)
+                      ? `${etaMinutes} min`
+                      : "—"}
                 </Text>
               </View>
             </View>
@@ -552,7 +693,9 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
           <View>
             <Text style={styles.mapHeaderStatLabel}>{t.distance}</Text>
             <Text style={styles.mapHeaderStatValue}>
-              {distanceKm.toFixed(1)} km
+              {Number.isFinite(distanceKm)
+                ? `${distanceKm.toFixed(1)} km`
+                : "—"}
             </Text>
           </View>
         </View>
@@ -637,19 +780,30 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
           contentContainerStyle={styles.scrollContent}
         >
           {/* ────── DRIVER CARD ──────────────────────────────── */}
-          <DriverCard
-            name={driverName}
-            isOnline={isOnline}
-            avatarUri={driverAvatar}
-            rating={driverRating}
-            carModel={carModel}
-            plateNumber={plateNumber}
-            onCall={handleCall}
-            onMessage={handleMessage}
-            hasPhone={!!driverPhone}
-            translations={t}
-            isRTL={isRTL}
-          />
+          {isLoadingEnrichment && !driverName ? (
+            <View style={[styles.card, styles.driverCard]}>
+              <View style={{ alignItems: "center", paddingVertical: 16 }}>
+                <ActivityIndicator size="small" color={colors.primary} />
+                <Text style={[styles.loadingText, { marginTop: 8 }]}>
+                  {t.loading}
+                </Text>
+              </View>
+            </View>
+          ) : hasDriverAssigned ? (
+            <DriverCard
+              name={driverName}
+              isOnline={isOnline}
+              avatarUri={driverAvatar}
+              rating={driverRating}
+              carModel={carModel}
+              plateNumber={plateNumber}
+              onCall={handleCall}
+              onMessage={handleMessage}
+              hasPhone={!!driverPhone}
+              translations={t}
+              isRTL={isRTL}
+            />
+          ) : null}
 
           {/* ────── PICKUP STATION CARD ──────────────────────── */}
           {pickupStation && (
@@ -672,7 +826,11 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
               icon={isRetour ? "school" : "home"}
               title={isRetour ? schoolName : t.home}
               subtitle={t.leaveHome}
-              time={timing.formatted.leaveHomeTime}
+              time={formatDynamicTime(
+                timing.leaveHomeTime,
+                homeBadge,
+                language,
+              )}
               badge={homeBadge}
               isFirst
               hasNext
@@ -692,7 +850,7 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
               icon="location-on"
               title={t.pickup}
               subtitle={t.waitForPickup}
-              time={timing.formatted.pickupTime}
+              time={formatDynamicTime(timing.pickupTime, pickupBadge, language)}
               badge={pickupBadge}
               isFirst={false}
               hasNext
@@ -712,7 +870,7 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
               icon={isRetour ? "home" : "school"}
               title={isRetour ? t.home : schoolName}
               subtitle={t.schoolArrival}
-              time={timing.formatted.schoolTime}
+              time={formatDynamicTime(timing.schoolTime, schoolBadge, language)}
               badge={schoolBadge}
               isFirst={false}
               hasNext={false}
@@ -739,7 +897,10 @@ const DriverCard = ({
   translations,
   isRTL,
 }) => {
-  const filledStars = Math.round(Math.max(0, Math.min(5, rating)));
+  const hasRating = rating != null && Number.isFinite(Number(rating));
+  const filledStars = hasRating
+    ? Math.round(Math.max(0, Math.min(5, rating)))
+    : 0;
 
   return (
     <View style={[styles.card, styles.driverCard]}>
@@ -785,39 +946,43 @@ const DriverCard = ({
             </View>
           </View>
           <Text style={[styles.driverName, isRTL && styles.rtl]}>{name}</Text>
-          <View style={[styles.ratingRow, isRTL && styles.rowReverse]}>
-            <View
-              style={[
-                styles.starRow,
-                isRTL && { flexDirection: "row-reverse" },
-              ]}
-            >
-              {Array.from({ length: 5 }).map((_, index) => (
-                <MaterialIcons
-                  key={`star-${index + 1}`}
-                  name={index < filledStars ? "star" : "star-border"}
-                  size={14}
-                  color="#F59E0B"
-                />
-              ))}
+          {hasRating && (
+            <View style={[styles.ratingRow, isRTL && styles.rowReverse]}>
+              <View
+                style={[
+                  styles.starRow,
+                  isRTL && { flexDirection: "row-reverse" },
+                ]}
+              >
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <MaterialIcons
+                    key={`star-${index + 1}`}
+                    name={index < filledStars ? "star" : "star-border"}
+                    size={14}
+                    color="#F59E0B"
+                  />
+                ))}
+              </View>
+              <Text style={styles.ratingText}>{rating.toFixed(1)}</Text>
+              <Text style={styles.ratingLabel}>{translations.rating}</Text>
             </View>
-            <Text style={styles.ratingText}>{rating.toFixed(1)}</Text>
-            <Text style={styles.ratingLabel}>{translations.rating}</Text>
-          </View>
+          )}
         </View>
       </View>
 
       <View style={[styles.driverMetaRow, isRTL && styles.rowReverse]}>
-        <View style={[styles.driverMetaItem, isRTL && styles.rowReverse]}>
-          <MaterialIcons
-            name="directions-car"
-            size={15}
-            color={colors.primary}
-          />
-          <Text style={styles.driverMetaText} numberOfLines={1}>
-            {translations.carModel}: {carModel}
-          </Text>
-        </View>
+        {carModel && (
+          <View style={[styles.driverMetaItem, isRTL && styles.rowReverse]}>
+            <MaterialIcons
+              name="directions-car"
+              size={15}
+              color={colors.primary}
+            />
+            <Text style={styles.driverMetaText} numberOfLines={1}>
+              {translations.carModel}: {carModel}
+            </Text>
+          </View>
+        )}
         <View style={[styles.driverMetaItem, isRTL && styles.rowReverse]}>
           <MaterialIcons name="push-pin" size={15} color={colors.primary} />
           <Text style={styles.driverMetaText} numberOfLines={1}>

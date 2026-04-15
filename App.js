@@ -7,10 +7,9 @@ import SplashScreen from "./src/screens/public/SplashScreen";
 import OnboardingScreen from "./src/screens/public/OnboardingScreen";
 import SelectRoleScreen from "./src/screens/auth/SelectRoleScreen";
 import StudentRegisterScreen from "./src/screens/student/StudentRegisterScreen";
-import EmailVerificationScreen from "./src/screens/auth/EmailVerificationScreen";
 import StudentHomeScreen from "./src/screens/student/StudentHomeScreen";
 import ProfileScreen from "./src/screens/student/ProfileScreen";
-import DriverRegisterScreen from "./src/screens/auth/DriverRegisterScreen";
+import DriverRegisterScreen from "./src/screens/driver/DriverRegistrationFlow";
 import DriverVehicleScreen from "./src/screens/driver/DriverVehicleScreen";
 import DriverTabNavigator from "./src/navigation/DriverTabNavigator";
 import DriverProfileScreen from "./src/screens/driver/DriverProfileScreen";
@@ -134,33 +133,67 @@ export default function App() {
       try {
         const { data, error } = await getSession();
 
-        if (error || !data?.session?.user?.email) {
-          setIsBootstrappingAuth(false);
-          return;
+        if (data?.session?.user?.email) {
+          const userEmail = data.session.user.email;
+
+          const driverResult = await getDriverByEmail(userEmail);
+          if (driverResult?.data?.id) {
+            setDriverData({
+              driverId: driverResult.data.id,
+              email: userEmail,
+            });
+            setCurrentScreen("driverHome");
+            setIsBootstrappingAuth(false);
+            return;
+          }
+
+          const studentResult = await getStudentByEmail(userEmail);
+          if (studentResult?.data?.id) {
+            setStudentData({
+              studentId: studentResult.data.id,
+              email: userEmail,
+            });
+            setCurrentScreen("studentHome");
+            setIsBootstrappingAuth(false);
+            return;
+          }
         }
 
-        const userEmail = data.session.user.email;
-
-        const driverResult = await getDriverByEmail(userEmail);
-        if (driverResult?.data?.id) {
-          setDriverData({
-            driverId: driverResult.data.id,
-            email: userEmail,
-          });
-          setCurrentScreen("driverHome");
-          setIsBootstrappingAuth(false);
-          return;
+        // Fallback: check local registration storage
+        const localEmail = await AsyncStorage.getItem(
+          "@registered_student_email",
+        );
+        const localId = await AsyncStorage.getItem("@registered_student_id");
+        if (localEmail && localId) {
+          const studentResult = await getStudentByEmail(localEmail);
+          if (studentResult?.data?.id) {
+            setStudentData({
+              studentId: studentResult.data.id,
+              email: localEmail,
+            });
+            setCurrentScreen("studentHome");
+            setIsBootstrappingAuth(false);
+            return;
+          }
         }
 
-        const studentResult = await getStudentByEmail(userEmail);
-        if (studentResult?.data?.id) {
-          setStudentData({
-            studentId: studentResult.data.id,
-            email: userEmail,
-          });
-          setCurrentScreen("studentHome");
-          setIsBootstrappingAuth(false);
-          return;
+        const localDriverEmail = await AsyncStorage.getItem(
+          "@registered_driver_email",
+        );
+        const localDriverId = await AsyncStorage.getItem(
+          "@registered_driver_id",
+        );
+        if (localDriverEmail && localDriverId) {
+          const driverResult = await getDriverByEmail(localDriverEmail);
+          if (driverResult?.data?.id) {
+            setDriverData({
+              driverId: driverResult.data.id,
+              email: localDriverEmail,
+            });
+            setCurrentScreen("driverHome");
+            setIsBootstrappingAuth(false);
+            return;
+          }
         }
       } catch (e) {
         // Fall through to login if restore fails
@@ -343,37 +376,11 @@ export default function App() {
           onLanguageChange={setLanguage}
           onBack={() => setCurrentScreen("selectRole")}
           onSuccess={(data) => {
-            console.log("OTP sent, navigating to email verification:", data);
-            // Store email and navigate to email verification
-            setStudentData({ email: data.email });
-            setCurrentScreen("emailVerification");
-          }}
-        />
-      );
-    }
-
-    if (currentScreen === "emailVerification") {
-      if (!studentData?.email) {
-        // If no email data, go back to registration
-        setCurrentScreen("studentRegister");
-        return null;
-      }
-      return (
-        <EmailVerificationScreen
-          email={studentData.email}
-          language={language}
-          onBack={() => setCurrentScreen("studentRegister")}
-          onSuccess={(data) => {
-            console.log(
-              "Email verified successfully, student profile created:",
-              data,
-            );
-            // Update student data with the actual student ID
+            console.log("Student registered successfully:", data);
             setStudentData({
               studentId: data.studentId,
               email: data.email,
             });
-            // Navigate to student home after successful verification
             setCurrentScreen("studentHome");
           }}
         />

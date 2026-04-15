@@ -245,17 +245,20 @@ const DriverHomeScreen = ({
   );
 
   const missingCoordinates = useMemo(() => {
+    // Driver and School are absolutely required
     if (!isValidCoordinate(driverLocation)) return true;
     if (!isValidCoordinate(schoolLocation)) return true;
-    if (!hasStudentsArray || validStudents.length === 0) return true;
-    if (validStudents.length !== students.length) return true;
+
+    // We need at least one valid coordinate to show something on the map
+    // but we don't necessarily need ALL students to have coordinates to show the map
+    // although we should have at least the students array initialized.
+    if (!hasStudentsArray) return true;
+
     return false;
   }, [
     driverLocation,
     schoolLocation,
     hasStudentsArray,
-    validStudents,
-    students,
   ]);
 
   const pendingCount = useMemo(
@@ -811,8 +814,8 @@ const DriverHomeScreen = ({
               />
               <Text style={styles.fallbackTitle}>Map unavailable</Text>
               <Text style={styles.fallbackSubtitle}>
-                Driver, school, and all student coordinates are required to
-                render the map.
+                Driver and school coordinates are required to render the map.
+                Students with missing locations will be skipped.
               </Text>
               <TouchableOpacity style={styles.retryBtn} onPress={loadTrip}>
                 <Text style={styles.retryBtnText}>Retry</Text>

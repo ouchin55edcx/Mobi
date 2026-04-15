@@ -16,6 +16,7 @@ import {
 import { SafeAreaView } from "react-native-safe-area-context";
 import { StatusBar } from "expo-status-bar";
 import { MaterialIcons, MaterialCommunityIcons } from "@expo/vector-icons";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { supabase } from "../../lib/supabase";
 import {
   getValidationError,
@@ -296,61 +297,142 @@ const StudentRegisterScreen = ({
       return;
     }
 
-    console.log("Validation passed, sending OTP email...");
+    console.log("Validation passed, creating account...");
     setIsLoading(true);
 
     try {
-      // Send OTP email — Supabase sends a 6-digit code
-      const { error } = await supabase.auth.signInWithOtp({
+      const password =
+        formData.cin.toUpperCase().trim() + formData.phone.slice(-4);
+      let userId = null;
+
+      // Try to create auth user — no OTP required
+      const { data: authData, error: authError } = await supabase.auth.signUp({
         email: formData.email.toLowerCase().trim(),
+        password,
         options: {
-          shouldCreateUser: true,
           data: {
-            // Store form data in user metadata
-            // So we can insert into students table after verification
             fullname: formData.fullname.trim(),
             phone: formData.phone.trim(),
             cin: formData.cin.toUpperCase().trim(),
             school_id: formData.school,
-            home_location: JSON.stringify(formData.homeLocation),
+            home_location: formData.homeLocation,
           },
         },
       });
 
-      if (error) {
-        // Rate limit — only log in dev, never show to user
-        // Navigate to OTP screen anyway — if they got a previous code it may still work
-        if (error.message?.toLowerCase().includes("rate limit")) {
-          if (__DEV__) {
-            console.warn("OTP rate limit hit:", error.message);
-          }
-          // Still navigate — don't block the user
-          if (onSuccess) {
-            onSuccess({
+      if (authError) {
+        // Rate limit — account may already exist from a previous attempt
+        if (authError.message?.toLowerCase().includes("rate limit")) {
+          if (__DEV__)
+            console.warn("signUp rate limit — falling back to signIn");
+
+          const { data: signInData, error: signInError } =
+            await supabase.auth.signInWithPassword({
               email: formData.email.toLowerCase().trim(),
+              password,
             });
+
+          if (signInError || !signInData?.user?.id) {
+            Alert.alert(
+              language === "ar" ? "حاول لاحقاً" : "Try Again Later",
+              language === "ar"
+                ? "تعذر إنشاء الحساب بسبب محاولات كثيرة. يرجى الانتظار بضع دقائق وإعادة المحاولة."
+                : "Too many attempts. Please wait a few minutes and try again.",
+            );
+            return;
           }
+
+          userId = signInData.user.id;
+          console.log("✅ Signed in via fallback, userId:", userId);
+        } else {
+          console.error("Auth signup error:", authError);
+          Alert.alert(
+            language === "ar" ? "خطأ" : "Error",
+            authError.message ||
+              (language === "ar"
+                ? "فشل إنشاء الحساب"
+                : "Failed to create account"),
+          );
           return;
         }
+      }
 
-        // All other errors — show to user
-        console.error("OTP signup error:", error);
+      if (!userId) {
+        userId = authData?.user?.id;
+      }
+
+      if (!userId) {
         Alert.alert(
           language === "ar" ? "خطأ" : "Error",
-          error.message ||
-            (language === "ar"
-              ? "فشل إنشاء الحساب"
-              : "Failed to create account"),
+          language === "ar" ? "فشل إنشاء الحساب" : "Failed to create account",
         );
         return;
       }
 
-      console.log("OTP email sent successfully");
+      console.log("✅ Auth user ready, userId:", userId);
 
-      // Navigate to OTP verification screen
+      // Wait briefly for auth commit
+      await new Promise((r) => setTimeout(r, 500));
+
+      // Check if student already exists (from a previous partial registration)
+      const { data: existingStudent } = await supabase
+        .from("students")
+        .select("id")
+        .eq("user_id", userId)
+        .maybeSingle();
+
+      if (existingStudent) {
+        console.log("✅ Student already exists:", existingStudent.id);
+        if (onSuccess) {
+          onSuccess({
+            studentId: existingStudent.id,
+            email: formData.email.toLowerCase().trim(),
+          });
+        }
+        return;
+      }
+
+      // Insert student profile
+      const { data: student, error: dbError } = await supabase
+        .from("students")
+        .insert({
+          user_id: userId,
+          fullname: formData.fullname.trim(),
+          phone: formData.phone.trim(),
+          email: formData.email.toLowerCase().trim(),
+          cin: formData.cin.toUpperCase().trim(),
+          school_id: formData.school,
+          home_location: formData.homeLocation,
+          is_verified: true,
+        })
+        .select("id")
+        .single();
+
+      if (dbError) {
+        console.error("Failed to insert student profile:", dbError);
+        Alert.alert(
+          language === "ar" ? "خطأ" : "Error",
+          dbError.message ||
+            (language === "ar"
+              ? "فشل إنشاء الملف الشخصي"
+              : "Failed to create profile"),
+        );
+        return;
+      }
+
+      console.log("✅ Student profile created!");
+      console.log("  Student ID:", student.id);
+
+      const studentEmail = formData.email.toLowerCase().trim();
+
+      // Persist student identity locally for session restoration on app restart
+      await AsyncStorage.setItem("@registered_student_email", studentEmail);
+      await AsyncStorage.setItem("@registered_student_id", student.id);
+
       if (onSuccess) {
         onSuccess({
-          email: formData.email.toLowerCase().trim(),
+          studentId: student.id,
+          email: studentEmail,
         });
       }
     } catch (error) {

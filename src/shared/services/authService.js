@@ -112,6 +112,15 @@ export const signUp = async (email, password, metadata = {}) => {
       return { data: { user: mockUser, session: mockSession }, error: null };
     }
 
+    // Persist session locally so app can restore it on restart
+    if (data?.session) {
+      await AsyncStorage.setItem(AUTH_USER_KEY, JSON.stringify(data.user));
+      await AsyncStorage.setItem(
+        AUTH_SESSION_KEY,
+        JSON.stringify(data.session),
+      );
+    }
+
     return { data, error: null };
   } catch (error) {
     // warning: console.warn("Exception during sign up, mocking locally:", error);

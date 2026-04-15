@@ -34,6 +34,8 @@ import {
   getStudentCurrentTrip,
   requestStudentTripDetailsState,
 } from "../../shared/services/groupingService";
+import { runGroupingForDate } from "../../shared/services/groupingAlgorithm";
+import { getAssignedTripForStudent } from "../../shared/services/tripService";
 import { supabase } from "../../lib/supabase";
 
 const PRIMARY_BLUE = "#3185FC";
@@ -300,10 +302,27 @@ const StudentHomeScreen = ({
 
         if (data && data.length > 0) {
           console.log(`✅ Found ${data.length} upcoming booking(s):`);
-          data.forEach((b) => {
-            console.log(`  - ${b.id} | ${b.trip_date} | ${b.status}`);
-          });
-          setUpcomingBookings(data);
+
+          // Enhanced status check: check if any of these bookings are in a trip
+          const bookingsWithTripStatus = await Promise.all(data.map(async (booking) => {
+            const { data: tripData } = await supabase
+              .from("trips")
+              .select("status, id")
+              .eq("trip_date", booking.trip_date)
+              .contains("student_ids", [studentId])
+              .maybeSingle();
+
+            if (tripData) {
+              return {
+                ...booking,
+                status: tripData.status === 'SCHEDULED' ? 'ASSIGNED' : tripData.status,
+                trip_id: tripData.id
+              };
+            }
+            return booking;
+          }));
+
+          setUpcomingBookings(bookingsWithTripStatus);
         } else {
           console.log("No upcoming bookings found");
           setUpcomingBookings([]);
@@ -421,6 +440,20 @@ const StudentHomeScreen = ({
       console.log("  Status:", data.status);
       // Refresh the bookings list
       setRefreshBooking((prev) => prev + 1);
+
+      // Run grouping in background — do not await, do not block UI
+      runGroupingForDate(tripDate.toISOString().split("T")[0])
+        .then((result) => {
+          if (__DEV__) {
+            console.log("[Auto-grouping] Result:", result);
+          }
+        })
+        .catch((err) => {
+          if (__DEV__) {
+            console.warn("[Auto-grouping] Error:", err.message);
+          }
+          // Never show grouping errors to the student — silent fail
+        });
     } catch (e) {
       console.error("Unexpected error creating booking:", e);
       Alert.alert(language === "ar" ? "خطأ" : "Error", e.message);
@@ -710,32 +743,75 @@ const StudentHomeScreen = ({
                 <TouchableOpacity
                   key={booking.id}
                   style={styles.tripCardContainer}
-                  onPress={() => {
+                  onPress={async () => {
                     if (!onNavigateToTripDetails) return;
+
+                    // For ASSIGNED bookings, fetch enriched trip data
+                    if (booking.status === "ASSIGNED") {
+                      const tripDate = booking.trip_date;
+                      const { data: enrichedTrip, error } =
+                        await getAssignedTripForStudent(studentId, tripDate);
+
+                      if (enrichedTrip) {
+                        onNavigateToTripDetails({
+                          ...enrichedTrip,
+                          homeLocation: booking.pickup_location || studentLocation,
+                          destinationLocation: schoolLocation,
+                          routeCoordinates,
+                          schoolName,
+                          leaveHomeTime: booking.start_time,
+                          arriveDestinationTime: booking.end_time,
+                        });
+                        return;
+                      }
+
+                      if (error) {
+                        console.warn(
+                          "[TripDetails] Failed to fetch enriched trip:",
+                          error,
+                        );
+                      }
+                    }
+
+                    // Fallback: basic booking data
                     const tripPayload = {
                       id: booking.id,
                       tripId: booking.id,
-                      studentId: studentId,
-                      homeLocation: booking.pickup_location,
-                      destinationLocation: booking.destination_location,
-                      routeCoordinates: routeCoordinates,
+                      studentId,
+                      homeLocation: booking.pickup_location || studentLocation,
+                      destinationLocation: schoolLocation,
+                      routeCoordinates,
                       leaveHomeTime: booking.start_time,
                       arriveDestinationTime: booking.end_time,
                       status: booking.status,
-                      schoolName: schoolName,
+                      schoolName,
                     };
                     onNavigateToTripDetails(tripPayload);
                   }}
                   activeOpacity={0.85}
                 >
                   <View style={styles.tripCardHeader}>
-                    <View style={styles.tripStatusBadge}>
-                      <Text style={styles.tripStatusText}>
+                    <View style={[
+                      styles.tripStatusBadge,
+                      booking.status === "ASSIGNED" && { backgroundColor: "#ECFDF5" },
+                      booking.status === "IN_PROGRESS" && { backgroundColor: "#FDF2F2" },
+                      booking.status === "COMPLETED" && { backgroundColor: "#F3F4F6" },
+                    ]}>
+                      <Text style={[
+                        styles.tripStatusText,
+                        booking.status === "ASSIGNED" && { color: "#059669" },
+                        booking.status === "IN_PROGRESS" && { color: "#DC2626" },
+                        booking.status === "COMPLETED" && { color: "#4B5563" },
+                      ]}>
                         {booking.status === "CONFIRMED"
                           ? "✓ Confirmed"
                           : booking.status === "ASSIGNED"
                             ? "🚐 Assigned"
-                            : "⏳ Pending"}
+                            : booking.status === "IN_PROGRESS"
+                              ? "🚩 In Progress"
+                              : booking.status === "COMPLETED"
+                                ? "🏁 Completed"
+                                : "⏳ Pending"}
                       </Text>
                     </View>
                     <Text style={styles.tripCardDate}>
@@ -813,10 +889,10 @@ const StudentHomeScreen = ({
                   <Text style={styles.inputValue}>
                     {tripDate
                       ? tripDate.toLocaleDateString("en-GB", {
-                          weekday: "short",
-                          day: "2-digit",
-                          month: "short",
-                        })
+                        weekday: "short",
+                        day: "2-digit",
+                        month: "short",
+                      })
                       : "Select date"}
                   </Text>
                 </View>
@@ -865,7 +941,7 @@ const StudentHomeScreen = ({
                 style={[
                   styles.goButton,
                   (!tripDate || !arrivalTime || !returnTime) &&
-                    styles.goButtonDisabled,
+                  styles.goButtonDisabled,
                 ]}
                 onPress={handleGo}
                 disabled={isBooking || !tripDate || !arrivalTime || !returnTime}
