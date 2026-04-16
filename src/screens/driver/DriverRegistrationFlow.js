@@ -22,10 +22,6 @@ const translations = {
     fullNamePlaceholder: "John Doe",
     email: "Email Address",
     emailPlaceholder: "john.doe@example.com",
-    password: "Password",
-    passwordPlaceholder: "Minimum 8 characters",
-    confirmPassword: "Confirm Password",
-    confirmPasswordPlaceholder: "Re-enter your password",
     phoneNumber: "Phone Number",
     phoneNumberPlaceholder: "0612345678",
     next: "Next",
@@ -37,10 +33,6 @@ const translations = {
     fullNamePlaceholder: "محمد أحمد",
     email: "البريد الإلكتروني",
     emailPlaceholder: "mohammed@example.com",
-    password: "كلمة المرور",
-    passwordPlaceholder: "8 أحرف على الأقل",
-    confirmPassword: "تأكيد كلمة المرور",
-    confirmPasswordPlaceholder: "أعد إدخال كلمة المرور",
     phoneNumber: "رقم الهاتف",
     phoneNumberPlaceholder: "0612345678",
     next: "التالي",
@@ -110,15 +102,13 @@ const DriverRegisterScreen = ({
   language = "en",
   onBack,
   onLanguageChange,
-  navigation,
+  onNext,
 }) => {
   const t = translations[language] || translations.en;
   const [activeField, setActiveField] = useState(null);
   const [formData, setFormData] = useState({
     full_name: "",
     email: "",
-    password: "",
-    confirm_password: "",
     phone_number: "",
   });
   const [errors, setErrors] = useState({});
@@ -134,14 +124,6 @@ const DriverRegisterScreen = ({
       case "email":
         if (!value.trim()) return language === "ar" ? "البريد الإلكتروني مطلوب" : "Email is required";
         if (!validateEmail(value.trim())) return language === "ar" ? "يرجى إدخال بريد إلكتروني صالح" : "Please enter a valid email";
-        return null;
-      case "password":
-        if (!value) return language === "ar" ? "كلمة المرور مطلوبة" : "Password is required";
-        if (value.length < 8) return language === "ar" ? "كلمة المرور يجب أن تكون 8 أحرف على الأقل" : "Password must be at least 8 characters";
-        return null;
-      case "confirm_password":
-        if (!value) return language === "ar" ? "يرجى تأكيد كلمة المرور" : "Please confirm your password";
-        if (value !== source.password) return language === "ar" ? "كلمتا المرور غير متطابقتين" : "Passwords do not match";
         return null;
       case "phone_number":
         if (!value.trim()) return language === "ar" ? "رقم الهاتف مطلوب" : "Phone number is required";
@@ -172,20 +154,19 @@ const DriverRegisterScreen = ({
       return;
     }
 
-    navigation.navigate("DriverVehicleRegister", {
-      full_name: formData.full_name.trim(),
-      email: formData.email.trim().toLowerCase(),
-      password: formData.password,
-      phone_number: formData.phone_number.trim(),
-    });
+    if (onNext) {
+      onNext({
+        full_name: formData.full_name.trim(),
+        email: formData.email.trim().toLowerCase(),
+        phone_number: formData.phone_number.trim(),
+      });
+    }
   };
 
   const isNextDisabled = useMemo(
     () =>
       !formData.full_name ||
       !formData.email ||
-      !formData.password ||
-      !formData.confirm_password ||
       !formData.phone_number,
     [formData],
   );
@@ -272,49 +253,6 @@ const DriverRegisterScreen = ({
                 hasError={errors.email}
                 language={language}
                 keyboardType="email-address"
-              />
-
-              <InputField
-                label={t.password}
-                placeholder={t.passwordPlaceholder}
-                icon="lock-outline"
-                value={formData.password}
-                onChangeText={(value) => handleChange("password", value)}
-                onFocus={() => setActiveField("password")}
-                onBlur={() => {
-                  setActiveField(null);
-                  setErrors((prev) => ({
-                    ...prev,
-                    password: validateField("password"),
-                    confirm_password: formData.confirm_password
-                      ? validateField("confirm_password")
-                      : prev.confirm_password,
-                  }));
-                }}
-                isFocused={activeField === "password"}
-                hasError={errors.password}
-                language={language}
-                secureTextEntry
-              />
-
-              <InputField
-                label={t.confirmPassword}
-                placeholder={t.confirmPasswordPlaceholder}
-                icon="lock-outline"
-                value={formData.confirm_password}
-                onChangeText={(value) => handleChange("confirm_password", value)}
-                onFocus={() => setActiveField("confirm_password")}
-                onBlur={() => {
-                  setActiveField(null);
-                  setErrors((prev) => ({
-                    ...prev,
-                    confirm_password: validateField("confirm_password"),
-                  }));
-                }}
-                isFocused={activeField === "confirm_password"}
-                hasError={errors.confirm_password}
-                language={language}
-                secureTextEntry
               />
 
               <InputField

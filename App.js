@@ -263,15 +263,31 @@ export default function App() {
   };
 
   const handleLogout = async () => {
-    await signOut();
+    try {
+      await signOut();
 
-    setStudentData(null);
-    setDriverData(null);
-    setDriverRegisterParams(null);
-    setTripLiveViewData(null);
-    setTripDetailsData(null);
-    setStudentTripDetailsData(null);
-    setCurrentScreen("login");
+      // Clear role-specific persistent identity
+      await Promise.all([
+        AsyncStorage.removeItem("@registered_student_id"),
+        AsyncStorage.removeItem("@registered_student_email"),
+        AsyncStorage.removeItem("@registered_driver_id"),
+        AsyncStorage.removeItem("@registered_driver_email"),
+        AsyncStorage.removeItem("@pending_driver_registration"),
+      ]);
+
+      setStudentData(null);
+      setDriverData(null);
+      setDriverRegisterParams(null);
+      setTripLiveViewData(null);
+      setTripDetailsData(null);
+      setStudentTripDetailsData(null);
+
+      // Redirect to select role page
+      setCurrentScreen("selectRole");
+    } catch (e) {
+      console.error("Logout error:", e);
+      setCurrentScreen("selectRole");
+    }
   };
 
   // Show splash screen while fonts are loading or during initial splash
@@ -401,9 +417,24 @@ export default function App() {
           language={language}
           onLanguageChange={setLanguage}
           onBack={() => setCurrentScreen("selectRole")}
+          onNext={(params) => {
+            setDriverRegisterParams(params);
+            setCurrentScreen("driverVehicleRegister");
+          }}
+        />
+      );
+    }
+
+    if (currentScreen === "driverVehicleRegister") {
+      return (
+        <DriverVehicleScreen
+          params={driverRegisterParams}
+          language={language}
+          onLanguageChange={setLanguage}
+          onBack={() => setCurrentScreen("driverRegister")}
           onSuccess={(data) => {
             console.log("Driver registered:", data);
-            if (data.isDriver) {
+            if (data) {
               setDriverData({ driverId: data.driverId, email: data.email });
               setCurrentScreen("driverHome");
             }

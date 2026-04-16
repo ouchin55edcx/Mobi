@@ -10,85 +10,107 @@ import {
   ActivityIndicator,
   Platform,
   Vibration,
+  Dimensions,
 } from "react-native";
 import { StatusBar } from "expo-status-bar";
-import { MaterialIcons } from "@expo/vector-icons";
-import Header from "../../shared/components/common/Header";
+import { MaterialIcons, Ionicons, FontAwesome5 } from "@expo/vector-icons";
+import { supabase } from "../../lib/supabase";
+import { UbuntuFonts } from "../../shared/utils/fonts";
+import { LinearGradient } from "expo-linear-gradient";
+
+const { width } = Dimensions.get("window");
 
 const translations = {
   en: {
-    title: "Profile",
-    subtitle: "Your driver information",
-    personalInfo: "Contact & Information",
-    busInfo: "Vehicle Information",
+    title: "Driver Profile",
+    subtitle: "Manage your account and vehicle",
+    personalInfo: "Personal Details",
+    busInfo: "Vehicle Details",
     fullname: "Full Name",
-    email: "Email",
-    phone: "Phone",
+    email: "Email Address",
+    phone: "Phone Number",
     licenseNumber: "License Number",
-    busPlate: "Bus Plate Number",
-    busCapacity: "Bus Capacity",
-    busModel: "Bus Model",
-    rating: "Rating",
+    busPlate: "Plate Number",
+    busCapacity: "Seat Capacity",
+    busModel: "Car Model",
     driver: "Driver",
-    edit: "Edit",
-    save: "Save",
-    cancel: "Cancel",
-    logout: "Logout",
-    logoutConfirm: "Are you sure you want to logout?",
+    edit: "Edit Profile",
+    save: "Save Changes",
+    cancel: "Discard",
+    logout: "Sign Out",
+    logoutConfirm: "Are you sure you want to sign out of your account?",
     logoutConfirmTitle: "Logout",
-    yes: "Yes",
-    no: "No",
+    yes: "Yes, Logout",
+    no: "Cancel",
     saving: "Saving...",
     saved: "Profile updated successfully",
-    error: "Error",
-    errorMessage: "Failed to update profile",
-    ok: "OK",
-    loading: "Loading...",
+    error: "Sync Error",
+    errorMessage: "Unable to update profile data",
+    ok: "Dismiss",
+    loading: "Preparing Profile...",
+    verified: "Verified Driver",
+    notVerified: "Pending Sync",
+    rejected: "Action Required",
+    seats: "Seats",
   },
   ar: {
     title: "الملف الشخصي",
-    subtitle: "معلومات السائق",
-    personalInfo: "التواصل والمعلومات",
-    busInfo: "معلومات المركبة",
+    subtitle: "إدارة حسابك ومركبتك",
+    personalInfo: "التفاصيل الشخصية",
+    busInfo: "تفاصيل المركبة",
     fullname: "الاسم الكامل",
     email: "البريد الإلكتروني",
-    phone: "الهاتف",
+    phone: "رقم الهاتف",
     licenseNumber: "رقم الرخصة",
-    busPlate: "رقم لوحة الحافلة",
-    busCapacity: "سعة الحافلة",
-    busModel: "طراز الحافلة",
-    rating: "التقييم",
+    busPlate: "رقم اللوحة",
+    busCapacity: "عدد المقاعد",
+    busModel: "طراز السيارة",
     driver: "سائق",
-    edit: "تعديل",
-    save: "حفظ",
+    edit: "تعديل الملف",
+    save: "حفظ التغييرات",
     cancel: "إلغاء",
     logout: "تسجيل الخروج",
-    logoutConfirm: "هل أنت متأكد من تسجيل الخروج؟",
+    logoutConfirm: "هل أنت متأكد من تسجيل الخروج من حسابك؟",
     logoutConfirmTitle: "تسجيل الخروج",
-    yes: "نعم",
-    no: "لا",
+    yes: "نعم، خروج",
+    no: "إلغاء",
     saving: "جاري الحفظ...",
-    saved: "تم تحديث الملف الشخصي بنجاح",
-    error: "خطأ",
-    errorMessage: "فشل تحديث الملف الشخصي",
-    ok: "حسناً",
+    saved: "تم تحديث الملف الشخصي",
+    error: "خطأ في المزامنة",
+    errorMessage: "تعذر تحديث بيانات الملف الشخصي",
+    ok: "موافق",
     loading: "جاري التحميل...",
+    verified: "سائق موثق",
+    notVerified: "قيد المزامنة",
+    rejected: "مرفوض",
+    seats: "مقاعد",
   },
 };
 
-const DEFAULT_DRIVER_PROFILE = {
-  id: "driver-profile-placeholder",
-  name: "Mohamed Alami",
-  email: "mohamed.alami@example.com",
-  phone: "+212612345678",
-  license_number: "DL-123456",
-  rating: 4.8,
-  bus: {
-    plate_number: "12345-A-67",
-    capacity: 50,
-    model: "Mercedes Sprinter",
-  },
-};
+
+const InfoItem = ({ label, value, icon, editing, onChangeText, keyboardType, autoCapitalize, placeholder, isRTL }) => (
+  <View style={[styles.infoItemRow, isRTL && styles.rtlRow]}>
+    <View style={styles.infoIconWrapper}>
+      <MaterialIcons name={icon} size={20} color="#3185FC" />
+    </View>
+    <View style={styles.infoTextWrapper}>
+      <Text style={[styles.infoItemLabel, isRTL && styles.rtlText]}>{label}</Text>
+      {editing ? (
+        <TextInput
+          style={[styles.infoItemInput, isRTL && styles.rtlText]}
+          value={value}
+          onChangeText={onChangeText}
+          keyboardType={keyboardType}
+          autoCapitalize={autoCapitalize}
+          placeholder={placeholder}
+          placeholderTextColor="#94A3B8"
+        />
+      ) : (
+        <Text style={[styles.infoItemValue, isRTL && styles.rtlText]}>{value || "--"}</Text>
+      )}
+    </View>
+  </View>
+);
 
 const DriverProfileScreen = ({
   driverId,
@@ -112,7 +134,7 @@ const DriverProfileScreen = ({
 
   const t = translations[language];
   const isRTL = language === "ar";
-  const displayName = formData.name || driver?.name || "--";
+  const displayName = formData.name || driver?.fullname || "--";
   const initials = displayName
     .split(" ")
     .filter(Boolean)
@@ -127,18 +149,29 @@ const DriverProfileScreen = ({
   const loadDriverData = async () => {
     try {
       setLoading(true);
-      setDriver(DEFAULT_DRIVER_PROFILE);
-      setFormData({
-        name: DEFAULT_DRIVER_PROFILE.name,
-        phone: DEFAULT_DRIVER_PROFILE.phone,
-        email: DEFAULT_DRIVER_PROFILE.email,
-        license_number: DEFAULT_DRIVER_PROFILE.license_number,
-        bus_plate: DEFAULT_DRIVER_PROFILE.bus.plate_number,
-        bus_capacity: DEFAULT_DRIVER_PROFILE.bus.capacity.toString(),
-        bus_model: DEFAULT_DRIVER_PROFILE.bus.model,
-      });
+      const { data, error } = await supabase
+        .from("drivers")
+        .select("*")
+        .eq("id", driverId)
+        .single();
+
+      if (error) throw error;
+
+      if (data) {
+        setDriver(data);
+        const loc = data.location || {};
+        setFormData({
+          name: data.fullname || "",
+          phone: loc.phone_number || "",
+          email: data.email || "",
+          license_number: data.permis_url || "", // Using permis_url as license placeholder if needed
+          bus_plate: loc.car_plate_number || "",
+          bus_capacity: loc.seat_capacity?.toString() || "",
+          bus_model: loc.car_type || "",
+        });
+      }
     } catch (error) {
-      // error handled
+      console.error("Error loading driver data:", error);
       Alert.alert(t.error, t.errorMessage, [{ text: t.ok }]);
     } finally {
       setLoading(false);
@@ -151,25 +184,37 @@ const DriverProfileScreen = ({
 
   const handleSave = async () => {
     try {
-      setSaving(true);
-      setDriver((prev) => ({
-        ...prev,
-        name: formData.name,
-        phone: formData.phone,
-        email: formData.email,
-        license_number: formData.license_number,
-        bus: {
-          ...prev.bus,
-          plate_number: formData.bus_plate,
-          capacity: parseInt(formData.bus_capacity, 10),
-          model: formData.bus_model,
-        },
-      }));
-      Alert.alert(t.saved, "", [{ text: t.ok }]);
+      if (!formData.name.trim()) {
+        Alert.alert(t.error, "Name cannot be empty");
+        return;
+      }
 
+      setSaving(true);
+      
+      const updateData = {
+        fullname: formData.name,
+        email: formData.email,
+        location: {
+          ...driver.location,
+          phone_number: formData.phone,
+          car_plate_number: formData.bus_plate,
+          car_type: formData.bus_model,
+          seat_capacity: parseInt(formData.bus_capacity, 10) || 0,
+        }
+      };
+
+      const { error } = await supabase
+        .from("drivers")
+        .update(updateData)
+        .eq("id", driverId);
+
+      if (error) throw error;
+
+      setDriver({ ...driver, ...updateData });
+      Alert.alert(t.saved, "", [{ text: t.ok }]);
       setEditing(false);
     } catch (error) {
-      // error handled
+      console.error("Save error:", error);
       Alert.alert(t.error, t.errorMessage, [{ text: t.ok }]);
     } finally {
       setSaving(false);
@@ -199,21 +244,24 @@ const DriverProfileScreen = ({
     );
   };
 
+  const getStatusConfig = (status) => {
+    switch (status) {
+      case "APPROVED":
+        return { label: t.verified, color: "#10B981", icon: "verified" };
+      case "REJECTED":
+        return { label: t.rejected, color: "#EF4444", icon: "error" };
+      default:
+        return { label: t.notVerified, color: "#F59E0B", icon: "pending" };
+    }
+  };
+
+  const status = getStatusConfig(driver?.status);
+
   if (loading) {
     return (
-      <View style={styles.container}>
-        <Header
-          title={t.title}
-          subtitle={t.subtitle}
-          language={language}
-          onBack={onBack}
-        />
-        <View style={styles.loadingContainer}>
-          <ActivityIndicator size="large" color="#0D6EFD" />
-          <Text style={[styles.loadingText, isRTL && styles.rtl]}>
-            {t.loading}
-          </Text>
-        </View>
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#3185FC" />
+        <Text style={styles.loadingText}>{t.loading}</Text>
       </View>
     );
   }
@@ -221,291 +269,164 @@ const DriverProfileScreen = ({
   return (
     <View style={styles.container}>
       <StatusBar style="dark" />
-      <Header
-        title={t.title}
-        subtitle={t.subtitle}
-        language={language}
-        onBack={onBack}
-      />
+      
+      {/* Dynamic Header */}
+      <LinearGradient
+        colors={["#FFFFFF", "#F8FAFF"]}
+        style={styles.header}
+      >
+        <View style={[styles.headerNav, isRTL && styles.rtlRow]}>
+          <TouchableOpacity onPress={onBack} style={styles.headerIconBtn}>
+            <MaterialIcons name={isRTL ? "arrow-forward" : "arrow-back"} size={26} color="#1A1A1A" />
+          </TouchableOpacity>
+          <Text style={[styles.headerTitle, isRTL && styles.rtlText]}>{t.title}</Text>
+          <TouchableOpacity 
+            onPress={() => setEditing(!editing)} 
+            style={styles.headerIconBtn}
+          >
+            <MaterialIcons name={editing ? "close" : "edit"} size={22} color={editing ? "#EF4444" : "#3185FC"} />
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.profileHero}>
+           <View style={styles.avatarBorder}>
+             <View style={styles.avatar}>
+               <Text style={styles.avatarText}>{initials || "D"}</Text>
+             </View>
+             <TouchableOpacity style={styles.cameraBtn}>
+               <MaterialIcons name="camera-alt" size={16} color="#FFFFFF" />
+             </TouchableOpacity>
+           </View>
+           
+           <Text style={styles.profileName}>{displayName}</Text>
+           
+           <View style={[styles.statusBadge, { backgroundColor: status.color + "15" }]}>
+             <MaterialIcons name={status.icon} size={14} color={status.color} />
+             <Text style={[styles.statusText, { color: status.color }]}>{status.label}</Text>
+           </View>
+        </View>
+      </LinearGradient>
 
       <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
+        style={styles.content}
+        contentContainerStyle={styles.contentScroll}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.heroCard}>
-          <View style={styles.heroTopAccent} />
-          <View style={styles.heroMain}>
-            <View style={styles.avatar}>
-              <Text style={styles.avatarText}>{initials || "D"}</Text>
-            </View>
 
-            <View style={styles.heroIdentity}>
-              {editing ? (
-                <TextInput
-                  style={[styles.heroInput, isRTL && styles.rtl]}
-                  value={formData.name}
-                  onChangeText={(value) => handleInputChange("name", value)}
-                  placeholder={t.fullname}
-                />
-              ) : (
-                <Text style={[styles.heroName, isRTL && styles.rtl]}>
-                  {displayName}
-                </Text>
-              )}
-              <Text style={[styles.heroRole, isRTL && styles.rtl]}>
-                {t.driver}
-              </Text>
-              <View style={styles.ratingPill}>
-                <MaterialIcons name="star" size={14} color="#F59E0B" />
-                <Text style={styles.ratingText}>
-                  {(driver?.rating || DEFAULT_DRIVER_PROFILE.rating).toFixed(1)}
-                </Text>
-              </View>
-            </View>
-
-            {!editing && (
-              <TouchableOpacity
-                style={styles.editButton}
-                onPress={() => setEditing(true)}
-                activeOpacity={0.8}
-              >
-                <MaterialIcons name="edit" size={18} color="#0D6EFD" />
-                <Text style={[styles.editButtonText, isRTL && styles.rtl]}>
-                  {t.edit}
-                </Text>
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-
+        {/* Section: Vehicle */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, isRTL && styles.rtl]}>
-            {t.busInfo}
-          </Text>
-          <View style={styles.infoCard}>
-            <View style={styles.infoRow}>
-              <View style={styles.iconWrap}>
-                <MaterialIcons
-                  name="directions-car"
-                  size={18}
-                  color="#0D6EFD"
-                />
-              </View>
-              <View style={styles.infoContent}>
-                <Text style={[styles.infoLabel, isRTL && styles.rtl]}>
-                  {t.busModel}
-                </Text>
-                {editing ? (
-                  <TextInput
-                    style={[styles.input, isRTL && styles.rtl]}
-                    value={formData.bus_model}
-                    onChangeText={(value) =>
-                      handleInputChange("bus_model", value)
-                    }
-                    placeholder={t.busModel}
-                  />
-                ) : (
-                  <Text style={[styles.infoValue, isRTL && styles.rtl]}>
-                    {driver?.bus?.model || "--"}
-                  </Text>
-                )}
-              </View>
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.infoRow}>
-              <View style={styles.iconWrap}>
-                <MaterialIcons
-                  name="confirmation-number"
-                  size={18}
-                  color="#0D6EFD"
-                />
-              </View>
-              <View style={styles.infoContent}>
-                <Text style={[styles.infoLabel, isRTL && styles.rtl]}>
-                  {t.busPlate}
-                </Text>
-                {editing ? (
-                  <TextInput
-                    style={[styles.input, isRTL && styles.rtl]}
-                    value={formData.bus_plate}
-                    onChangeText={(value) =>
-                      handleInputChange("bus_plate", value)
-                    }
-                    placeholder={t.busPlate}
-                  />
-                ) : (
-                  <Text style={[styles.infoValue, isRTL && styles.rtl]}>
-                    {driver?.bus?.plate_number || "--"}
-                  </Text>
-                )}
-              </View>
-            </View>
+          <View style={[styles.sectionHeader, isRTL && styles.rtlRow]}>
+            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>{t.busInfo}</Text>
+          </View>
+          <View style={styles.card}>
+            <InfoItem
+              label={t.busModel}
+              value={formData.bus_model}
+              icon="directions-car"
+              editing={editing}
+              onChangeText={(v) => handleInputChange("bus_model", v)}
+              placeholder="e.g. Mercedes Sprinter"
+              isRTL={isRTL}
+            />
+            <View style={styles.cardDivider} />
+            <InfoItem
+              label={t.busPlate}
+              value={formData.bus_plate}
+              icon="pin"
+              editing={editing}
+              onChangeText={(v) => handleInputChange("bus_plate", v)}
+              placeholder="ABC-1234"
+              autoCapitalize="characters"
+              isRTL={isRTL}
+            />
+            <View style={styles.cardDivider} />
+            <InfoItem
+              label={t.busCapacity}
+              value={editing ? formData.bus_capacity : `${formData.bus_capacity} ${t.seats}`}
+              icon="people"
+              editing={editing}
+              onChangeText={(v) => handleInputChange("bus_capacity", v)}
+              placeholder="50"
+              keyboardType="numeric"
+              isRTL={isRTL}
+            />
           </View>
         </View>
 
+        {/* Section: Account */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, isRTL && styles.rtl]}>
-            {t.personalInfo}
-          </Text>
-          <View style={styles.infoCard}>
-            <View style={styles.infoRow}>
-              <View style={styles.iconWrap}>
-                <MaterialIcons name="phone" size={18} color="#0D6EFD" />
-              </View>
-              <View style={styles.infoContent}>
-                <Text style={[styles.infoLabel, isRTL && styles.rtl]}>
-                  {t.phone}
-                </Text>
-                {editing ? (
-                  <TextInput
-                    style={[styles.input, isRTL && styles.rtl]}
-                    value={formData.phone}
-                    onChangeText={(value) => handleInputChange("phone", value)}
-                    placeholder={t.phone}
-                    keyboardType="phone-pad"
-                  />
-                ) : (
-                  <Text style={[styles.infoValue, isRTL && styles.rtl]}>
-                    {driver?.phone || "--"}
-                  </Text>
-                )}
-              </View>
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.infoRow}>
-              <View style={styles.iconWrap}>
-                <MaterialIcons name="email" size={18} color="#0D6EFD" />
-              </View>
-              <View style={styles.infoContent}>
-                <Text style={[styles.infoLabel, isRTL && styles.rtl]}>
-                  {t.email}
-                </Text>
-                {editing ? (
-                  <TextInput
-                    style={[styles.input, isRTL && styles.rtl]}
-                    value={formData.email}
-                    onChangeText={(value) => handleInputChange("email", value)}
-                    placeholder={t.email}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                  />
-                ) : (
-                  <Text style={[styles.infoValue, isRTL && styles.rtl]}>
-                    {driver?.email || "--"}
-                  </Text>
-                )}
-              </View>
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.infoRow}>
-              <View style={styles.iconWrap}>
-                <MaterialIcons name="badge" size={18} color="#0D6EFD" />
-              </View>
-              <View style={styles.infoContent}>
-                <Text style={[styles.infoLabel, isRTL && styles.rtl]}>
-                  {t.licenseNumber}
-                </Text>
-                {editing ? (
-                  <TextInput
-                    style={[styles.input, isRTL && styles.rtl]}
-                    value={formData.license_number}
-                    onChangeText={(value) =>
-                      handleInputChange("license_number", value)
-                    }
-                    placeholder={t.licenseNumber}
-                  />
-                ) : (
-                  <Text style={[styles.infoValue, isRTL && styles.rtl]}>
-                    {driver?.license_number || "--"}
-                  </Text>
-                )}
-              </View>
-            </View>
-
-            <View style={styles.divider} />
-
-            <View style={styles.infoRow}>
-              <View style={styles.iconWrap}>
-                <MaterialIcons name="people" size={18} color="#0D6EFD" />
-              </View>
-              <View style={styles.infoContent}>
-                <Text style={[styles.infoLabel, isRTL && styles.rtl]}>
-                  {t.busCapacity}
-                </Text>
-                {editing ? (
-                  <TextInput
-                    style={[styles.input, isRTL && styles.rtl]}
-                    value={formData.bus_capacity}
-                    onChangeText={(value) =>
-                      handleInputChange("bus_capacity", value)
-                    }
-                    placeholder={t.busCapacity}
-                    keyboardType="numeric"
-                  />
-                ) : (
-                  <Text style={[styles.infoValue, isRTL && styles.rtl]}>
-                    {driver?.bus?.capacity || "--"}{" "}
-                    {language === "ar" ? "مقعد" : "seats"}
-                  </Text>
-                )}
-              </View>
-            </View>
+          <View style={[styles.sectionHeader, isRTL && styles.rtlRow]}>
+            <Text style={[styles.sectionTitle, isRTL && styles.rtlText]}>{t.personalInfo}</Text>
+          </View>
+          <View style={styles.card}>
+            <InfoItem
+              label={t.fullname}
+              value={formData.name}
+              icon="person"
+              editing={editing}
+              onChangeText={(v) => handleInputChange("name", v)}
+              isRTL={isRTL}
+            />
+            <View style={styles.cardDivider} />
+            <InfoItem
+              label={t.phone}
+              value={formData.phone}
+              icon="phone"
+              editing={editing}
+              onChangeText={(v) => handleInputChange("phone", v)}
+              keyboardType="phone-pad"
+              isRTL={isRTL}
+            />
+            <View style={styles.cardDivider} />
+            <InfoItem
+              label={t.email}
+              value={formData.email}
+              icon="email"
+              editing={editing}
+              onChangeText={(v) => handleInputChange("email", v)}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              isRTL={isRTL}
+            />
           </View>
         </View>
 
-        {editing && (
-          <View style={styles.actionButtons}>
-            <TouchableOpacity
-              style={[styles.button, styles.cancelButton]}
+        {editing ? (
+          <View style={styles.actionRow}>
+            <TouchableOpacity 
+              style={[styles.btn, styles.btnOutline]} 
               onPress={() => {
                 setEditing(false);
-                setFormData({
-                  name: driver?.name || "",
-                  phone: driver?.phone || "",
-                  email: driver?.email || "",
-                  license_number: driver?.license_number || "",
-                  bus_plate: driver?.bus?.plate_number || "",
-                  bus_capacity: driver?.bus?.capacity?.toString() || "",
-                  bus_model: driver?.bus?.model || "",
-                });
+                loadDriverData(); // Reset
               }}
-              activeOpacity={0.8}
             >
-              <Text style={styles.cancelButtonText}>{t.cancel}</Text>
+              <Text style={styles.btnOutlineText}>{t.cancel}</Text>
             </TouchableOpacity>
-
-            <TouchableOpacity
-              style={[styles.button, styles.saveButton]}
+            <TouchableOpacity 
+              style={[styles.btn, styles.btnPrimary]} 
               onPress={handleSave}
               disabled={saving}
-              activeOpacity={0.8}
             >
               {saving ? (
-                <ActivityIndicator color="#FFFFFF" />
+                <ActivityIndicator color="#FFFFFF" size="small" />
               ) : (
-                <Text style={styles.saveButtonText}>{t.save}</Text>
+                <Text style={styles.btnPrimaryText}>{t.save}</Text>
               )}
             </TouchableOpacity>
           </View>
+        ) : (
+          <TouchableOpacity 
+            style={styles.logoutBtn} 
+            onPress={handleLogout}
+            activeOpacity={0.7}
+          >
+            <View style={styles.logoutIconCircle}>
+              <MaterialIcons name="logout" size={20} color="#EF4444" />
+            </View>
+            <Text style={[styles.logoutText, isRTL && styles.rtlText]}>{t.logout}</Text>
+            <MaterialIcons name={isRTL ? "chevron-left" : "chevron-right"} size={24} color="#CBD5E1" />
+          </TouchableOpacity>
         )}
-
-        <TouchableOpacity
-          style={styles.logoutButton}
-          onPress={handleLogout}
-          activeOpacity={0.8}
-        >
-          <MaterialIcons name="logout" size={20} color="#DC2626" />
-          <Text style={[styles.logoutButtonText, isRTL && styles.rtl]}>
-            {t.logout}
-          </Text>
-        </TouchableOpacity>
       </ScrollView>
     </View>
   );
@@ -514,233 +435,260 @@ const DriverProfileScreen = ({
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#F4F8FF",
-  },
-  scrollView: {
-    flex: 1,
-  },
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 42,
-    rowGap: 20,
+    backgroundColor: "#F8FAFF",
   },
   loadingContainer: {
     flex: 1,
-    alignItems: "center",
     justifyContent: "center",
-    padding: 48,
+    alignItems: "center",
+    backgroundColor: "#FFFFFF",
   },
   loadingText: {
-    marginTop: 16,
-    fontSize: 16,
-    color: "#475569",
-    fontWeight: "500",
+    marginTop: 12,
+    fontSize: 15,
+    color: "#64748B",
+    fontFamily: UbuntuFonts.medium,
   },
-  heroCard: {
+  header: {
+    paddingTop: Platform.OS === "ios" ? 50 : 30,
+    paddingBottom: 25,
+    borderBottomLeftRadius: 32,
+    borderBottomRightRadius: 32,
+    shadowColor: "#3185FC",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.05,
+    shadowRadius: 15,
+    elevation: 5,
     backgroundColor: "#FFFFFF",
-    borderRadius: 22,
-    overflow: "hidden",
-    shadowColor: "#0A2540",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.08,
-    shadowRadius: 10,
-    elevation: 4,
   },
-  heroTopAccent: {
-    height: 56,
-    backgroundColor: "#0D6EFD",
-  },
-  heroMain: {
+  headerNav: {
     flexDirection: "row",
     alignItems: "center",
-    paddingHorizontal: 16,
-    paddingBottom: 16,
-    marginTop: -24,
-    columnGap: 12,
+    justifyContent: "space-between",
+    paddingHorizontal: 20,
+    marginBottom: 20,
+  },
+  headerIconBtn: {
+    width: 44,
+    height: 44,
+    borderRadius: 12,
+    backgroundColor: "#F1F5F9",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  headerTitle: {
+    fontSize: 18,
+    fontFamily: UbuntuFonts.bold,
+    color: "#1A1A1A",
+  },
+  profileHero: {
+    alignItems: "center",
+  },
+  avatarBorder: {
+    width: 100,
+    height: 100,
+    borderRadius: 50,
+    borderWidth: 4,
+    borderColor: "#FFFFFF",
+    backgroundColor: "#3185FC",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#3185FC",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 10,
+    position: "relative",
+    marginBottom: 16,
   },
   avatar: {
-    width: 72,
-    height: 72,
-    borderRadius: 36,
-    backgroundColor: "#EAF2FF",
-    borderWidth: 3,
-    borderColor: "#FFFFFF",
-    alignItems: "center",
+    width: "100%",
+    height: "100%",
+    borderRadius: 50,
     justifyContent: "center",
+    alignItems: "center",
   },
   avatarText: {
-    fontSize: 24,
-    fontWeight: "800",
-    color: "#0D6EFD",
+    fontSize: 36,
+    color: "#FFFFFF",
+    fontFamily: UbuntuFonts.bold,
   },
-  heroIdentity: {
-    flex: 1,
-  },
-  heroName: {
-    fontSize: 22,
-    fontWeight: "800",
-    color: "#0F172A",
-  },
-  heroInput: {
-    fontSize: 21,
-    fontWeight: "700",
-    color: "#0F172A",
-    borderBottomWidth: 1,
-    borderBottomColor: "#BFDBFE",
-    paddingVertical: 2,
-  },
-  heroRole: {
-    marginTop: 2,
-    fontSize: 13,
-    fontWeight: "500",
-    color: "#475569",
-  },
-  ratingPill: {
-    marginTop: 8,
-    alignSelf: "flex-start",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 999,
-    backgroundColor: "#FFF8E8",
-  },
-  ratingText: {
-    fontSize: 13,
-    fontWeight: "700",
-    color: "#B45309",
-  },
-  editButton: {
-    height: 36,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: "#BFDBFE",
-    backgroundColor: "#F5FAFF",
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 6,
-  },
-  editButtonText: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#0D6EFD",
-  },
-  section: {
-    rowGap: 10,
-  },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#1F3B73",
-  },
-  infoCard: {
-    backgroundColor: "#FFFFFF",
-    borderRadius: 18,
-    paddingHorizontal: 14,
-    paddingVertical: 8,
-    shadowColor: "#0A2540",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.06,
-    shadowRadius: 6,
-    elevation: 2,
-  },
-  divider: {
-    height: 1,
-    backgroundColor: "#EEF2F7",
-    marginLeft: 44,
-  },
-  infoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 12,
-    columnGap: 12,
-  },
-  iconWrap: {
+  cameraBtn: {
+    position: "absolute",
+    bottom: 0,
+    right: 0,
     width: 32,
     height: 32,
     borderRadius: 16,
-    alignItems: "center",
+    backgroundColor: "#3185FC",
+    borderWidth: 3,
+    borderColor: "#FFFFFF",
     justifyContent: "center",
-    backgroundColor: "#EAF2FF",
+    alignItems: "center",
   },
-  infoContent: {
-    flex: 1,
+  profileName: {
+    fontSize: 24,
+    fontFamily: UbuntuFonts.bold,
+    color: "#1A1A1A",
+    marginBottom: 8,
   },
-  infoLabel: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#64748B",
-    marginBottom: 3,
-  },
-  infoValue: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#0F172A",
-  },
-  input: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#0F172A",
-    borderBottomWidth: 1,
-    borderBottomColor: "#D8E2F0",
-    paddingBottom: 3,
-  },
-  actionButtons: {
+  statusBadge: {
     flexDirection: "row",
-    columnGap: 12,
-    marginTop: 2,
-  },
-  button: {
-    flex: 1,
-    height: 52,
-    borderRadius: 16,
     alignItems: "center",
-    justifyContent: "center",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+    gap: 6,
   },
-  cancelButton: {
-    backgroundColor: "#EEF2F7",
+  statusText: {
+    fontSize: 12,
+    fontFamily: UbuntuFonts.bold,
+    textTransform: "uppercase",
   },
-  cancelButtonText: {
+  content: {
+    flex: 1,
+  },
+  contentScroll: {
+    paddingBottom: 40,
+  },
+  section: {
+    marginTop: 30,
+    marginHorizontal: 20,
+  },
+  sectionHeader: {
+    marginBottom: 12,
+    paddingHorizontal: 4,
+  },
+  sectionTitle: {
     fontSize: 16,
-    fontWeight: "700",
-    color: "#475569",
+    fontFamily: UbuntuFonts.bold,
+    color: "#1A1A1A",
+    letterSpacing: 0.3,
   },
-  saveButton: {
-    backgroundColor: "#0D6EFD",
-    shadowColor: "#0D6EFD",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.25,
+  card: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
     shadowRadius: 8,
-    elevation: 4,
+    elevation: 2,
   },
-  saveButtonText: {
+  cardDivider: {
+    height: 1,
+    backgroundColor: "#F1F5F9",
+    marginVertical: 15,
+    marginLeft: 44,
+  },
+  infoItemRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  infoIconWrapper: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: "#F1F5F9",
+    justifyContent: "center",
+    alignItems: "center",
+    marginRight: 12,
+  },
+  infoTextWrapper: {
+    flex: 1,
+  },
+  infoItemLabel: {
+    fontSize: 12,
+    fontFamily: UbuntuFonts.medium,
+    color: "#94A3B8",
+    marginBottom: 4,
+  },
+  infoItemValue: {
+    fontSize: 15,
+    fontFamily: UbuntuFonts.bold,
+    color: "#1A1A1A",
+  },
+  infoItemInput: {
+    fontSize: 15,
+    fontFamily: UbuntuFonts.bold,
+    color: "#3185FC",
+    padding: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: "#3185FC33",
+  },
+  actionRow: {
+    flexDirection: "row",
+    marginHorizontal: 20,
+    marginTop: 40,
+    gap: 12,
+  },
+  btn: {
+    flex: 1,
+    height: 56,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  btnPrimary: {
+    backgroundColor: "#3185FC",
+    shadowColor: "#3185FC",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 8,
+  },
+  btnPrimaryText: {
     fontSize: 16,
-    fontWeight: "700",
+    fontFamily: UbuntuFonts.bold,
     color: "#FFFFFF",
   },
-  logoutButton: {
-    marginTop: 6,
+  btnOutline: {
+    backgroundColor: "#FFFFFF",
+    borderWidth: 1.5,
+    borderColor: "#E2E8F0",
+  },
+  btnOutlineText: {
+    fontSize: 16,
+    fontFamily: UbuntuFonts.bold,
+    color: "#64748B",
+  },
+  logoutBtn: {
+    marginHorizontal: 20,
+    marginTop: 40,
+    backgroundColor: "#FFFFFF",
+    borderRadius: 20,
+    padding: 16,
     flexDirection: "row",
     alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.03,
+    shadowRadius: 8,
+    elevation: 2,
+    marginBottom: 20,
+  },
+  logoutIconCircle: {
+    width: 40,
+    height: 40,
+    borderRadius: 12,
+    backgroundColor: "#FEF2F2",
     justifyContent: "center",
-    columnGap: 8,
-    height: 52,
-    borderRadius: 16,
-    backgroundColor: "#FFF5F5",
-    borderWidth: 1,
-    borderColor: "#FECACA",
+    alignItems: "center",
+    marginRight: 12,
   },
-  logoutButtonText: {
+  logoutText: {
+    flex: 1,
     fontSize: 16,
-    fontWeight: "700",
-    color: "#DC2626",
+    fontFamily: UbuntuFonts.bold,
+    color: "#EF4444",
   },
-  rtl: {
+  rtlRow: {
+    flexDirection: "row-reverse",
+  },
+  rtlText: {
     textAlign: "right",
   },
 });
 
 export default DriverProfileScreen;
+

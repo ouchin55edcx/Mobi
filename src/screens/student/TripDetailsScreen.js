@@ -227,29 +227,49 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
   useEffect(() => {
     let mounted = true;
     const enrich = async () => {
-      if (tripData?.driverName || tripData?.driver_id) {
+      console.log("[TripDetails] Effect start. tripData input:", {
+        id: tripData?.id,
+        trip_id: tripData?.trip_id,
+        status: tripData?.status,
+        driver_id: tripData?.driver_id,
+        driverName: tripData?.driverName
+      });
+
+      // Only skip if we already have the full driver info
+      if (tripData?.driverName) {
+        console.log("[TripDetails] Skip enrichment: driverName already present.");
         setIsLoadingEnrichment(false);
         return;
       }
 
       const tripId = tripData?.tripId || tripData?.trip_id || tripData?.id;
       const studentId = tripData?.studentId || tripData?.student_id;
-      const tripDate = tripData?.trip_date;
+      const tripDateStr = tripData?.trip_date || tripData?.tripDate;
+
+      console.log("[TripDetails] Resolved IDs:", { tripId, studentId, tripDateStr });
 
       if (!tripId || !studentId) {
+        console.warn("[TripDetails] Missing tripId or studentId. Can't enrich.");
         setIsLoadingEnrichment(false);
         return;
       }
 
-      if (tripDate) {
+      if (tripDateStr) {
+        console.log("[TripDetails] Calling getAssignedTripForStudent with:", studentId, tripDateStr);
         const { data, error } = await getAssignedTripForStudent(
           studentId,
-          tripDate,
+          tripDateStr,
         );
+        console.log("[TripDetails] getAssignedTripForStudent result:", { 
+          hasData: !!data, 
+          driverName: data?.driverName,
+          error 
+        });
         if (mounted && data) {
           setEnrichedTrip((prev) => ({ ...prev, ...data }));
         }
       } else {
+        console.log("[TripDetails] Fetching trip by ID:", tripId);
         const { data } = await supabase
           .from("trips")
           .select("*")
@@ -257,20 +277,31 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
           .maybeSingle();
 
         if (mounted && data) {
+          console.log("[TripDetails] Trip record found. Driver ID:", data.driver_id);
           let driverName = null;
           let driverPhone = null;
+          let driverAvatar = null;
+          let driverRating = null;
           let plateNumber = null;
           let busModel = null;
 
           if (data.driver_id) {
+            // DIAGNOSTIC: Fetch EVERYTHING to see what columns exist
             const { data: drv } = await supabase
               .from("drivers")
-              .select("fullname, phone")
+              .select("*")
               .eq("id", data.driver_id)
               .maybeSingle();
             if (drv) {
+              console.log("[TripDetails] Keys found in drivers table:", Object.keys(drv));
+              console.log("[TripDetails] Driver info found:", drv.fullname);
               driverName = drv.fullname;
-              driverPhone = drv.phone;
+              // Check various possible names for phone
+              driverPhone = drv.phone || drv.phone_number || drv.phoneNumber || drv.tel || null;
+              driverAvatar = drv.avatar_url;
+              driverRating = drv.rating;
+            } else {
+              console.warn("[TripDetails] Driver ID exists but record not found in drivers table.");
             }
           }
 
@@ -295,7 +326,8 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
             ...data,
             driverName,
             driverPhone,
-            driverRating: data.driver_rating || null,
+            driverAvatar,
+            driverRating: driverRating || null,
             plateNumber: plateNumber || prev.plateNumber,
             busModel: busModel || prev.busModel,
             studentOrder: studentIndex >= 0 ? studentIndex + 1 : 1,
@@ -787,7 +819,7 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
           showsVerticalScrollIndicator={false}
           contentContainerStyle={styles.scrollContent}
         >
-          {/* ────── DRIVER CARD ──────────────────────────────── */}
+          {/* ────── DRIVER/SEARCHING CARD ──────────────────────── */}
           {isLoadingEnrichment && !driverName ? (
             <View style={[styles.card, styles.driverCard]}>
               <View style={{ alignItems: "center", paddingVertical: 16 }}>
@@ -811,7 +843,26 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
               translations={t}
               isRTL={isRTL}
             />
-          ) : null}
+          ) : (
+            <View style={[styles.card, styles.searchingCard]}>
+              <View style={[styles.searchingContent, isRTL && styles.rowReverse]}>
+                <View style={styles.searchingAnimationWrapper}>
+                  <View style={styles.searchingPulse} />
+                  <MaterialIcons name="person-search" size={32} color={colors.primary} />
+                </View>
+                <View style={[styles.searchingInfo, isRTL && { alignItems: 'flex-end' }]}>
+                  <Text style={[styles.searchingTitle, isRTL && styles.rtl]}>
+                    {language === "ar" ? "نبحث عن سائقك..." : "Finding your Captain..."}
+                  </Text>
+                  <Text style={[styles.searchingSubtitle, isRTL && styles.rtl]}>
+                    {language === "ar" 
+                      ? "سنقوم بتحديثك فور تخصيص حافلة." 
+                      : "We'll notify you as soon as a driver is assigned."}
+                  </Text>
+                </View>
+              </View>
+            </View>
+          )}
 
           {/* ────── PICKUP STATION CARD ──────────────────────── */}
 
@@ -1542,6 +1593,51 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+  /* ──── SEARCHING CARD ──── */
+  searchingCard: {
+    backgroundColor: "#F0F9FF",
+    borderColor: "#BAE6FD",
+    paddingVertical: 20,
+  },
+  searchingContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 16,
+  },
+  searchingAnimationWrapper: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#E0F2FE",
+    alignItems: "center",
+    justifyContent: "center",
+    position: "relative",
+  },
+  searchingPulse: {
+    position: "absolute",
+    width: "100%",
+    height: "100%",
+    borderRadius: 32,
+    borderWidth: 2,
+    borderColor: colors.primary,
+    opacity: 0.2,
+  },
+  searchingInfo: {
+    flex: 1,
+    gap: 4,
+  },
+  searchingTitle: {
+    fontSize: 16,
+    fontFamily: UbuntuFonts.bold,
+    color: colors.text,
+  },
+  searchingSubtitle: {
+    fontSize: 13,
+    fontFamily: UbuntuFonts.medium,
+    color: colors.textSecondary,
+    lineHeight: 18,
+  },
+
   actionButton: {
     flexDirection: "row",
     alignItems: "center",

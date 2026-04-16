@@ -500,36 +500,62 @@ export const getActiveTripForStudent = async (studentId) => {
 export const getAssignedTripForStudent = async (studentId, tripDate) => {
   try {
     // 1. Find the trip that includes this student in student_ids
+    console.log("[tripService] getAssignedTripForStudent start:", { studentId, tripDate });
     const { data: trips, error: tripErr } = await supabase
       .from("trips")
       .select("*")
       .eq("trip_date", tripDate)
-      .eq("status", "SCHEDULED");
+      .in("status", ["SCHEDULED", "IN_PROGRESS"]);
 
-    if (tripErr) return { data: null, error: tripErr };
+    if (tripErr) {
+        console.error("[tripService] supabase trips query error:", tripErr);
+        return { data: null, error: tripErr };
+    }
+
+    console.log("[tripService] candidate trips found:", trips?.length || 0);
 
     // 2. Filter client-side for student in student_ids (JSONB array)
     const trip = (trips || []).find(
       (t) => Array.isArray(t.student_ids) && t.student_ids.includes(studentId),
     );
 
-    if (!trip) return { data: null, error: null };
+    if (!trip) {
+        console.warn("[tripService] no trip found matching studentId in array for date:", tripDate);
+        return { data: null, error: null };
+    }
+
+    console.log("[tripService] trip matched. driverId:", trip.driver_id);
 
     // 3. Manually fetch driver and bus (no FK relationship)
     let driverName = null;
     let driverPhone = null;
+    let driverAvatar = null;
+    let driverRating = null;
     let plateNumber = null;
     let busCapacity = null;
 
     if (trip.driver_id) {
-      const { data: drv } = await supabase
+      const cleanDriverId = String(trip.driver_id).trim();
+      
+      // DIAGNOSTIC: Fetch EVERYTHING to see what columns exist
+      const { data: drv, error: drvErr } = await supabase
         .from("drivers")
-        .select("fullname, phone")
-        .eq("id", trip.driver_id)
+        .select("*")
+        .eq("id", cleanDriverId)
         .maybeSingle();
+
+      if (drvErr) console.error("[tripService] Driver query error:", drvErr);
+
       if (drv) {
+        console.log("[tripService] Keys found in drivers table:", Object.keys(drv));
+        console.log("[tripService] Driver record found:", drv.fullname);
         driverName = drv.fullname;
-        driverPhone = drv.phone;
+        // Check various possible names for phone
+        driverPhone = drv.phone || drv.phone_number || drv.phoneNumber || drv.tel || null;
+        driverAvatar = drv.avatar_url;
+        driverRating = drv.rating;
+      } else {
+        console.warn("[tripService] Driver record not found for ID:", cleanDriverId);
       }
     }
 
@@ -560,7 +586,8 @@ export const getAssignedTripForStudent = async (studentId, tripDate) => {
         schoolArrival: trip.school_arrival,
         driverName,
         driverPhone,
-        driverRating: 4.8,
+        driverAvatar,
+        driverRating: driverRating || 4.8,
         plateNumber,
         busModel: busCapacity ? `${busCapacity} seats` : null,
         studentOrder: studentIndex >= 0 ? studentIndex + 1 : 1,

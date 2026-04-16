@@ -290,7 +290,7 @@ const StudentHomeScreen = ({
           .from("bookings")
           .select("*")
           .eq("student_id", studentId)
-          .in("status", ["PENDING", "CONFIRMED", "ASSIGNED"])
+          .in("status", ["PENDING", "CONFIRMED", "ASSIGNED", "IN_PROGRESS", "COMPLETED"])
           .gte("trip_date", today)
           .order("trip_date", { ascending: true })
           .order("start_time", { ascending: true });
@@ -304,18 +304,32 @@ const StudentHomeScreen = ({
         if (data && data.length > 0) {
           console.log(`✅ Found ${data.length} upcoming booking(s):`);
 
-          // Enhanced status check: check if any of these bookings are in a trip
+          // Enhanced status check: prioritize status from the "trips" table as requested
           const bookingsWithTripStatus = await Promise.all(data.map(async (booking) => {
-            const { data: tripData } = await supabase
+            // Find all trips for this student on the specific booking date
+            // We fetch all and filter in JS to be more robust against JSONB array indexing issues
+            const { data: tripsData } = await supabase
               .from("trips")
-              .select("status, id")
-              .eq("trip_date", booking.trip_date)
-              .contains("student_ids", [studentId])
-              .maybeSingle();
+              .select("status, id, student_ids, school_arrival, start_time")
+              .eq("trip_date", booking.trip_date);
+
+            const studentTrips = (tripsData || []).filter(t => 
+              Array.isArray(t.student_ids) && t.student_ids.includes(studentId)
+            );
+
+            // Match the booking to the correct trip by comparing school arrival times
+            const bookingArrival = new Date(booking.start_time);
+            const tripData = studentTrips.find(t => {
+              const tripArrival = new Date(t.school_arrival || t.start_time);
+              // Match if trip arrival is within 1.5 hours of requested booking arrival
+              return Math.abs(tripArrival - bookingArrival) < 5400000;
+            }) || (studentTrips.length === 1 ? studentTrips[0] : null);
 
             if (tripData) {
+              console.log(`[StudentHome] Found trip ${tripData.id} for booking ${booking.id}. Trip status: ${tripData.status}`);
               return {
                 ...booking,
+                // Map SCHEDULED (trip table) to ASSIGNED (UI display name)
                 status: tripData.status === 'SCHEDULED' ? 'ASSIGNED' : tripData.status,
                 trip_id: tripData.id
               };
@@ -346,6 +360,31 @@ const StudentHomeScreen = ({
     });
     return () => subscription.remove();
   }, []);
+
+  // Realtime subscription for trip updates
+  useEffect(() => {
+    if (!studentId) return;
+
+    const channel = supabase
+      .channel("student-home-trips")
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "trips",
+        },
+        (payload) => {
+          console.log("[StudentHome] Realtime trip update:", payload.new?.status);
+          setRefreshBooking((prev) => prev + 1);
+        },
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [studentId]);
 
   // Notify parent when this screen is focused
   useEffect(() => {
@@ -804,19 +843,19 @@ const StudentHomeScreen = ({
                   <View style={styles.tripCardHeader}>
                     <View style={[
                       styles.tripStatusBadge,
-                      booking.status === "ASSIGNED" && { backgroundColor: "#ECFDF5" },
+                      (booking.status === "ASSIGNED" || booking.status === "SCHEDULED") && { backgroundColor: "#ECFDF5" },
                       booking.status === "IN_PROGRESS" && { backgroundColor: "#FDF2F2" },
                       booking.status === "COMPLETED" && { backgroundColor: "#F3F4F6" },
                     ]}>
                       <Text style={[
                         styles.tripStatusText,
-                        booking.status === "ASSIGNED" && { color: "#059669" },
+                        (booking.status === "ASSIGNED" || booking.status === "SCHEDULED") && { color: "#059669" },
                         booking.status === "IN_PROGRESS" && { color: "#DC2626" },
                         booking.status === "COMPLETED" && { color: "#4B5563" },
                       ]}>
                         {booking.status === "CONFIRMED"
                           ? "✓ Confirmed"
-                          : booking.status === "ASSIGNED"
+                          : (booking.status === "ASSIGNED" || booking.status === "SCHEDULED")
                             ? "🚐 Assigned"
                             : booking.status === "IN_PROGRESS"
                               ? "🚩 In Progress"

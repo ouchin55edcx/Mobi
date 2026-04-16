@@ -17,6 +17,7 @@ import { MaterialIcons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { UbuntuFonts } from "../../shared/utils/fonts";
 import { supabase } from "../../lib/supabase";
+import MapLocationPicker from "../../shared/components/common/MapLocationPicker";
 
 const translations = {
   en: {
@@ -104,15 +105,107 @@ const InputField = ({
   </View>
 );
 
+const VehicleTypePicker = ({ value, onSelect, language, error }) => {
+  const types = [
+    { id: "sedan", name: "Sedan", nameAr: "سيدان" },
+    { id: "suv", name: "SUV", nameAr: "سيارة رياضية" },
+    { id: "hatchback", name: "Hatchback", nameAr: "هاتشباك" },
+    { id: "van", name: "Van", nameAr: "فان" },
+    { id: "minivan", name: "Minivan", nameAr: "ميني فان" },
+    { id: "other", name: "Other", nameAr: "أخرى" },
+  ];
+  const [isExpanded, setIsExpanded] = useState(false);
+  const t = translations[language] || translations.en;
+
+  return (
+    <View style={styles.inputGroup}>
+      <Text
+        style={[
+          styles.label,
+          isExpanded && styles.labelFocused,
+          error && styles.labelError,
+          language === "ar" && styles.rtlText,
+        ]}
+      >
+        {t.carType}
+      </Text>
+      <TouchableOpacity
+        style={[
+          styles.inputWrapper,
+          isExpanded && styles.inputWrapperFocused,
+          error && styles.inputWrapperError,
+          language === "ar" && styles.rtlRow,
+        ]}
+        onPress={() => setIsExpanded(!isExpanded)}
+        activeOpacity={0.7}
+      >
+        <MaterialIcons
+          name="directions-car"
+          size={20}
+          color={error ? "#EF4444" : isExpanded ? "#3185FC" : "#94A3B8"}
+          style={styles.inputIcon}
+        />
+        <Text
+          style={[
+            styles.input,
+            !value && { color: "#94A3B8" },
+            language === "ar" && styles.rtlText,
+            { textAlignVertical: "center", lineHeight: 54 },
+          ]}
+        >
+          {value
+            ? types.find((t) => t.id === value || t.name === value)?.[
+                language === "ar" ? "nameAr" : "name"
+              ] || value
+            : t.carTypePlaceholder}
+        </Text>
+        <MaterialIcons
+          name={isExpanded ? "keyboard-arrow-up" : "keyboard-arrow-down"}
+          size={24}
+          color="#94A3B8"
+        />
+      </TouchableOpacity>
+      {isExpanded && (
+        <View style={styles.dropdownContainer}>
+          {types.map((type) => (
+            <TouchableOpacity
+              key={type.id}
+              style={[styles.optionItem, language === "ar" && styles.rtlRow]}
+              onPress={() => {
+                onSelect(type.name);
+                setIsExpanded(false);
+              }}
+            >
+              <Text
+                style={[
+                  styles.optionText,
+                  language === "ar" && styles.rtlText,
+                  value === type.name && styles.optionTextActive,
+                ]}
+              >
+                {language === "ar" ? type.nameAr : type.name}
+              </Text>
+              {value === type.name && (
+                <MaterialIcons name="check" size={18} color="#3185FC" />
+              )}
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+      {error && <Text style={styles.errorText}>{error}</Text>}
+    </View>
+  );
+};
+
 const DriverVehicleScreen = ({
   language = "en",
   onBack,
   onLanguageChange,
-  route,
+  params = {},
   onSuccess,
 }) => {
   const t = translations[language] || translations.en;
-  const params = route?.params || {};
+  // params are now received directly as a prop
   const [activeField, setActiveField] = useState(null);
   const [loading, setLoading] = useState(false);
   const [loadingLocation, setLoadingLocation] = useState(true);
@@ -146,6 +239,11 @@ const DriverVehicleScreen = ({
           setFormData((prev) => ({
             ...prev,
             location_address: address || prev.location_address,
+            city: firstGeo?.city || prev.city || "",
+            location_coords: {
+              latitude: coords.coords.latitude,
+              longitude: coords.coords.longitude,
+            }
           }));
           setLocationLat(coords.coords.latitude);
           setLocationLng(coords.coords.longitude);
@@ -199,8 +297,8 @@ const DriverVehicleScreen = ({
         }
         return null;
       }
-      case "location_address":
-        return value.trim()
+      case "location_coords":
+        return value
           ? null
           : language === "ar"
             ? "الموقع مطلوب"
@@ -219,6 +317,10 @@ const DriverVehicleScreen = ({
   };
 
   const handleRegister = async () => {
+    console.log("[DriverRegister] Starting registration process...");
+    console.log("[DriverRegister] Step 1 Data:", params);
+    console.log("[DriverRegister] Step 2 Data:", formData);
+
     const nextErrors = {};
 
     Object.keys(formData).forEach((field) => {
@@ -230,23 +332,56 @@ const DriverVehicleScreen = ({
     setBannerError("");
 
     if (Object.keys(nextErrors).length > 0) {
+      console.log("[DriverRegister] Validation failed:", nextErrors);
       return;
     }
 
     setLoading(true);
 
     try {
+      // Auto-generate password: plate number + last 4 digits of phone
+      const generatedPassword = (formData.car_plate_number || "").toUpperCase().trim() + (params.phone_number || "").slice(-4);
+      console.log("[DriverRegister] Generated Password for Auth:", generatedPassword);
+
+      console.log("[DriverRegister] Attempting Supabase Auth SignUp for:", params.email);
       const { data, error } = await supabase.auth.signUp({
         email: params.email,
-        password: params.password,
+        password: generatedPassword,
       });
 
       if (error) {
-        setBannerError(error.message);
-        return;
+        // Rate limit — account may already exist from a previous attempt
+        if (error.message?.toLowerCase().includes("rate limit")) {
+          console.warn("[DriverRegister] SignUp rate limit — falling back to signIn");
+
+          const { data: signInData, error: signInError } =
+            await supabase.auth.signInWithPassword({
+              email: params.email.toLowerCase().trim(),
+              password: generatedPassword,
+            });
+
+          if (signInError || !signInData?.user?.id) {
+            console.error("[DriverRegister] Fallback SignIn failed:", signInError);
+            setBannerError(
+              language === "ar"
+                ? "تعذر إنشاء الحساب بسبب محاولات كثيرة. يرجى الانتظار بضع دقائق وإعادة المحاولة."
+                : "Too many attempts. Please wait a few minutes and try again."
+            );
+            return;
+          }
+
+          data.user = signInData.user;
+          data.session = signInData.session;
+          console.log("[DriverRegister] Signed in via fallback.");
+        } else {
+          console.error("[DriverRegister] Auth SignUp Error:", error);
+          setBannerError(error.message);
+          return;
+        }
       }
 
       const userId = data?.user?.id;
+      console.log("[DriverRegister] Auth Success! User ID:", userId);
 
       if (!userId) {
         setBannerError(
@@ -258,6 +393,7 @@ const DriverVehicleScreen = ({
       }
 
       // 1. Ensure user exists in public.users (fallback for trigger delay/failure)
+      console.log("[DriverRegister] Checking public.users for sync...");
       const { data: userData } = await supabase
         .from("users")
         .select("id")
@@ -265,7 +401,7 @@ const DriverVehicleScreen = ({
         .maybeSingle();
 
       if (!userData) {
-        console.log("  Inserting into public.users manually for driver...");
+        console.log("[DriverRegister] User not found in public.users, inserting manually...");
         const { error: userInsertError } = await supabase
           .from("users")
           .insert({
@@ -276,32 +412,43 @@ const DriverVehicleScreen = ({
           });
 
         if (userInsertError && !userInsertError.message?.includes("duplicate")) {
+          console.error("[DriverRegister] public.users insert error:", userInsertError);
           setBannerError(userInsertError.message);
           return;
         }
+        console.log("[DriverRegister] public.users sync complete.");
       }
+
+      console.log("[DriverRegister] Inserting into public.drivers table...");
 
       const { data: driverRecord, error: dbError } = await supabase
         .from("drivers")
         .insert({
           user_id: userId,
-          full_name: params.full_name,
+          fullname: params.full_name,
           email: params.email,
-          phone_number: params.phone_number,
-          car_type: formData.car_type.trim(),
-          car_plate_number: formData.car_plate_number.trim().toUpperCase(),
-          seat_capacity: parseInt(formData.seat_capacity, 10),
-          location_address: formData.location_address.trim(),
-          location_lat: locationLat,
-          location_lng: locationLng,
+          city: formData.city || null,
+          location: {
+            address: formData.location_address,
+            latitude: locationLat,
+            longitude: locationLng,
+            phone_number: params.phone_number,
+            car_type: formData.car_type.trim(),
+            car_plate_number: formData.car_plate_number.trim().toUpperCase(),
+            seat_capacity: parseInt(formData.seat_capacity, 10),
+          },
+          status: 'PENDING'
         })
         .select()
         .single();
 
       if (dbError) {
+        console.error("[DriverRegister] Drivers table entry error:", dbError);
         setBannerError(dbError.message);
         return;
       }
+
+      console.log("[DriverRegister] Driver registration successful! Record ID:", driverRecord.id);
 
       // Persist driver identity locally for session restoration on app restart
       await AsyncStorage.setItem("@registered_driver_email", params.email);
@@ -311,6 +458,7 @@ const DriverVehicleScreen = ({
         onSuccess({ driverId: driverRecord?.id, email: params.email });
       }
     } catch (error) {
+      console.error("[DriverRegister] Unexpected crash during registration:", error);
       setBannerError(
         error?.message ||
           (language === "ar"
@@ -328,7 +476,7 @@ const DriverVehicleScreen = ({
       !formData.car_type ||
       !formData.car_plate_number ||
       !formData.seat_capacity ||
-      !formData.location_address,
+      !formData.location_coords,
     [formData, loading],
   );
 
@@ -409,23 +557,11 @@ const DriverVehicleScreen = ({
             ) : null}
 
             <View style={styles.formCard}>
-              <InputField
-                label={t.carType}
-                placeholder={t.carTypePlaceholder}
-                icon="directions-car"
+              <VehicleTypePicker
                 value={formData.car_type}
-                onChangeText={(value) => handleChange("car_type", value)}
-                onFocus={() => setActiveField("car_type")}
-                onBlur={() => {
-                  setActiveField(null);
-                  setErrors((prev) => ({
-                    ...prev,
-                    car_type: validateField("car_type"),
-                  }));
-                }}
-                isFocused={activeField === "car_type"}
-                hasError={errors.car_type}
+                onSelect={(value) => handleChange("car_type", value)}
                 language={language}
+                error={errors.car_type}
               />
 
               <InputField
@@ -470,25 +606,20 @@ const DriverVehicleScreen = ({
                 keyboardType="numeric"
               />
 
-              <InputField
-                label={t.locationAddress}
-                placeholder={t.locationAddressPlaceholder}
-                icon="location-on"
-                value={formData.location_address}
-                onChangeText={(value) =>
-                  handleChange("location_address", value)
-                }
-                onFocus={() => setActiveField("location_address")}
-                onBlur={() => {
-                  setActiveField(null);
-                  setErrors((prev) => ({
+              <MapLocationPicker
+                value={formData.location_coords}
+                onSelect={(loc) => {
+                  setFormData((prev) => ({
                     ...prev,
-                    location_address: validateField("location_address"),
+                    location_coords: loc,
+                    location_address: loc.address || prev.location_address,
                   }));
+                  setLocationLat(loc.latitude);
+                  setLocationLng(loc.longitude);
+                  setErrors((prev) => ({ ...prev, location_coords: null }));
                 }}
-                isFocused={activeField === "location_address"}
-                hasError={errors.location_address}
                 language={language}
+                error={errors.location_coords}
               />
 
               {loadingLocation ? (
@@ -691,6 +822,34 @@ const styles = StyleSheet.create({
   },
   rtlText: {
     textAlign: "right",
+  },
+  dropdownContainer: {
+    backgroundColor: "#FFFFFF",
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "#EBF2FF",
+    marginTop: 8,
+    paddingVertical: 8,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.05,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  optionItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  optionText: {
+    fontSize: 15,
+    color: "#64748B",
+    fontFamily: UbuntuFonts.medium,
+  },
+  optionTextActive: {
+    color: "#1A1A1A",
   },
 });
 
