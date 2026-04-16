@@ -227,44 +227,20 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
   useEffect(() => {
     let mounted = true;
     const enrich = async () => {
-      console.log("[TripDetails] Effect start. tripData input:", {
-        id: tripData?.id,
-        trip_id: tripData?.trip_id,
-        status: tripData?.status,
-        driver_id: tripData?.driver_id,
-        driverName: tripData?.driverName
-      });
-
-      // Only skip if we already have the full driver info
-      if (tripData?.driverName) {
-        console.log("[TripDetails] Skip enrichment: driverName already present.");
-        setIsLoadingEnrichment(false);
-        return;
-      }
-
       const tripId = tripData?.tripId || tripData?.trip_id || tripData?.id;
       const studentId = tripData?.studentId || tripData?.student_id;
       const tripDateStr = tripData?.trip_date || tripData?.tripDate;
 
-      console.log("[TripDetails] Resolved IDs:", { tripId, studentId, tripDateStr });
-
       if (!tripId || !studentId) {
-        console.warn("[TripDetails] Missing tripId or studentId. Can't enrich.");
         setIsLoadingEnrichment(false);
         return;
       }
 
       if (tripDateStr) {
-        console.log("[TripDetails] Calling getAssignedTripForStudent with:", studentId, tripDateStr);
-        const { data, error } = await getAssignedTripForStudent(
+        const { data } = await getAssignedTripForStudent(
           studentId,
           tripDateStr,
         );
-        console.log("[TripDetails] getAssignedTripForStudent result:", { 
-          hasData: !!data, 
-          driverName: data?.driverName,
-          error 
-        });
         if (mounted && data) {
           setEnrichedTrip((prev) => ({ ...prev, ...data }));
         }
@@ -286,22 +262,17 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
           let busModel = null;
 
           if (data.driver_id) {
-            // DIAGNOSTIC: Fetch EVERYTHING to see what columns exist
             const { data: drv } = await supabase
               .from("drivers")
               .select("*")
               .eq("id", data.driver_id)
               .maybeSingle();
             if (drv) {
-              console.log("[TripDetails] Keys found in drivers table:", Object.keys(drv));
-              console.log("[TripDetails] Driver info found:", drv.fullname);
               driverName = drv.fullname;
               // Check various possible names for phone
               driverPhone = drv.phone || drv.phone_number || drv.phoneNumber || drv.tel || null;
               driverAvatar = drv.avatar_url;
               driverRating = drv.rating;
-            } else {
-              console.warn("[TripDetails] Driver ID exists but record not found in drivers table.");
             }
           }
 

@@ -537,25 +537,18 @@ export const getAssignedTripForStudent = async (studentId, tripDate) => {
     if (trip.driver_id) {
       const cleanDriverId = String(trip.driver_id).trim();
       
-      // DIAGNOSTIC: Fetch EVERYTHING to see what columns exist
-      const { data: drv, error: drvErr } = await supabase
+      const { data: drv } = await supabase
         .from("drivers")
         .select("*")
         .eq("id", cleanDriverId)
         .maybeSingle();
 
-      if (drvErr) console.error("[tripService] Driver query error:", drvErr);
-
       if (drv) {
-        console.log("[tripService] Keys found in drivers table:", Object.keys(drv));
-        console.log("[tripService] Driver record found:", drv.fullname);
         driverName = drv.fullname;
         // Check various possible names for phone
         driverPhone = drv.phone || drv.phone_number || drv.phoneNumber || drv.tel || null;
         driverAvatar = drv.avatar_url;
         driverRating = drv.rating;
-      } else {
-        console.warn("[tripService] Driver record not found for ID:", cleanDriverId);
       }
     }
 
