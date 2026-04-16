@@ -165,6 +165,8 @@ const StudentHomeScreen = ({
   const [locationHint, setLocationHint] = useState("");
   const [groupingHint, setGroupingHint] = useState("");
   const [showNotifications, setShowNotifications] = useState(false);
+  const [activeTripId, setActiveTripId] = useState(null); // Trip starting notification track
+  const [lastStatuses, setLastStatuses] = useState({}); // Tracking statuses to detect transitions
 
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const slideAnim = useRef(new Animated.Value(40)).current;
@@ -307,10 +309,9 @@ const StudentHomeScreen = ({
           // Enhanced status check: prioritize status from the "trips" table as requested
           const bookingsWithTripStatus = await Promise.all(data.map(async (booking) => {
             // Find all trips for this student on the specific booking date
-            // We fetch all and filter in JS to be more robust against JSONB array indexing issues
             const { data: tripsData } = await supabase
               .from("trips")
-              .select("status, id, student_ids, school_arrival, start_time")
+              .select("status, id, student_ids, school_arrival, start_time, driver_id")
               .eq("trip_date", booking.trip_date);
 
             const studentTrips = (tripsData || []).filter(t => 
@@ -326,16 +327,34 @@ const StudentHomeScreen = ({
             }) || (studentTrips.length === 1 ? studentTrips[0] : null);
 
             if (tripData) {
-              console.log(`[StudentHome] Found trip ${tripData.id} for booking ${booking.id}. Trip status: ${tripData.status}`);
+              const newStatus = tripData.status === 'SCHEDULED' ? 'ASSIGNED' : tripData.status;
+
+              // Detect status switch to IN_PROGRESS for notification
+              const oldStatus = lastStatuses[booking.id];
+              if (oldStatus && oldStatus !== "IN_PROGRESS" && newStatus === "IN_PROGRESS") {
+                 Alert.alert(
+                   language === "ar" ? "بدأت الرحلة!" : "Trip Started!",
+                   language === "ar" 
+                     ? "سائقك بدأ الرحلة الآن. يمكنك تتبعه مباشرة."
+                     : "Your driver has started the trip. You can track it live now!"
+                 );
+              }
+
               return {
                 ...booking,
                 // Map SCHEDULED (trip table) to ASSIGNED (UI display name)
-                status: tripData.status === 'SCHEDULED' ? 'ASSIGNED' : tripData.status,
-                trip_id: tripData.id
+                status: newStatus,
+                trip_id: tripData.id,
+                driver_id: tripData.driver_id
               };
             }
             return booking;
           }));
+
+          // Update statuses map for next iteration
+          const newStatuses = {};
+          bookingsWithTripStatus.forEach(t => { newStatuses[t.id] = t.status; });
+          setLastStatuses(newStatuses);
 
           setUpcomingBookings(bookingsWithTripStatus);
         } else {
@@ -710,6 +729,45 @@ const StudentHomeScreen = ({
           <View style={styles.statusIndicator}>
             <ActivityIndicator size="small" color={PRIMARY_BLUE} />
           </View>
+        )}
+
+        {/* Live Trip Status Bar (Visible when a trip is in progress) */}
+        {upcomingBookings.some(b => b.status === "IN_PROGRESS") && (
+          <TouchableOpacity 
+            style={styles.liveTripBanner}
+            onPress={() => {
+              const booking = upcomingBookings.find(b => b.status === "IN_PROGRESS");
+              if (booking) {
+                const tripPayload = {
+                  id: booking.id,
+                  tripId: booking.trip_id || booking.id, // Using trip_id from earlier mapping
+                  studentId,
+                  homeLocation: studentLocation || booking.pickup_location,
+                  destinationLocation: schoolLocation,
+                  routeCoordinates,
+                  start_time: booking.start_time,
+                    trip_date: booking.trip_date,
+                  leaveHomeTime: booking.start_time,
+                  arriveDestinationTime: booking.end_time,
+                  status: "IN_PROGRESS",
+                  schoolName,
+                    driver_id: booking.driver_id
+                };
+                onNavigateToTripDetails(tripPayload);
+              }
+            }}
+          >
+            <View style={styles.liveTripIndicator} />
+            <View style={styles.liveTripContent}>
+              <Text style={styles.liveTripTitle}>
+                {language === "ar" ? "رحلة جارية الآن" : "Trip is Live Now"}
+              </Text>
+              <Text style={styles.liveTripSubtitle}>
+                {language === "ar" ? "انقر للمتابعة على الخريطة" : "Tap to track on map"}
+              </Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
         )}
 
         {/* Booking Info Overlay on Map */}
@@ -1472,6 +1530,42 @@ const styles = StyleSheet.create({
   },
   rtlText: {
     textAlign: "right",
+  },
+  liveTripBanner: {
+    position: "absolute",
+    top: 60,
+    left: 16,
+    right: 16,
+    backgroundColor: "#DC2626", // Red for live
+    borderRadius: 12,
+    padding: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 6,
+    zIndex: 100,
+  },
+  liveTripIndicator: {
+    width: 10,
+    height: 10,
+    borderRadius: 5,
+    backgroundColor: "#FFFFFF",
+    marginRight: 12,
+  },
+  liveTripContent: {
+    flex: 1,
+  },
+  liveTripTitle: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  liveTripSubtitle: {
+    color: "rgba(255, 255, 255, 0.8)",
+    fontSize: 12,
   },
 });
 
