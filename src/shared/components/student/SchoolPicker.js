@@ -18,7 +18,8 @@ const SchoolPicker = ({
   onSelect, 
   language = 'en', 
   error = null,
-  disabled = false 
+  disabled = false,
+  city = null // New prop for filtering
 }) => {
   const [isVisible, setIsVisible] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -44,6 +45,7 @@ const SchoolPicker = ({
           id: school.id,
           name: school.name,
           nameAr: school.name_ar,
+          city: school.city?.toLowerCase(), // Add city for filtering
         }));
         setSchools(mappedSchools);
       }
@@ -56,6 +58,12 @@ const SchoolPicker = ({
   const selectedSchool = schools.find((school) => school.id === value);
 
   const filteredSchools = schools.filter((school) => {
+    // 1. Filter by city if provided
+    if (city && school.city !== city.toLowerCase()) {
+      return false;
+    }
+
+    // 2. Filter by search query
     const name = language === 'ar' ? school.nameAr : school.name;
     return name.toLowerCase().includes(searchQuery.toLowerCase());
   });

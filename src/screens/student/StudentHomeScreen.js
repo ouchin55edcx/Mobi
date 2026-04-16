@@ -185,27 +185,29 @@ const StudentHomeScreen = ({
   }, []);
 
   // Initialization & Data Loading
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const { data } = await getStudentById(studentId);
-        if (data) {
-          setStudentData(data);
-          if (data.home_location) setStudentLocation(data.home_location);
-          if (data.schools) {
-            setSchoolName(data.schools.name);
-            setSchoolLocation({
-              latitude: data.schools.latitude,
-              longitude: data.schools.longitude,
-            });
-          }
+  const loadData = useCallback(async () => {
+    if (!studentId) return;
+    try {
+      const { data } = await getStudentById(studentId);
+      if (data) {
+        setStudentData(data);
+        if (data.home_location) setStudentLocation(data.home_location);
+        if (data.schools) {
+          setSchoolName(data.schools.name);
+          setSchoolLocation({
+            latitude: data.schools.latitude,
+            longitude: data.schools.longitude,
+          });
         }
-      } catch (e) {
-        // error handled
       }
-    };
-    loadData();
+    } catch (e) {
+      console.error("[StudentHome] Failed to load student data:", e);
+    }
   }, [studentId]);
+
+  useEffect(() => {
+    loadData();
+  }, [loadData]);
 
   // Location Resolution
   useEffect(() => {
@@ -290,7 +292,6 @@ const StudentHomeScreen = ({
           .eq("student_id", studentId)
           .in("status", ["PENDING", "CONFIRMED", "ASSIGNED"])
           .gte("trip_date", today)
-          .lte("trip_date", tomorrow)
           .order("trip_date", { ascending: true })
           .order("start_time", { ascending: true });
 
@@ -348,8 +349,14 @@ const StudentHomeScreen = ({
 
   // Notify parent when this screen is focused
   useEffect(() => {
-    if (onFocus) onFocus(() => setRefreshBooking((prev) => prev + 1));
-  }, [onFocus]);
+    if (onFocus) {
+      onFocus(() => {
+        console.log("[StudentHome] Refreshing data on focus...");
+        setRefreshBooking((prev) => prev + 1);
+        loadData();
+      });
+    }
+  }, [onFocus, loadData]);
 
   const handleGo = async () => {
     // Validation
@@ -755,10 +762,12 @@ const StudentHomeScreen = ({
                       if (enrichedTrip) {
                         onNavigateToTripDetails({
                           ...enrichedTrip,
-                          homeLocation: booking.pickup_location || studentLocation,
+                          homeLocation: studentLocation || booking.pickup_location,
                           destinationLocation: schoolLocation,
                           routeCoordinates,
                           schoolName,
+                          start_time: booking.start_time,
+                          trip_date: booking.trip_date,
                           leaveHomeTime: booking.start_time,
                           arriveDestinationTime: booking.end_time,
                         });
@@ -778,9 +787,11 @@ const StudentHomeScreen = ({
                       id: booking.id,
                       tripId: booking.id,
                       studentId,
-                      homeLocation: booking.pickup_location || studentLocation,
+                      homeLocation: studentLocation || booking.pickup_location,
                       destinationLocation: schoolLocation,
                       routeCoordinates,
+                      start_time: booking.start_time,
+                      trip_date: booking.trip_date,
                       leaveHomeTime: booking.start_time,
                       arriveDestinationTime: booking.end_time,
                       status: booking.status,

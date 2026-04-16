@@ -61,7 +61,7 @@ const colors = {
   badges: {
     SOON: { bg: "#F0F9FF", text: "#0369A1" },
     NOW: { bg: "#ECFDF5", text: "#047857" },
-    PASSED: { bg: "#F3E8FF", text: "#7E22CE" },
+    DONE: { bg: "#F3E8FF", text: "#7E22CE" }, // Changed PASSED to DONE to match timing service
   },
 };
 
@@ -108,6 +108,8 @@ const translations = {
     inRangeTag: "✓ On Route",
     outOfRangeTag: "⚠ 500m+ away",
     pickupOrder: "Your Stop #",
+    leaveSchool: "Leave School",
+    homeArrival: "Home Arrival",
   },
   ar: {
     back: "رجوع",
@@ -150,6 +152,8 @@ const translations = {
     inRangeTag: "✓ على الطريق",
     outOfRangeTag: "⚠ 500م+ بعيداً",
     pickupOrder: "محطتك #",
+    leaveSchool: "غادر المدرسة",
+    homeArrival: "الوصول للمنزل",
   },
 };
 
@@ -173,9 +177,9 @@ const formatTimeCompact = (date) => {
   });
 };
 
-/** Format a future/past time relative to now: "in 2h 15m", "3m ago", or "—:—" */
-const formatDynamicTime = (date, badge, lang) => {
-  if (!date || isNaN(date.getTime())) return "—:—";
+/** Get a short relative time string: "In 15m", "3m ago", etc. */
+const getRelativeTimeString = (date, badge, lang) => {
+  if (!date || isNaN(date.getTime())) return "";
 
   const now = Date.now();
   const eventMs = date.getTime();
@@ -183,22 +187,30 @@ const formatDynamicTime = (date, badge, lang) => {
   const diffSec = Math.round(diffMs / 1000);
   const diffMin = Math.round(Math.abs(diffSec) / 60);
   const diffHour = Math.floor(diffMin / 60);
+  const diffDay = Math.floor(diffHour / 24);
+  const remainHour = diffHour % 24;
   const remainMin = diffMin % 60;
 
   if (badge === "NOW") {
-    return lang === "ar" ? "الآن" : "NOW";
+    return ""; // Badge says NOW, so text is redundant
   }
 
-  if (badge === "PASSED" || diffSec < 0) {
-    if (diffMin < 1) return lang === "ar" ? "انتهى" : "Done";
+  // If the event is more than 5 minutes in the past
+  if (badge === "DONE" || diffSec < -300) {
     if (diffMin < 60) return `${diffMin}m ${lang === "ar" ? "مضى" : "ago"}`;
-    return `${diffHour}h ${remainMin}m ${lang === "ar" ? "مضى" : "ago"}`;
+    if (diffHour < 24) return `${diffHour}h ${remainMin}m ${lang === "ar" ? "مضى" : "ago"}`;
+    return date.toLocaleDateString(lang === "ar" ? "ar-EG" : "en-GB", { day: '2-digit', month: 'short' });
   }
 
   // SOON / future
-  if (diffMin < 1) return lang === "ar" ? "أقل من دقيقة" : "< 1 min";
+  if (diffMin < 1) return lang === "ar" ? "قريباً" : "Soon";
   if (diffMin < 60) return `${lang === "ar" ? "في" : "in"} ${diffMin}m`;
-  return `${lang === "ar" ? "في" : "in"} ${diffHour}h ${remainMin}m`;
+  if (diffHour < 24) return `${lang === "ar" ? "في" : "in"} ${diffHour}h ${remainMin}m`;
+  
+  if (diffDay === 1) return lang === "ar" ? "غداً" : "Tomorrow";
+  if (diffDay < 7) return `${lang === "ar" ? "في" : "in"} ${diffDay} ${lang === "ar" ? "أيام" : "days"}`;
+
+  return date.toLocaleDateString(lang === "ar" ? "ar-EG" : "en-GB", { day: '2-digit', month: 'short' });
 };
 
 /* ═════════════════════════════ Main Component ════════════════════════════ */
@@ -551,25 +563,33 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
 
   /* ── Timing Computation ────────────────────────────────────────────── */
   const timing = useMemo(() => {
-    const anchorTime =
-      enrichedTrip?.startTime || enrichedTrip?.start_time || null;
+    // anchorTime = the student's school arrival time (e.g. 8:45 AM)
+    // leaveHomeTime is a legacy name — it actually holds the school start time from the booking
+    const anchorTime = isRetour
+      ? (enrichedTrip?.arriveDestinationTime || enrichedTrip?.end_time || enrichedTrip?.endTime || enrichedTrip?.startTime || enrichedTrip?.start_time)
+      : (enrichedTrip?.startTime || enrichedTrip?.start_time || enrichedTrip?.leaveHomeTime);
     const walkDist = pickupStation?.walkDistMeters ?? null;
     const distMeters = Number.isFinite(distanceKm) ? distanceKm * 1_000 : null;
 
     return computeTripTimes({
       startTime: anchorTime,
+      tripDate: enrichedTrip?.trip_date || enrichedTrip?.tripDate,
       walkDistMeters: walkDist ?? 400,
       driverEtaToSchoolSecs: etaToSchoolSecs,
       pickupToSchoolDistMeters: distMeters ? distMeters * 0.6 : null,
       studentOrder,
+      totalStudents: enrichedTrip?.totalStudents || enrichedTrip?.student_ids?.length || 1,
+      isRetour,
     });
   }, [
     enrichedTrip?.startTime,
     enrichedTrip?.start_time,
+    enrichedTrip?.leaveHomeTime,
     pickupStation?.walkDistMeters,
     etaToSchoolSecs,
     distanceKm,
     studentOrder,
+    isRetour,
   ]);
 
   /* ── Badge States (updated every 30s for dynamic behavior) ───────── */
@@ -597,19 +617,7 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
     if (!etaToSchoolSecs) return null;
     return Math.max(1, Math.round(etaToSchoolSecs / 60));
   }, [etaToSchoolSecs]);
-  const pickupAddress = useMemo(() => {
-    if (enrichedTrip?.pickupAddress) return enrichedTrip.pickupAddress;
-    if (enrichedTrip?.pickupName) return enrichedTrip.pickupName;
-    if (pickupStation?.address) return pickupStation.address;
-    return isLoadingEnrichment ? t.loading : t.pickupUnavailable;
-  }, [
-    t.loading,
-    t.pickupUnavailable,
-    enrichedTrip?.pickupAddress,
-    enrichedTrip?.pickupName,
-    pickupStation?.address,
-    isLoadingEnrichment,
-  ]);
+
 
   /* ── Contact Handlers ──────────────────────────────────────────────── */
   const handleCall = () => driverPhone && Linking.openURL(`tel:${driverPhone}`);
@@ -806,16 +814,7 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
           ) : null}
 
           {/* ────── PICKUP STATION CARD ──────────────────────── */}
-          {pickupStation && (
-            <PickupCard
-              station={pickupStation}
-              timing={timing}
-              address={pickupAddress}
-              translations={t}
-              isRTL={isRTL}
-              studentOrder={studentOrder}
-            />
-          )}
+
           {/* ────── JOURNEY TIMELINE ──────────────────────────── */}
           <View style={styles.timelineWrapper}>
             <Text style={[styles.timelineSectionTitle, isRTL && styles.rtl]}>
@@ -825,8 +824,9 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
             <TimelineStop
               icon={isRetour ? "school" : "home"}
               title={isRetour ? schoolName : t.home}
-              subtitle={t.leaveHome}
-              time={formatDynamicTime(
+              subtitle={isRetour ? t.leaveSchool : t.leaveHome}
+              time={formatTimeCompact(timing.leaveHomeTime)}
+              relativeTime={getRelativeTimeString(
                 timing.leaveHomeTime,
                 homeBadge,
                 language,
@@ -850,7 +850,12 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
               icon="location-on"
               title={t.pickup}
               subtitle={t.waitForPickup}
-              time={formatDynamicTime(timing.pickupTime, pickupBadge, language)}
+              time={formatTimeCompact(timing.pickupTime)}
+              relativeTime={getRelativeTimeString(
+                timing.pickupTime,
+                pickupBadge,
+                language,
+              )}
               badge={pickupBadge}
               isFirst={false}
               hasNext
@@ -869,8 +874,13 @@ const TripDetailsScreen = ({ tripData, language = "en", onBack }) => {
             <TimelineStop
               icon={isRetour ? "home" : "school"}
               title={isRetour ? t.home : schoolName}
-              subtitle={t.schoolArrival}
-              time={formatDynamicTime(timing.schoolTime, schoolBadge, language)}
+              subtitle={isRetour ? t.homeArrival : t.schoolArrival}
+              time={formatTimeCompact(timing.schoolTime)}
+              relativeTime={getRelativeTimeString(
+                timing.schoolTime,
+                schoolBadge,
+                language,
+              )}
               badge={schoolBadge}
               isFirst={false}
               hasNext={false}
@@ -1026,80 +1036,7 @@ const DriverCard = ({
   );
 };
 
-/* ──────────────────── PickupCard Sub-Component ──────────────────────── */
-const PickupCard = ({
-  station,
-  timing,
-  address,
-  translations,
-  isRTL,
-  studentOrder,
-}) => (
-  <View style={[styles.card, styles.pickupCardBorder]}>
-    <View
-      style={[
-        styles.pickupCardHeader,
-        isRTL && { flexDirection: "row-reverse" },
-      ]}
-    >
-      <View style={styles.pickupIcon}>
-        <MaterialIcons name="location-on" size={20} color={colors.primary} />
-      </View>
-      <View style={{ flex: 1 }}>
-        <Text style={[styles.cardTitle, isRTL && styles.rtl]}>
-          {translations.pickupLocation}
-        </Text>
-        <Text style={[styles.pickupSubtitle, isRTL && styles.rtl]}>
-          {translations.pickupOrder} {studentOrder}
-        </Text>
-      </View>
-    </View>
-    <View style={styles.pickupAddressBlock}>
-      <Text
-        style={[styles.pickupAddressText, isRTL && styles.rtl]}
-        numberOfLines={2}
-      >
-        {address}
-      </Text>
-    </View>
 
-    <View
-      style={[styles.pickupStatsRow, isRTL && { flexDirection: "row-reverse" }]}
-    >
-      <View style={[styles.pickupInlineStat, isRTL && styles.rowReverse]}>
-        <MaterialIcons
-          name="directions-walk"
-          size={14}
-          color={colors.primary}
-        />
-        <Text style={styles.pickupInlineText}>
-          {formatWalkTime(timing.walkTimeMinutes)}
-        </Text>
-      </View>
-      <View style={[styles.pickupInlineStat, isRTL && styles.rowReverse]}>
-        <MaterialIcons name="near-me" size={14} color={colors.primary} />
-        <Text style={styles.pickupInlineText}>
-          {formatWalkDistance(station.walkDistMeters)}
-        </Text>
-      </View>
-      <View
-        style={[
-          styles.pickupRangeTag,
-          !station.withinConstraint && styles.pickupRangeTagWarning,
-        ]}
-      >
-        <Text
-          style={[
-            styles.pickupRangeText,
-            !station.withinConstraint && { color: colors.warning },
-          ]}
-        >
-          {formatWalkDistance(station.walkDistMeters)}
-        </Text>
-      </View>
-    </View>
-  </View>
-);
 
 /* ──────────────────── TimelineStop Sub-Component ──────────────────── */
 const TimelineStop = ({
@@ -1107,6 +1044,7 @@ const TimelineStop = ({
   title,
   subtitle,
   time,
+  relativeTime,
   badge,
   isFirst,
   hasNext,
@@ -1150,9 +1088,16 @@ const TimelineStop = ({
             <Text style={[styles.timelineStopTitle, isRTL && styles.rtl]}>
               {title}
             </Text>
-            <Text style={[styles.timelineSubtitle, isRTL && styles.rtl]}>
-              {subtitle}
-            </Text>
+            <View style={[styles.subtitleRow, isRTL && styles.rowReverse]}>
+              <Text style={[styles.timelineSubtitle, isRTL && styles.rtl]}>
+                {subtitle}
+              </Text>
+              {!!relativeTime && (
+                <Text style={styles.relativeTimeText}>
+                  • {relativeTime}
+                </Text>
+              )}
+            </View>
           </View>
           <View style={[styles.badgeBox, { backgroundColor: badgeColors.bg }]}>
             <Text style={[styles.badgeText, { color: badgeColors.text }]}>
@@ -1606,82 +1551,7 @@ const styles = StyleSheet.create({
     opacity: 0.45,
   },
 
-  /* ──── PICKUP CARD ──── */
-  pickupCardBorder: {
-    borderColor: "#DBEAFE",
-    backgroundColor: "#F8FBFF",
-    borderRadius: 24,
-  },
-  pickupCardHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 10,
-    marginBottom: 10,
-  },
-  pickupIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: colors.primaryLight,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  pickupSubtitle: {
-    fontSize: 11,
-    color: colors.textSecondary,
-    fontFamily: UbuntuFonts.medium,
-    marginTop: 2,
-  },
-  pickupAddressBlock: {
-    borderRadius: 18,
-    backgroundColor: colors.surface,
-    borderWidth: 1,
-    borderColor: colors.border,
-    paddingHorizontal: 12,
-    paddingVertical: 10,
-    marginBottom: 10,
-  },
-  pickupAddressText: {
-    fontSize: 14,
-    fontFamily: UbuntuFonts.bold,
-    color: colors.text,
-  },
-  pickupStatsRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    gap: 8,
-    backgroundColor: colors.surface,
-    borderRadius: 18,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    borderWidth: 1,
-    borderColor: colors.border,
-  },
-  pickupInlineStat: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-  },
-  pickupInlineText: {
-    fontSize: 12,
-    fontFamily: UbuntuFonts.semiBold,
-    color: colors.text,
-  },
-  pickupRangeTag: {
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: colors.successLight,
-  },
-  pickupRangeTagWarning: {
-    backgroundColor: colors.warningLight,
-  },
-  pickupRangeText: {
-    fontSize: 11,
-    fontFamily: UbuntuFonts.bold,
-    color: colors.success,
-  },
+
 
   /* ──── TIMELINE ──── */
   timelineWrapper: {
@@ -1743,9 +1613,20 @@ const styles = StyleSheet.create({
     color: colors.text,
     marginBottom: 2,
   },
-  timelineSubtitle: {
-    fontSize: 11,
+  subtitleRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 2,
+  },
+  relativeTimeText: {
+    fontSize: 12,
     fontFamily: UbuntuFonts.medium,
+    color: colors.textTertiary,
+  },
+  timelineSubtitle: {
+    fontSize: 12,
+    fontFamily: UbuntuFonts.regular,
     color: colors.textSecondary,
   },
   timelineDetail: {

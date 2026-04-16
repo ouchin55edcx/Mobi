@@ -257,6 +257,30 @@ const DriverVehicleScreen = ({
         return;
       }
 
+      // 1. Ensure user exists in public.users (fallback for trigger delay/failure)
+      const { data: userData } = await supabase
+        .from("users")
+        .select("id")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (!userData) {
+        console.log("  Inserting into public.users manually for driver...");
+        const { error: userInsertError } = await supabase
+          .from("users")
+          .insert({
+            id: userId,
+            email: params.email.toLowerCase().trim(),
+            fullname: params.full_name.trim(),
+            role: "driver",
+          });
+
+        if (userInsertError && !userInsertError.message?.includes("duplicate")) {
+          setBannerError(userInsertError.message);
+          return;
+        }
+      }
+
       const { data: driverRecord, error: dbError } = await supabase
         .from("drivers")
         .insert({

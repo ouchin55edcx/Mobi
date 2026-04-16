@@ -22,6 +22,7 @@ import {
   getStudentById,
   updateStudent,
 } from "../../shared/services/studentService";
+import MapLocationPicker from "../../shared/components/common/MapLocationPicker";
 
 const translations = {
   en: {
@@ -64,6 +65,8 @@ const translations = {
     emailUpdateBlocked: "Email can be updated once every 3 months.",
     nextUpdateOn: "Next update on",
     editableAfter: "Editable after",
+    changeLocation: "Change Location",
+    confirmLocation: "Confirm New Location",
   },
   ar: {
     title: "الملف الشخصي",
@@ -105,6 +108,8 @@ const translations = {
     emailUpdateBlocked: "يمكن تعديل البريد الإلكتروني مرة واحدة كل 3 أشهر.",
     nextUpdateOn: "يمكن التعديل في",
     editableAfter: "متاح بعد",
+    changeLocation: "تغيير الموقع",
+    confirmLocation: "تأكيد الموقع الجديد",
   },
 };
 
@@ -149,12 +154,14 @@ const ProfileScreen = ({
     phone: "",
     email: "",
     school: "",
+    home_location: null,
   });
   const [updateLocks, setUpdateLocks] = useState({
     phoneUpdatedAt: null,
     emailUpdatedAt: null,
   });
   const [locationModalVisible, setLocationModalVisible] = useState(false);
+  const [pickerModalVisible, setPickerModalVisible] = useState(false);
 
   const t = translations[language];
   const avatarUri =
@@ -222,6 +229,7 @@ const ProfileScreen = ({
           phone: data.phone || "",
           email: data.email || "",
           school: data.school_id || data.school || "",
+          home_location: data.home_location || null,
         });
       }
     } catch (err) {
@@ -245,6 +253,7 @@ const ProfileScreen = ({
         phone: student.phone || "",
         email: student.email || "",
         school: student.school || "",
+        home_location: student.home_location || null,
       });
     }
   };
@@ -284,6 +293,7 @@ const ProfileScreen = ({
         fullname: formData.fullname,
         phone: nextPhone,
         email: nextEmail,
+        home_location: formData.home_location,
       });
 
       if (error) {
@@ -690,10 +700,21 @@ const ProfileScreen = ({
               <View style={styles.locationDetailItem}>
                 <MaterialIcons name="place" size={16} color="#6B7280" />
                 <Text style={styles.locationDetailText}>
-                  {student.home_location.latitude?.toFixed(6) || "--"},{" "}
-                  {student.home_location.longitude?.toFixed(6) || "--"}
+                  {editing
+                    ? `${formData.home_location?.latitude?.toFixed(6) || "--"}, ${formData.home_location?.longitude?.toFixed(6) || "--"}`
+                    : `${student.home_location.latitude?.toFixed(6) || "--"}, ${student.home_location.longitude?.toFixed(6) || "--"}`}
                 </Text>
               </View>
+              {editing && (
+                <TouchableOpacity
+                  style={styles.changeLocationButton}
+                  onPress={() => setPickerModalVisible(true)}
+                  activeOpacity={0.7}
+                >
+                  <MaterialIcons name="edit-location" size={18} color="#3185FC" />
+                  <Text style={styles.changeLocationText}>{t.changeLocation}</Text>
+                </TouchableOpacity>
+              )}
             </View>
           </View>
         )}
@@ -759,6 +780,36 @@ const ProfileScreen = ({
               </View>
             )}
           </View>
+        </SafeAreaView>
+      </Modal>
+       <Modal
+        visible={pickerModalVisible}
+        animationType="slide"
+        onRequestClose={() => setPickerModalVisible(false)}
+      >
+        <SafeAreaView style={styles.pickerModalRoot} edges={["top", "bottom"]}>
+          <View style={styles.pickerModalHeader}>
+            <Text style={styles.pickerModalTitle}>{t.changeLocation}</Text>
+            <TouchableOpacity
+              onPress={() => setPickerModalVisible(false)}
+              style={styles.pickerCloseBtn}
+            >
+              <MaterialIcons name="close" size={24} color="#1A1A1A" />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.pickerContent}>
+            <MapLocationPicker
+              value={formData.home_location}
+              onSelect={(loc) => setFormData({ ...formData, home_location: loc })}
+              language={language}
+            />
+          </View>
+          <TouchableOpacity
+            style={styles.confirmLocationBtn}
+            onPress={() => setPickerModalVisible(false)}
+          >
+            <Text style={styles.confirmLocationText}>{t.confirmLocation}</Text>
+          </TouchableOpacity>
         </SafeAreaView>
       </Modal>
     </SafeAreaView>
@@ -1077,6 +1128,66 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: "#64748B",
     fontFamily: Platform.OS === "ios" ? "Menlo" : "monospace",
+    flex: 1,
+  },
+  changeLocationButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    marginTop: 10,
+    backgroundColor: "#EFF6FF",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: "#DBEAFE",
+    alignSelf: "flex-start",
+  },
+  changeLocationText: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#3185FC",
+  },
+  pickerModalRoot: {
+    flex: 1,
+    backgroundColor: "#FFFFFF",
+  },
+  pickerModalHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+  },
+  pickerModalTitle: {
+    fontSize: 18,
+    fontWeight: "800",
+    color: "#1A1A1A",
+  },
+  pickerCloseBtn: {
+    padding: 4,
+  },
+  pickerContent: {
+    flex: 1,
+    padding: 20,
+  },
+  confirmLocationBtn: {
+    backgroundColor: "#3185FC",
+    margin: 20,
+    paddingVertical: 16,
+    borderRadius: 16,
+    alignItems: "center",
+    shadowColor: "#3185FC",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 4,
+  },
+  confirmLocationText: {
+    color: "#FFFFFF",
+    fontSize: 16,
+    fontWeight: "700",
   },
   logoutButton: {
     flexDirection: "row",

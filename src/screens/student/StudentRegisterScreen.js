@@ -36,10 +36,10 @@ const translations = {
   en: {
     step1Title: "Personal Profile",
     step1Subtitle: "Basic details to help us identify you.",
-    step2Title: "Your University",
-    step2Subtitle: "Select your educational institution.",
-    step3Title: "Home Location",
-    step3Subtitle: "Pin your residence for accurate routing.",
+    step2Title: "Home Location",
+    step2Subtitle: "Select your city and pin your residence.",
+    step3Title: "Your University",
+    step3Subtitle: "Select your educational institution in your city.",
     fullname: "Full Name",
     fullnamePlaceholder: "John Doe",
     phone: "Phone Number",
@@ -61,10 +61,10 @@ const translations = {
   ar: {
     step1Title: "الملف الشخصي",
     step1Subtitle: "تفاصيل أساسية لمساعدتنا في التعرف عليك.",
-    step2Title: "جامعتك",
-    step2Subtitle: "اختر مؤسستك التعليمية.",
-    step3Title: "موقع المنزل",
-    step3Subtitle: "حدد موقع سكنك لتخطيط دقيق للرحلات.",
+    step2Title: "موقع المنزل",
+    step2Subtitle: "اختر مدينتك وحدد موقع سكنك.",
+    step3Title: "جامعتك",
+    step3Subtitle: "اختر مؤسستك التعليمية في مدينتك.",
     fullname: "الاسم الكامل",
     fullnamePlaceholder: "محمد أحمد",
     phone: "رقم الهاتف",
@@ -83,6 +83,100 @@ const translations = {
     of: "من",
     step: "خطوة",
   },
+};
+
+const CityPicker = ({ value, onSelect, language, error }) => {
+  const cities = [
+    { id: "casablanca", name: "Casablanca", nameAr: "الدار البيضاء" },
+    { id: "rabat", name: "Rabat", nameAr: "الرباط" },
+    { id: "marrakech", name: "Marrakech", nameAr: "مراكش" },
+    { id: "tangier", name: "Tangier", nameAr: "طنجة" },
+    { id: "fes", name: "Fes", nameAr: "فاس" },
+    { id: "agadir", name: "Agadir", nameAr: "أكادير" },
+    { id: "meknes", name: "Meknes", nameAr: "مكناس" },
+    { id: "oujda", name: "Oujda", nameAr: "وجدة" },
+    { id: "kenitra", name: "Kenitra", nameAr: "القنيطرة" },
+    { id: "tetouan", name: "Tetouan", nameAr: "تطوان" },
+  ];
+
+  const [isExpanded, setIsExpanded] = useState(false);
+
+  return (
+    <View style={styles.inputGroup}>
+      <Text style={styles.label}>
+        {language === "ar" ? "المدينة" : "City"}
+      </Text>
+      <TouchableOpacity
+        style={[
+          styles.inputWrapper,
+          isExpanded && styles.inputWrapperFocused,
+          error && styles.inputWrapperError,
+          language === "ar" && styles.rtlRow,
+        ]}
+        onPress={() => setIsExpanded(!isExpanded)}
+        activeOpacity={0.7}
+      >
+        <MaterialIcons
+          name="location-city"
+          size={20}
+          color={error ? "#EF4444" : isExpanded ? "#3185FC" : "#94A3B8"}
+          style={styles.inputIcon}
+        />
+        <Text
+          style={[
+            styles.input,
+            !value && styles.pickerPlaceholder,
+            language === "ar" && styles.rtlText,
+            { verticalAlign: 'middle', lineHeight: 54 }
+          ]}
+        >
+          {value
+            ? cities.find((c) => c.id === value)?.[language === "ar" ? "nameAr" : "name"]
+            : language === "ar"
+            ? "اختر مدينتك"
+            : "Select your city"}
+        </Text>
+        <MaterialIcons
+          name={isExpanded ? "keyboard-arrow-up" : "keyboard-arrow-down"}
+          size={24}
+          color="#94A3B8"
+        />
+      </TouchableOpacity>
+
+      {isExpanded && (
+        <View style={styles.dropdownContainer}>
+          {cities.map((city) => (
+            <TouchableOpacity
+              key={city.id}
+              style={[
+                styles.cityOption,
+                value === city.id && styles.cityOptionSelected,
+                language === "ar" && styles.rtlRow,
+              ]}
+              onPress={() => {
+                onSelect(city.id);
+                setIsExpanded(false);
+              }}
+            >
+              <Text
+                style={[
+                  styles.cityOptionText,
+                  value === city.id && styles.cityOptionTextSelected,
+                  language === "ar" && styles.rtlText,
+                ]}
+              >
+                {language === "ar" ? city.nameAr : city.name}
+              </Text>
+              {value === city.id && (
+                <MaterialIcons name="check" size={18} color="#3185FC" />
+              )}
+            </TouchableOpacity>
+          ))}
+        </View>
+      )}
+      {error && <Text style={styles.errorText}>{error}</Text>}
+    </View>
+  );
 };
 
 const InputField = React.memo(
@@ -157,6 +251,7 @@ const StudentRegisterScreen = ({
     phone: "",
     email: "",
     cin: "",
+    city: "",
     school: "",
     homeLocation: null,
   });
@@ -236,13 +331,17 @@ const StudentRegisterScreen = ({
           else if (!validateCIN(formData.cin.toUpperCase()))
             error = getValidationError("cin", formData.cin, language);
           break;
-        case "school":
-          if (!formData.school)
-            error = getValidationError("school", "", language);
+        case "city":
+          if (!formData.city)
+            error = language === "ar" ? "يرجى اختيار المدينة" : "Please select a city";
           break;
         case "homeLocation":
           if (!formData.homeLocation)
             error = getValidationError("location", null, language);
+          break;
+        case "school":
+          if (!formData.school)
+            error = getValidationError("school", "", language);
           break;
       }
       console.log(`validateField(${field}): error =`, error);
@@ -255,8 +354,8 @@ const StudentRegisterScreen = ({
   const handleNext = () => {
     const fields = {
       1: ["fullname", "phone", "email", "cin"],
-      2: ["school"],
-      3: ["homeLocation"],
+      2: ["city", "homeLocation"],
+      3: ["school"],
     };
     let isValid = true;
     fields[currentStep].forEach((f) => {
@@ -275,8 +374,10 @@ const StudentRegisterScreen = ({
       "phone",
       "email",
       "cin",
-      "school",
+      "cin",
+      "city",
       "homeLocation",
+      "school",
     ];
     let isValid = true;
     allFields.forEach((f) => {
@@ -371,8 +472,39 @@ const StudentRegisterScreen = ({
 
       console.log("✅ Auth user ready, userId:", userId);
 
-      // Wait briefly for auth commit
-      await new Promise((r) => setTimeout(r, 500));
+      // 1. Ensure user exists in public.users (fallback for trigger delay/failure)
+      const { data: userData, error: userLookupError } = await supabase
+        .from("users")
+        .select("id")
+        .eq("id", userId)
+        .maybeSingle();
+
+      if (!userData) {
+        console.log("  Inserting into public.users manually...");
+        const { error: userInsertError } = await supabase
+          .from("users")
+          .insert({
+            id: userId,
+            email: formData.email.toLowerCase().trim(),
+            fullname: formData.fullname.trim(),
+            role: "student",
+          });
+
+        if (userInsertError) {
+          console.error("  Manual user insert failed:", userInsertError);
+          // Only fail if it's NOT a duplicate key error (which means another process/trigger did it)
+          if (!userInsertError.message?.includes("duplicate")) {
+            Alert.alert(
+              language === "ar" ? "خطأ" : "Error",
+              language === "ar" ? "فشل تهيئة الحساب" : "Account initialization failed"
+            );
+            setIsLoading(false);
+            return;
+          }
+        }
+      }
+
+      console.log("✅ User profile synced in public.users");
 
       // Check if student already exists (from a previous partial registration)
       const { data: existingStudent } = await supabase
@@ -605,8 +737,35 @@ const StudentRegisterScreen = ({
 
             {currentStep === 2 && (
               <View style={styles.formContainer}>
+                <CityPicker
+                  value={formData.city}
+                  onSelect={(v) => {
+                    handleInputChange("city", v);
+                    setTouched((p) => ({ ...p, city: true }));
+                    // Reset school if city changes to avoid mismatched school
+                    handleInputChange("school", "");
+                    setSelectedSchool(null);
+                  }}
+                  language={language}
+                  error={touched.city && errors.city}
+                />
+                <MapLocationPicker
+                  value={formData.homeLocation}
+                  onSelect={(loc) => {
+                    handleInputChange("homeLocation", loc);
+                    setTouched((p) => ({ ...p, homeLocation: true }));
+                  }}
+                  language={language}
+                  error={touched.homeLocation && errors.homeLocation}
+                />
+              </View>
+            )}
+
+            {currentStep === 3 && (
+              <View style={styles.formContainer}>
                 <SchoolPicker
                   value={formData.school}
+                  city={formData.city} // Pass city for filtering
                   onSelect={(id) => {
                     handleInputChange("school", id);
                     setTouched((p) => ({ ...p, school: true }));
@@ -624,20 +783,6 @@ const StudentRegisterScreen = ({
                     style={{ marginTop: 20 }}
                   />
                 )}
-              </View>
-            )}
-
-            {currentStep === 3 && (
-              <View style={styles.formContainer}>
-                <MapLocationPicker
-                  value={formData.homeLocation}
-                  onSelect={(loc) => {
-                    handleInputChange("homeLocation", loc);
-                    setTouched((p) => ({ ...p, homeLocation: true }));
-                  }}
-                  language={language}
-                  error={touched.homeLocation && errors.homeLocation}
-                />
               </View>
             )}
           </Animated.View>
@@ -833,6 +978,36 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: UbuntuFonts.bold,
   },
+  pickerPlaceholder: { color: "#94A3B8" },
+  dropdownContainer: {
+    backgroundColor: "#FFFFFF",
+    marginTop: 8,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderColor: "#EBF2FF",
+    overflow: "hidden",
+    elevation: 4,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+  },
+  cityOption: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: 16,
+    paddingVertical: 14,
+    borderBottomWidth: 1,
+    borderBottomColor: "#F1F5F9",
+  },
+  cityOptionSelected: { backgroundColor: "#F0F7FF" },
+  cityOptionText: {
+    fontSize: 15,
+    color: "#475569",
+    fontFamily: UbuntuFonts.medium,
+  },
+  cityOptionTextSelected: { color: "#3185FC", fontFamily: UbuntuFonts.bold },
   rtlRow: { flexDirection: "row-reverse" },
   rtlText: { textAlign: "right" },
 });

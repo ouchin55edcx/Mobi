@@ -40,7 +40,7 @@ const isValidCoordinate = (point) =>
 
 export default function App() {
   const [showSplash, setShowSplash] = useState(true);
-  const [currentScreen, setCurrentScreen] = useState("login");
+  const [currentScreen, setCurrentScreen] = useState("selectRole");
   const [language, setLanguage] = useState("en");
   const [studentData, setStudentData] = useState(null);
   const [driverData, setDriverData] = useState(null);
@@ -72,51 +72,8 @@ export default function App() {
     "UbuntuSans-ExtraBoldItalic": require("./src/assets/fonts/UbuntuSans-ExtraBoldItalic.ttf"),
   });
 
-  useEffect(() => {
-    // Check onboarding status and pending driver registration
-    const checkStartupState = async () => {
-      try {
-        const value = await AsyncStorage.getItem("@has_seen_onboarding");
-        setHasSeenOnboarding(value === "true");
-
-        // Check for pending driver registration
-        const pending = await AsyncStorage.getItem(
-          "@pending_driver_registration",
-        );
-        if (pending) {
-          const data = JSON.parse(pending);
-          const age = Date.now() - data.timestamp;
-          // If pending and less than 24 hours old, redirect to driver registration
-          if (age < 24 * 60 * 60 * 1000) {
-            console.log("Found pending driver registration, redirecting...");
-            setCurrentScreen("driverRegister");
-            setDriverData({ email: data.email });
-          } else {
-            // Expired, clear it
-            await AsyncStorage.removeItem("@pending_driver_registration");
-          }
-        }
-      } catch (e) {
-        setHasSeenOnboarding(false);
-      }
-    };
-    checkStartupState();
-  }, []);
-
-  useEffect(() => {
-    // Wait for fonts to load before showing the app
-    if (fontsLoaded || fontError) {
-      const timer = setTimeout(() => {
-        setShowSplash(false);
-        // If onboarding is not seen, switch to onboarding screen
-        if (hasSeenOnboarding === false) {
-          setCurrentScreen("onboarding");
-        }
-      }, 3000); // 3 seconds
-
-      return () => clearTimeout(timer);
-    }
-  }, [fontsLoaded, fontError, hasSeenOnboarding]);
+  // No longer needed: checkStartupState and fontsLoaded useEffects have been consolidated
+  // below into the restoreSession logic for better reliability.
 
   const handleFinishOnboarding = async () => {
     try {
@@ -130,98 +87,105 @@ export default function App() {
 
   useEffect(() => {
     const restoreSession = async () => {
+      // 1. Wait for fonts
+      if (!fontsLoaded && !fontError) return;
+
+      const startTime = Date.now();
       try {
+        // 2. Check if onboarding is needed
+        const onboardingValue = await AsyncStorage.getItem("@has_seen_onboarding");
+        const seenOnboarding = onboardingValue === "true";
+        setHasSeenOnboarding(seenOnboarding);
+
+        // 3. Check for pending driver registration (multi-step flow)
+        const pending = await AsyncStorage.getItem("@pending_driver_registration");
+        if (pending) {
+          const data = JSON.parse(pending);
+          const age = Date.now() - data.timestamp;
+          if (age < 24 * 60 * 60 * 1000) {
+            setDriverData({ email: data.email });
+            setCurrentScreen("driverRegister");
+            return;
+          } else {
+            await AsyncStorage.removeItem("@pending_driver_registration");
+          }
+        }
+
+        // 4. Try to restore active session from Supabase
         const { data, error } = await getSession();
+        const userEmail = data?.session?.user?.email;
 
-        if (data?.session?.user?.email) {
-          const userEmail = data.session.user.email;
-
+        if (userEmail) {
           const driverResult = await getDriverByEmail(userEmail);
           if (driverResult?.data?.id) {
-            setDriverData({
-              driverId: driverResult.data.id,
-              email: userEmail,
-            });
+            setDriverData({ driverId: driverResult.data.id, email: userEmail });
             setCurrentScreen("driverHome");
-            setIsBootstrappingAuth(false);
             return;
           }
 
           const studentResult = await getStudentByEmail(userEmail);
           if (studentResult?.data?.id) {
-            setStudentData({
-              studentId: studentResult.data.id,
-              email: userEmail,
-            });
+            setStudentData({ studentId: studentResult.data.id, email: userEmail });
             setCurrentScreen("studentHome");
-            setIsBootstrappingAuth(false);
             return;
           }
         }
 
-        // Fallback: check local registration storage
-        const localEmail = await AsyncStorage.getItem(
-          "@registered_student_email",
-        );
-        const localId = await AsyncStorage.getItem("@registered_student_id");
-        if (localEmail && localId) {
-          const studentResult = await getStudentByEmail(localEmail);
+        // 5. Fallback: Local identity (Persistent Role)
+        const localStudentId = await AsyncStorage.getItem("@registered_student_id");
+        const localStudentEmail = await AsyncStorage.getItem("@registered_student_email");
+        if (localStudentId && localStudentEmail) {
+          const studentResult = await getStudentByEmail(localStudentEmail);
           if (studentResult?.data?.id) {
-            setStudentData({
-              studentId: studentResult.data.id,
-              email: localEmail,
-            });
+            setStudentData({ studentId: studentResult.data.id, email: localStudentEmail });
             setCurrentScreen("studentHome");
-            setIsBootstrappingAuth(false);
             return;
           }
         }
 
-        const localDriverEmail = await AsyncStorage.getItem(
-          "@registered_driver_email",
-        );
-        const localDriverId = await AsyncStorage.getItem(
-          "@registered_driver_id",
-        );
-        if (localDriverEmail && localDriverId) {
+        const localDriverId = await AsyncStorage.getItem("@registered_driver_id");
+        const localDriverEmail = await AsyncStorage.getItem("@registered_driver_email");
+        if (localDriverId && localDriverEmail) {
           const driverResult = await getDriverByEmail(localDriverEmail);
           if (driverResult?.data?.id) {
-            setDriverData({
-              driverId: driverResult.data.id,
-              email: localDriverEmail,
-            });
+            setDriverData({ driverId: driverResult.data.id, email: localDriverEmail });
             setCurrentScreen("driverHome");
-            setIsBootstrappingAuth(false);
             return;
           }
         }
+
+        // 6. Final fallbacks
+        if (!seenOnboarding) {
+          setCurrentScreen("onboarding");
+        } else {
+          setCurrentScreen("selectRole");
+        }
       } catch (e) {
-        // Fall through to login if restore fails
+        console.error("Session restoration error:", e);
+        setCurrentScreen("selectRole");
       } finally {
-        setIsBootstrappingAuth(false);
+        const elapsedTime = Date.now() - startTime;
+        const remainingTime = Math.max(0, 1500 - elapsedTime);
+        setTimeout(() => {
+          setIsBootstrappingAuth(false);
+          setShowSplash(false);
+        }, remainingTime);
       }
     };
 
     restoreSession();
-  }, []);
+  }, [fontsLoaded, fontError]);
 
   const handleGoogleLogin = async () => {
     const { data, error } = await signInWithGoogle();
-
     if (error) {
       Alert.alert("Google Login Failed", error.message || "Please try again.");
       return;
     }
-
     if (data?.user || data?.session?.user) {
       setCurrentScreen("selectRole");
       return;
     }
-
-    Alert.alert(
-      "Google Login Failed",
-      "No user session returned from Supabase.",
-    );
   };
 
   const handleEmailPasswordLogin = async ({ email, password }) => {
@@ -229,40 +193,26 @@ export default function App() {
       Alert.alert("Login Failed", "Please enter both email and password.");
       return;
     }
-
     const { data, error } = await signIn(email, password);
-
     if (error) {
-      Alert.alert(
-        "Login Failed",
-        error.message || "Invalid email or password.",
-      );
+      Alert.alert("Login Failed", error.message || "Invalid email or password.");
       return;
     }
-
     const userEmail = data?.user?.email || data?.session?.user?.email || email;
 
     const driverResult = await getDriverByEmail(userEmail);
     if (driverResult?.data?.id) {
-      setDriverData({
-        driverId: driverResult.data.id,
-        email: userEmail,
-      });
-
+      setDriverData({ driverId: driverResult.data.id, email: userEmail });
       setCurrentScreen("driverHome");
       return;
     }
 
     const studentResult = await getStudentByEmail(userEmail);
     if (studentResult?.data?.id) {
-      setStudentData({
-        studentId: studentResult.data.id,
-        email: userEmail,
-      });
+      setStudentData({ studentId: studentResult.data.id, email: userEmail });
       setCurrentScreen("studentHome");
       return;
     }
-
     setCurrentScreen("selectRole");
   };
 
@@ -333,15 +283,8 @@ export default function App() {
     return <SplashScreen />;
   }
 
-  const handleSplashComplete = (targetScreen, params = null) => {
-    setShowSplash(false);
-    setCurrentScreen(targetScreen);
-  };
 
   const renderScreen = () => {
-    if (showSplash) {
-      return <SplashScreen onSplashComplete={handleSplashComplete} />;
-    }
 
     if (currentScreen === "onboarding") {
       return (
@@ -420,7 +363,12 @@ export default function App() {
           studentId={studentData?.studentId}
           language={language}
           onLogout={handleLogout}
-          onBack={() => setCurrentScreen("studentHome")}
+          onBack={() => {
+            setCurrentScreen("studentHome");
+            if (studentHomeRefreshRef.current) {
+              studentHomeRefreshRef.current();
+            }
+          }}
         />
       );
     }
