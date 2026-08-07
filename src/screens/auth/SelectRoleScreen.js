@@ -22,6 +22,8 @@ const translations = {
     student: "Student",
     studentDescription: "Find safe, reliable, and affordable campus rides.",
     continue: "Continue",
+    studentDemo: "Open Student Demo",
+    driverDemo: "Open Driver Demo",
     languageName: "English",
     languageFlag: "🇬🇧",
   },
@@ -33,6 +35,8 @@ const translations = {
     student: "طالب",
     studentDescription: "ابحث عن رحلات جامعية آمنة وموثوقة وبأسعار معقولة.",
     continue: "متابعة",
+    studentDemo: "فتح تجربة الطالب",
+    driverDemo: "فتح تجربة السائق",
     languageName: "العربية",
     languageFlag: "🇲🇦",
   },
@@ -43,6 +47,7 @@ const SelectRoleScreen = ({
   onBack,
   onRoleSelect,
   onLanguageChange,
+  onDemoSelect,
 }) => {
   const [selectedRole, setSelectedRole] = useState(null);
   const fadeAnim = useRef(new Animated.Value(0)).current;
@@ -214,6 +219,40 @@ const SelectRoleScreen = ({
             ))}
           </View>
 
+          <View style={styles.demoSection}>
+            <TouchableOpacity
+              style={[styles.demoButton, styles.studentDemoButton]}
+              onPress={() => onDemoSelect && onDemoSelect("student")}
+              activeOpacity={0.9}
+            >
+              <View style={styles.demoIconWrap}>
+                <MaterialCommunityIcons
+                  name="play-circle-outline"
+                  size={20}
+                  color="#3185FC"
+                />
+              </View>
+              <Text style={styles.demoButtonText}>{t.studentDemo}</Text>
+              <MaterialIcons name="arrow-forward" size={18} color="#3185FC" />
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.demoButton, styles.driverDemoButton]}
+              onPress={() => onDemoSelect && onDemoSelect("driver")}
+              activeOpacity={0.9}
+            >
+              <View style={styles.demoIconWrap}>
+                <MaterialCommunityIcons
+                  name="play-circle-outline"
+                  size={20}
+                  color="#10B981"
+                />
+              </View>
+              <Text style={styles.demoButtonText}>{t.driverDemo}</Text>
+              <MaterialIcons name="arrow-forward" size={18} color="#10B981" />
+            </TouchableOpacity>
+          </View>
+
           <TouchableOpacity
             style={[
               styles.continueButton,
@@ -344,6 +383,47 @@ const styles = StyleSheet.create({
     width: 12,
     height: 12,
     borderRadius: 6,
+  },
+  demoSection: {
+    gap: 12,
+    marginBottom: 16,
+  },
+  demoButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    borderRadius: 18,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    shadowColor: "#000000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.08,
+    shadowRadius: 10,
+    elevation: 3,
+  },
+  studentDemoButton: {
+    backgroundColor: "#F8FAFF",
+    borderColor: "#BFDBFE",
+  },
+  driverDemoButton: {
+    backgroundColor: "#F0FDF4",
+    borderColor: "#A7F3D0",
+  },
+  demoIconWrap: {
+    width: 38,
+    height: 38,
+    borderRadius: 12,
+    backgroundColor: "#FFFFFF",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  demoButtonText: {
+    flex: 1,
+    marginLeft: 10,
+    color: "#1A1A1A",
+    fontSize: 15,
+    fontFamily: UbuntuFonts.bold,
   },
   continueButton: {
     backgroundColor: "#3185FC",

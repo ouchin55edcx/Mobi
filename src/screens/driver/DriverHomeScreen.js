@@ -204,6 +204,7 @@ const DriverHomeScreen = ({
   language = "en",
   onSkipToProfile,
   onTripPress,
+  isDemo = false,
 }) => {
   const mapRef = useRef(null);
   const liveLocationSubscription = useRef(null);
@@ -394,6 +395,16 @@ const DriverHomeScreen = ({
   }, []);
 
   const requestDriverLocation = useCallback(async () => {
+    if (isDemo) {
+      const demoLocation = {
+        latitude: 33.5731,
+        longitude: -7.5898,
+      };
+      setLocationPermission("demo");
+      setDriverLocation(demoLocation);
+      return true;
+    }
+
     try {
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
@@ -417,7 +428,7 @@ const DriverHomeScreen = ({
       setLocationPermission("denied");
       return false;
     }
-  }, []);
+  }, [isDemo]);
 
   const stopLiveTracking = useCallback(() => {
     if (liveLocationSubscription.current?.remove) {
@@ -427,6 +438,15 @@ const DriverHomeScreen = ({
   }, []);
 
   const startLiveTracking = useCallback(async () => {
+    if (isDemo) {
+      setLocationPermission("demo");
+      setDriverLocation({
+        latitude: 33.5731,
+        longitude: -7.5898,
+      });
+      return true;
+    }
+
     const granted = await requestDriverLocation();
     if (!granted && !isValidCoordinate(driverLocation)) {
       Alert.alert(
@@ -473,6 +493,115 @@ const DriverHomeScreen = ({
     setLoadingTrip(true);
 
     try {
+      if (isDemo) {
+        const demoTrip = {
+          id: "demo-trip",
+          destination: "Demo School",
+          destinationLocation: {
+            latitude: 33.5738,
+            longitude: -7.589,
+          },
+          pickupLocation: {
+            latitude: 33.5731,
+            longitude: -7.5898,
+          },
+          parkingLocation: {
+            latitude: 33.5731,
+            longitude: -7.5898,
+          },
+          liveLocation: {
+            latitude: 33.5731,
+            longitude: -7.5898,
+          },
+          students: [
+            {
+              id: "demo-student-1",
+              name: "Amina",
+              homeLocation: {
+                latitude: 33.5731,
+                longitude: -7.5898,
+              },
+              pickupOrder: 1,
+              pickupLabel: "Home",
+            },
+            {
+              id: "demo-student-2",
+              name: "Youssef",
+              homeLocation: {
+                latitude: 33.5742,
+                longitude: -7.5894,
+              },
+              pickupOrder: 2,
+              pickupLabel: "School Gate",
+            },
+            {
+              id: "demo-student-3",
+              name: "Sara",
+              homeLocation: {
+                latitude: 33.5748,
+                longitude: -7.5906,
+              },
+              pickupOrder: 3,
+              pickupLabel: "Main Street",
+            },
+            {
+              id: "demo-student-4",
+              name: "Karim",
+              homeLocation: {
+                latitude: 33.5753,
+                longitude: -7.5888,
+              },
+              pickupOrder: 4,
+              pickupLabel: "Park Entrance",
+            },
+            {
+              id: "demo-student-5",
+              name: "Leila",
+              homeLocation: {
+                latitude: 33.5727,
+                longitude: -7.5882,
+              },
+              pickupOrder: 5,
+              pickupLabel: "Library Stop",
+            },
+            {
+              id: "demo-student-6",
+              name: "Omar",
+              homeLocation: {
+                latitude: 33.5721,
+                longitude: -7.5901,
+              },
+              pickupOrder: 6,
+              pickupLabel: "Corner Market",
+            },
+            {
+              id: "demo-student-7",
+              name: "Nadia",
+              homeLocation: {
+                latitude: 33.5739,
+                longitude: -7.5912,
+              },
+              pickupOrder: 7,
+              pickupLabel: "Blue Tower",
+            },
+          ],
+        };
+
+        const normalizedDemoStudents = normalizeStudents(demoTrip);
+        pickCurrentStudent(normalizedDemoStudents);
+        setTrip(demoTrip);
+        setStudents(normalizedDemoStudents);
+        setDriverLocation({
+          latitude: 33.5731,
+          longitude: -7.5898,
+        });
+        setRoute(null);
+        setRouteFailed(false);
+        setRouteFailureMessage("");
+        setLoadingTrip(false);
+        return;
+      }
+
       let selectedTrip = null;
 
       if (!driverId) {
@@ -519,7 +648,7 @@ const DriverHomeScreen = ({
     } finally {
       setLoadingTrip(false);
     }
-  }, [driverId, pickCurrentStudent, requestDriverLocation]);
+  }, [driverId, isDemo, pickCurrentStudent, requestDriverLocation]);
 
   useEffect(() => {
     loadTrip();
@@ -803,6 +932,14 @@ const DriverHomeScreen = ({
   return (
     <SafeAreaView style={styles.container} edges={["top", "left", "right"]}>
       <StatusBar style="dark" />
+      {isDemo && (
+        <View style={styles.demoBanner}>
+          <MaterialIcons name="visibility" size={16} color="#FFFFFF" />
+          <Text style={styles.demoBannerText}>
+            {language === "ar" ? "وضع تجريبي" : "Demo mode"}
+          </Text>
+        </View>
+      )}
       <View style={styles.screen}>
         <View style={styles.mapContainer}>
           {!canRenderMap ? (
@@ -1090,6 +1227,20 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.bg,
+  },
+  demoBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#166534",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  demoBannerText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontFamily: UbuntuFonts.medium,
   },
   screen: {
     flex: 1,

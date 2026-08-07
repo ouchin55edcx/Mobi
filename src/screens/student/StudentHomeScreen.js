@@ -213,6 +213,19 @@ const StudentHomeScreen = ({
 
   // Location Resolution
   useEffect(() => {
+    if (isDemo) {
+      setStudentLocation({
+        latitude: 33.5731,
+        longitude: -7.5898,
+      });
+      setSchoolLocation({
+        latitude: 33.5738,
+        longitude: -7.589,
+      });
+      setSchoolName(language === "ar" ? "المدرسة التجريبية" : "Demo School");
+      return;
+    }
+
     const resolveLocation = async () => {
       try {
         const { status } = await Location.requestForegroundPermissionsAsync();
@@ -232,7 +245,7 @@ const StudentHomeScreen = ({
       }
     };
     resolveLocation();
-  }, [t.gpsDenied]);
+  }, [isDemo, language, t.gpsDenied]);
 
   // Route Loading
   useEffect(() => {
@@ -613,6 +626,15 @@ const StudentHomeScreen = ({
   return (
     <View style={styles.container}>
       <StatusBar style="dark" />
+
+      {isDemo && (
+        <View style={styles.demoBanner}>
+          <MaterialIcons name="visibility" size={16} color="#FFFFFF" />
+          <Text style={styles.demoBannerText}>
+            {language === "ar" ? "وضع تجريبي" : "Demo mode"}
+          </Text>
+        </View>
+      )}
 
       {/* 70% Map Section */}
       <View style={styles.mapArea}>
@@ -1108,6 +1130,20 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#FFFFFF",
+  },
+  demoBanner: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 6,
+    backgroundColor: "#1D4ED8",
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  demoBannerText: {
+    color: "#FFFFFF",
+    fontSize: 12,
+    fontFamily: UbuntuFonts.Medium,
   },
   mapArea: {
     flex: 0.65,

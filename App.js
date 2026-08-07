@@ -324,6 +324,13 @@ export default function App() {
               setCurrentScreen("driverRegister");
             }
           }}
+          onDemoSelect={(role) => {
+            if (role === "student") {
+              setCurrentScreen("studentDemoHome");
+            } else if (role === "driver") {
+              setCurrentScreen("driverDemoHome");
+            }
+          }}
         />
       );
     }
@@ -342,6 +349,30 @@ export default function App() {
             });
             setCurrentScreen("studentHome");
           }}
+        />
+      );
+    }
+
+    if (currentScreen === "studentDemoHome") {
+      return (
+        <StudentHomeScreen
+          studentId={null}
+          isDemo
+          language={language}
+          onNavigateToTripDetails={(tripData) => {
+            const hasValidPayload =
+              isValidCoordinate(tripData?.homeLocation) &&
+              isValidCoordinate(tripData?.destinationLocation);
+
+            if (!hasValidPayload) {
+              Alert.alert("Trip Data Error", "Trip details are incomplete.");
+              return;
+            }
+
+            setStudentTripDetailsData(tripData);
+            setCurrentScreen("studentTripDetails");
+          }}
+          onNavigateToProfile={() => setCurrentScreen("selectRole")}
         />
       );
     }
@@ -438,6 +469,24 @@ export default function App() {
               setDriverData({ driverId: data.driverId, email: data.email });
               setCurrentScreen("driverHome");
             }
+          }}
+        />
+      );
+    }
+
+    if (currentScreen === "driverDemoHome") {
+      return (
+        <DriverTabNavigator
+          driverId={null}
+          isDemo
+          language={language}
+          onLogout={handleLogout}
+          onTripPress={async (tripData) => {
+            setTripLiveViewData({
+              ...tripData,
+              status: "trip_started",
+            });
+            setCurrentScreen("tripLiveView");
           }}
         />
       );

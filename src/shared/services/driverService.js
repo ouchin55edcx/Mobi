@@ -97,7 +97,7 @@ export const getDriverById = async (driverId) => {
     if (error) {
       // warning: console.warn('Supabase not available, fetching driver locally');
       const d = await AsyncStorage.getItem(`driver_${driverId}`);
-      if (d) return { data: JSON.parse(d), error: null };
+      if (d) { try { return { data: JSON.parse(d), error: null }; } catch { /* ignore corrupted data */ } }
       return { data: null, error };
     }
 
@@ -159,7 +159,7 @@ export const getDriverByEmail = async (email) => {
       const id = await AsyncStorage.getItem(`driver_email_${email}`);
       if (id) {
         const d = await AsyncStorage.getItem(`driver_${id}`);
-        if (d) return { data: JSON.parse(d), error: null };
+        if (d) { try { return { data: JSON.parse(d), error: null }; } catch { /* ignore corrupted data */ } }
       }
       return { data: null, error };
     }
@@ -169,7 +169,7 @@ export const getDriverByEmail = async (email) => {
     const id = await AsyncStorage.getItem(`driver_email_${email}`);
     if (id) {
       const d = await AsyncStorage.getItem(`driver_${id}`);
-      if (d) return { data: JSON.parse(d), error: null };
+      if (d) { try { return { data: JSON.parse(d), error: null }; } catch { /* ignore corrupted data */ } }
     }
     return { data: null, error };
   }

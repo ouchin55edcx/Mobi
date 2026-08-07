@@ -20,6 +20,19 @@ import { LinearGradient } from "expo-linear-gradient";
 
 const { width } = Dimensions.get("window");
 
+const DEMO_DRIVER_PROFILE = {
+  id: "demo-driver",
+  fullname: "Demo Driver",
+  email: "demo.driver@mobi.app",
+  status: "APPROVED",
+  location: {
+    phone_number: "+212 600 000 000",
+    car_plate_number: "AA-12345",
+    seat_capacity: 40,
+    car_type: "Mercedes Sprinter",
+  },
+};
+
 const translations = {
   en: {
     title: "Driver Profile",
@@ -117,6 +130,7 @@ const DriverProfileScreen = ({
   language = "en",
   onLogout,
   onBack,
+  isDemo = false,
 }) => {
   const [driver, setDriver] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -142,11 +156,22 @@ const DriverProfileScreen = ({
     .map((part) => part[0]?.toUpperCase())
     .join("");
 
-  useEffect(() => {
-    loadDriverData();
-  }, [driverId]);
-
   const loadDriverData = async () => {
+    if (isDemo) {
+      setDriver(DEMO_DRIVER_PROFILE);
+      setFormData({
+        name: DEMO_DRIVER_PROFILE.fullname || "",
+        phone: DEMO_DRIVER_PROFILE.location?.phone_number || "",
+        email: DEMO_DRIVER_PROFILE.email || "",
+        license_number: "",
+        bus_plate: DEMO_DRIVER_PROFILE.location?.car_plate_number || "",
+        bus_capacity: DEMO_DRIVER_PROFILE.location?.seat_capacity?.toString() || "",
+        bus_model: DEMO_DRIVER_PROFILE.location?.car_type || "",
+      });
+      setLoading(false);
+      return;
+    }
+
     try {
       setLoading(true);
       const { data, error } = await supabase
@@ -164,7 +189,7 @@ const DriverProfileScreen = ({
           name: data.fullname || "",
           phone: loc.phone_number || "",
           email: data.email || "",
-          license_number: data.permis_url || "", // Using permis_url as license placeholder if needed
+          license_number: data.permis_url || "",
           bus_plate: loc.car_plate_number || "",
           bus_capacity: loc.seat_capacity?.toString() || "",
           bus_model: loc.car_type || "",
@@ -178,6 +203,10 @@ const DriverProfileScreen = ({
     }
   };
 
+  useEffect(() => {
+    loadDriverData();
+  }, [driverId, isDemo]);
+
   const handleInputChange = (field, value) => {
     setFormData((prev) => ({ ...prev, [field]: value }));
   };
@@ -189,13 +218,31 @@ const DriverProfileScreen = ({
         return;
       }
 
+      if (isDemo) {
+        const updateData = {
+          fullname: formData.name,
+          email: formData.email,
+          location: {
+            ...(driver?.location || {}),
+            phone_number: formData.phone,
+            car_plate_number: formData.bus_plate,
+            car_type: formData.bus_model,
+            seat_capacity: parseInt(formData.bus_capacity, 10) || 0,
+          },
+        };
+        setDriver({ ...(driver || DEMO_DRIVER_PROFILE), ...updateData });
+        Alert.alert(t.saved, "", [{ text: t.ok }]);
+        setEditing(false);
+        return;
+      }
+
       setSaving(true);
       
       const updateData = {
         fullname: formData.name,
         email: formData.email,
         location: {
-          ...driver.location,
+          ...(driver?.location || {}),
           phone_number: formData.phone,
           car_plate_number: formData.bus_plate,
           car_type: formData.bus_model,
